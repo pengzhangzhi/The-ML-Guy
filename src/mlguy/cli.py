@@ -13,11 +13,12 @@ import pandas as pd
 
 TEMPLATES = Path(__file__).parent / "templates"
 
-from mlguy import budget, report
+from mlguy import budget, checks, judge, report
 from mlguy.judge import SubmissionError
 from mlguy.project import (
     TaskChanged,
     check_task_unchanged,
+    compare_with,
     load_task,
     score_split,
     state_dir,
@@ -58,7 +59,8 @@ def _freeze_task(task: dict) -> str:
 
 
 def _record_score(experiments: Experiments, task: dict, number: int, note: str,
-                  counts: bool, result: dict | None, error: str | None) -> dict:
+                  counts: bool, result: dict | None, error: str | None,
+                  previous_best: dict | None = None) -> dict:
     record = {
         "number": number,
         "time": now(),
@@ -69,9 +71,18 @@ def _record_score(experiments: Experiments, task: dict, number: int, note: str,
     if result:
         record["metrics"] = result["metrics"]
         record["n_validation"] = result["n"]
+        record["interval"] = result.get("interval")
+        if previous_best and previous_best["number"] != number:
+            chance = compare_with(task["_project_dir"], experiments.predictions(number),
+                                  experiments.predictions(previous_best["number"]))
+            if chance is not None:
+                record["vs_best"] = {"number": previous_best["number"], "chance_better": round(chance, 3)}
     else:
         record["error"] = error
-    experiments.append(record)
+    if any(r["number"] == number for r in experiments.all()):
+        experiments.replace(record)
+    else:
+        experiments.append(record)
     return record
 
 
@@ -79,6 +90,13 @@ def _print_scored(record: dict, task: dict, experiments: Experiments) -> None:
     primary = task["metric"]["primary"]
     metrics = "  ".join(f"{k}={v:.4f}" for k, v in record["metrics"].items())
     print(f"experiment {record['number']}: {metrics}  (validation, n={record['n_validation']})")
+    if record.get("interval"):
+        low, high = record["interval"]
+        print(f"  {primary} would fall between {low:.4f} and {high:.4f} on another draw of the validation rows")
+    if record.get("vs_best"):
+        versus = record["vs_best"]
+        print(f"  against experiment {versus['number']}, the best before this: better on "
+              f"{versus['chance_better']:.0%} of resamples: {judge.verdict(versus['chance_better'])}")
     best = experiments.best(primary)
     if best and best["number"] != record["number"]:
         print(f"best so far: experiment {best['number']} with {primary}={best['metrics'][primary]:.4f}")
@@ -115,6 +133,14 @@ def cmd_init(args: argparse.Namespace) -> int:
     project_dir, data = task["_project_dir"], task["data"]
     in_cols, tgt_col = list(data["input_columns"]), data["target_column"]
 
+    frozen = state_dir(task) / "task_hash.txt"
+    if frozen.exists() and Experiments(project_dir).all() and frozen.read_text().strip() != hash_task(project_dir):
+        raise CommandError(
+            "task/ has changed since it was frozen, and this project already has recorded experiments. "
+            "Their scores were measured against the old task, so it cannot be re-frozen. Restore task/, "
+            "or start a new project for the new task."
+        )
+
     for key in ("train", "validation"):
         path = project_dir / "task" / data[key]
         if not path.exists():
@@ -131,6 +157,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         if tgt_col not in df.columns:
             raise CommandError(f"{labeled_test.name} has no '{tgt_col}' column to hide")
         df[in_cols].to_csv(inputs_path, index=False)
+        test_frame = df
         stored = store_test_labels(task, df[[tgt_col]])
         labeled_test.unlink()
         print(f"test labels moved out of the project: {stored}")
@@ -138,18 +165,27 @@ def cmd_init(args: argparse.Namespace) -> int:
         raise CommandError(f"no test data: expected {labeled_test or inputs_path}")
     elif not test_labels_path(task).exists():
         raise CommandError(f"test inputs exist but no labels are stored at {test_labels_path(task)}")
+    else:
+        test_frame = pd.concat([pd.read_csv(inputs_path), pd.read_csv(test_labels_path(task))], axis=1)
+
+    train_frame = pd.read_csv(project_dir / "task" / data["train"])
+    validation_frame = pd.read_csv(project_dir / "task" / data["validation"])
+    found = checks.split_checks(task, train_frame, validation_frame, test_frame)
+    (state_dir(task) / "split_checks.json").write_text(json.dumps(found, indent=2))
 
     Experiments(project_dir).create()
     digest = _freeze_task(task)
     print(f"project '{task['name']}' ready")
-    print(f"  train {len(pd.read_csv(project_dir / 'task' / data['train']))}  "
-          f"validation {len(pd.read_csv(project_dir / 'task' / data['validation']))}  "
-          f"test {len(pd.read_csv(inputs_path))}")
+    print(f"  train {len(train_frame)}  validation {len(validation_frame)}  test {len(test_frame)}")
     print(f"  metric {task['metric']['primary']}  |  {budget.describe(task, [])}")
     print(f"  task frozen (hash {digest[:12]})")
     caveat = validation_caveat(task)
     if caveat:
         print(f"  note: {caveat}")
+    for item in found:
+        print(f"  check: {item}")
+    if found:
+        print("  fix each check above, or explain it in task/brief.md; they are repeated in the final report")
     print("next: train a model into model/, then run `mlguy validate`")
     return 0
 
@@ -160,14 +196,17 @@ def cmd_validate(args: argparse.Namespace) -> int:
     experiments = Experiments(task["_project_dir"])
     if any(r["number"] == 0 for r in experiments.all()) and not args.again:
         raise CommandError("the baseline is already recorded as experiment 0; use --again to redo it")
+    if any(r.get("counts_against_budget") for r in experiments.all()):
+        raise CommandError("the baseline cannot be redone once submissions exist: it would be a "
+                           "submission the budget does not count. Use `mlguy submit`.")
 
     try:
-        result = score_split(args.project, "validation")
+        result = score_split(args.project, "validation", keep_predictions=experiments.predictions(0))
     except SubmissionError as e:
         print(f"the pipeline does not work yet:\n{e}", file=sys.stderr)
         return 1
 
-    number = 0 if args.again else experiments.next_number()
+    number = 0
     experiments.snapshot(task["_project_dir"], number)
     record = _record_score(experiments, task, number, args.note, False, result, None)
     print("prediction and scoring work end to end.")
@@ -190,15 +229,17 @@ def cmd_submit(args: argparse.Namespace) -> int:
         return 2
 
     number = experiments.next_number()
+    previous_best = experiments.best(task["metric"]["primary"])
     try:
-        result, error = score_split(args.project, "validation"), None
+        result, error = score_split(args.project, "validation",
+                                    keep_predictions=experiments.predictions(number)), None
     except SubmissionError as e:
         result, error = None, str(e)
 
     target, size_mb = experiments.snapshot(task["_project_dir"], number)
     if size_mb > 200:
         print(f"note: the snapshot of this submission is {size_mb:.0f} MB", file=sys.stderr)
-    record = _record_score(experiments, task, number, args.note, True, result, error)
+    record = _record_score(experiments, task, number, args.note, True, result, error, previous_best)
     commit = git_commit(task["_project_dir"], f"experiment {number}: {args.note}")
     if commit:
         record["commit"] = commit
@@ -244,6 +285,9 @@ def cmd_finish(args: argparse.Namespace) -> int:
     path = report.write(project_dir, task, records, best, test_result)
     git_commit(project_dir, f"finish: test {primary}={test_result['metrics'][primary]:.4f}")
     print(f"test {primary} = {test_result['metrics'][primary]:.4f}  (n={test_result['n']}, scored once)")
+    if test_result.get("interval"):
+        print(f"  it would fall between {test_result['interval'][0]:.4f} and {test_result['interval'][1]:.4f} "
+              "on another draw of the test rows")
     print(f"report written to {path}")
     return 0
 
@@ -286,9 +330,9 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 def cmd_score(args: argparse.Namespace) -> int:
     try:
-        result = score_split(args.project, args.split)
+        result = score_split(args.project, "validation")
     except SubmissionError as e:
-        print(json.dumps({"status": "error", "split": args.split, "error": str(e)}, indent=2))
+        print(json.dumps({"status": "error", "split": "validation", "error": str(e)}, indent=2))
         return 1
     print(json.dumps({"status": "ok", **result}, indent=2))
     return 0
@@ -337,7 +381,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = add("validate", "check that prediction and scoring work; records the baseline as experiment 0", cmd_validate)
     p.add_argument("--note", default="baseline", help="one line on what this model is")
-    p.add_argument("--again", action="store_true", help="redo the baseline")
+    p.add_argument("--again", action="store_true", help="redo the baseline (only before the first submission)")
 
     p = add("submit", "score the current model on validation, record it, enforce the budget", cmd_submit)
     p.add_argument("--note", required=True, help="one line on what you changed and why")
@@ -349,8 +393,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--json", action="store_true")
     p.add_argument("--last", type=int, default=20, help="how many experiments to list")
 
-    p = add("score", "run predict.py on a split and score it, without recording anything", cmd_score)
-    p.add_argument("--split", choices=["validation", "test"], default="validation")
+    add("score", "score the current model on validation without recording it (the test set is only "
+                 "ever scored by `finish`)", cmd_score)
 
     p = add("dashboard", "watch the experiments in a browser", cmd_dashboard)
     p.add_argument("--port", type=int, default=8501)

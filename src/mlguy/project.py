@@ -101,11 +101,13 @@ def run_predict(run_dir: Path, input_csv: Path, output_csv: Path, timeout: int =
         raise SubmissionError("predict.py exited cleanly but wrote no output file")
 
 
-def score_split(project_dir: str | Path, split: str, run_dir: str | Path | None = None) -> dict:
+def score_split(project_dir: str | Path, split: str, run_dir: str | Path | None = None,
+                keep_predictions: Path | None = None) -> dict:
     """Run predict.py on one split's inputs (labels withheld) and score the result.
 
     `run_dir` is where predict.py, src/ and model/ live; it defaults to the project itself,
-    and is an experiment snapshot when scoring a past submission.
+    and is an experiment snapshot when scoring a past submission. `keep_predictions` saves the
+    checked predictions, so a later submission can be compared with this one row for row.
     """
     task = load_task(project_dir)
     project_dir = task["_project_dir"]
@@ -139,9 +141,33 @@ def score_split(project_dir: str | Path, split: str, run_dir: str | Path | None 
     y_pred, y_score = judge.check_predictions(preds, len(y_true))
     primary = task["metric"]["primary"]
     names = [primary] + [m for m in task["metric"].get("secondary", []) if m != primary]
+    metrics = judge.score(y_true, y_pred, names, y_score=y_score)
+    if keep_predictions is not None:
+        keep_predictions.parent.mkdir(parents=True, exist_ok=True)
+        saved = pd.DataFrame({"prediction": y_pred})
+        if y_score is not None:
+            saved["score"] = y_score
+        saved.to_csv(keep_predictions, index=False)
     return {
         "split": split,
         "n": int(len(y_true)),
         "primary": primary,
-        "metrics": judge.score(y_true, y_pred, names, y_score=y_score),
+        "metrics": metrics,
+        "interval": judge.interval(y_true, y_pred, primary, y_score=y_score),
     }
+
+
+def compare_with(project_dir: Path, new_file: Path, old_file: Path) -> float | None:
+    """How often the newer validation predictions beat the older ones, over resampled rows."""
+    task = load_task(project_dir)
+    if not (new_file.exists() and old_file.exists()):
+        return None
+    y_true = pd.read_csv(task["_project_dir"] / "task" / task["data"]["validation"])[task["data"]["target_column"]]
+    pairs = []
+    for path in (new_file, old_file):
+        frame = pd.read_csv(path)
+        if len(frame) != len(y_true):
+            return None
+        pairs.append((frame["prediction"].to_numpy(dtype=float),
+                      frame["score"].to_numpy(dtype=float) if "score" in frame else None))
+    return judge.chance_better(y_true.to_numpy(dtype=float), pairs[0], pairs[1], task["metric"]["primary"])

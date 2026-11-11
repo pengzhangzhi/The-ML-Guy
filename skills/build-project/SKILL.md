@@ -93,6 +93,12 @@ python src/train.py # the baseline
 mlguy validate      # proves prediction and scoring work; records experiment 0
 ```
 
+`mlguy init` checks the split before freezing it: rows shared between splits, a validation or
+test set too small to measure anything, and a validation set that looks unlike the test set.
+Each `check:` line it prints is a way the final score could mislead. Fix it, or explain it in
+the brief and to the user, before going on; once anything is scored, the task can no longer
+be changed.
+
 The baseline exists to prove the pipeline runs and to give later work a number to beat. Keep
 it simple and fast. Do not spend the user's budget trying to make it good — that is the
 research step's job, and `validate` does not count against the budget.

@@ -1,6 +1,6 @@
 """Experiment records: the append-only history of submissions.
 
-Only `mlguy submit` writes here. Each submission keeps a self-contained snapshot of
+Only `mlguy validate` and `mlguy submit` write here. Each submission keeps a self-contained snapshot of
 everything needed to reproduce its score (predict.py, src/, model/), so a later
 experiment cannot change what an earlier one scored.
 """
@@ -69,6 +69,14 @@ class Experiments:
         self.create()
         with self.log.open("a") as f:
             f.write(json.dumps(record) + "\n")
+
+    def replace(self, record: dict) -> None:
+        """Rewrite the record with this number. Only the baseline, before any submission, is ever replaced."""
+        kept = [r for r in self.all() if r["number"] != record["number"]]
+        self.log.write_text("".join(json.dumps(r) + "\n" for r in sorted(kept + [record], key=lambda r: r["number"])))
+
+    def predictions(self, number: int) -> Path:
+        return self.dir / f"{number:04d}" / "validation_predictions.csv"
 
     def snapshot(self, project_dir: Path, number: int) -> tuple[Path, float]:
         """Copy the prediction side of the project into experiments/NNNN/submission/."""

@@ -177,3 +177,67 @@ def is_better(new: float, old: float | None, metric: str) -> bool:
     if old is None:
         return True
     return new > old if METRICS[metric][1] == "maximize" else new < old
+
+
+# --------------------------------------------------------------------- noise
+#
+# A score is measured on a finite set of rows, so it would differ on another draw of them.
+# Resampling the rows says by how much, and whether one submission really beats another.
+
+RESAMPLES = 500
+
+
+def _one(metric: str, y_true: np.ndarray, y_pred: np.ndarray, y_score: np.ndarray | None) -> float | None:
+    try:
+        return METRICS[metric][0](y_true, y_score if METRICS[metric][3] else y_pred)
+    except SubmissionError:
+        return None  # undefined on this resample (one class only, constant predictions)
+
+
+def _resamples(n: int, seed: int = 0) -> np.ndarray:
+    return np.random.default_rng(seed).integers(0, n, size=(RESAMPLES, n))
+
+
+def interval(y_true, y_pred, metric: str, y_score=None) -> list[float] | None:
+    """The 95% bootstrap interval of a score: where it would fall on another draw of the rows."""
+    y_true, y_pred = np.asarray(y_true, dtype=float), np.asarray(y_pred, dtype=float)
+    y_score = None if y_score is None else np.asarray(y_score, dtype=float)
+    values = [_one(metric, y_true[i], y_pred[i], None if y_score is None else y_score[i])
+              for i in _resamples(len(y_true))]
+    values = [v for v in values if v is not None and np.isfinite(v)]
+    if len(values) < RESAMPLES // 2:
+        return None
+    low, high = np.percentile(values, [2.5, 97.5])
+    return [float(low), float(high)]
+
+
+def chance_better(y_true, new: tuple, old: tuple, metric: str) -> float | None:
+    """How often `new` beats `old` when both are scored on the same resampled rows.
+
+    `new` and `old` are (predictions, scores-or-None). Near 0.5 means the two cannot be told
+    apart on this data; near 1.0 means the improvement is real.
+    """
+    y_true = np.asarray(y_true, dtype=float)
+    wins = total = 0.0
+    for i in _resamples(len(y_true)):
+        a = _one(metric, y_true[i], new[0][i], None if new[1] is None else new[1][i])
+        b = _one(metric, y_true[i], old[0][i], None if old[1] is None else old[1][i])
+        if a is None or b is None:
+            continue
+        total += 1
+        wins += 1.0 if is_better(a, b, metric) else 0.5 if a == b else 0.0
+    return wins / total if total >= RESAMPLES // 2 else None
+
+
+def verdict(chance: float) -> str:
+    """Plain words for a chance_better value."""
+    chance = round(chance, 2)
+    if chance >= 0.95:
+        return "a real improvement"
+    if chance >= 0.80:
+        return "probably better, but not certain on this much data"
+    if chance > 0.20:
+        return "the two cannot be told apart on this data"
+    if chance > 0.05:
+        return "probably worse"
+    return "really worse"

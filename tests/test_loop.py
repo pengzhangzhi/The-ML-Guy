@@ -322,3 +322,83 @@ def test_serve_runs_the_projects_own_page(tmp_path, monkeypatch, capfd):
     (project / "app.py").write_text("import sys; print('page', *sys.argv[1:])\n")
     assert run(project, "serve", "--port", "7001", "--share") == 0
     assert "page --port 7001 --share" in capfd.readouterr().out
+
+
+# ------------------------------------------------------------ the rubric cannot be bypassed
+
+
+def test_the_test_set_cannot_be_scored_outside_finish(project):
+    run(project, "init")
+    with pytest.raises(SystemExit):
+        run(project, "score", "--split", "test")
+    assert run(project, "score") == 0, "validation scoring stays available"
+
+
+def test_the_baseline_cannot_become_a_free_submission(project):
+    run(project, "init")
+    run(project, "validate")
+    _write_model(project, 3.0)
+    assert run(project, "validate", "--again") == 0, "fixing the baseline before any submission is fine"
+    assert [r["number"] for r in Experiments(project).all()] == [0], "and it replaces the record"
+
+    run(project, "submit", "--note", "a counted submission")
+    assert run(project, "validate", "--again") == 2
+
+
+def test_a_changed_task_cannot_be_refrozen_once_there_are_results(project, capsys):
+    run(project, "init")
+    toml = project / "task" / "task.toml"
+    toml.write_text(toml.read_text().replace("max_submissions = 2", "max_submissions = 3"))
+    assert run(project, "init") == 0, "still setting up: nothing has been scored against the old task"
+
+    run(project, "validate")
+    toml.write_text(toml.read_text().replace("max_submissions = 3", "max_submissions = 99"))
+    assert run(project, "init") == 2
+    assert "cannot be re-frozen" in capsys.readouterr().err
+
+
+def test_scores_come_with_their_noise(project, capsys):
+    run(project, "init")
+    run(project, "validate")
+    baseline = Experiments(project).all()[0]
+    low, high = baseline["interval"]
+    assert low < baseline["metrics"]["spearman"] < high
+
+    _write_model(project, -1.0)
+    run(project, "submit", "--note", "flip the sign")
+    record = Experiments(project).all()[-1]
+    assert record["vs_best"] == {"number": 0, "chance_better": 0.0}
+    assert "really worse" in capsys.readouterr().out
+
+    _write_model(project, 2.0)  # same ranking as the baseline
+    run(project, "submit", "--note", "double the scale")
+    assert Experiments(project).all()[-1]["vs_best"]["chance_better"] == 0.5
+    assert "cannot be told apart" in capsys.readouterr().out
+
+    run(project, "finish")
+    assert "95% interval" in (project / "REPORT.md").read_text()
+
+
+def test_init_flags_a_split_that_would_mislead(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
+    project = tmp_path / "leaky"
+    (project / "task" / "data").mkdir(parents=True)
+    (project / "task" / "task.toml").write_text(
+        TASK_TOML.replace('type = "regression"', 'type = "classification"')
+                 .replace('primary = "spearman"', 'primary = "accuracy"').replace('secondary = ["ndcg"]', ""))
+    rng = random.Random(3)
+    seqs = ["".join(rng.choice("ACDE") for _ in range(8)) for _ in range(400)]
+    frame = pd.DataFrame({"sequence": seqs}).drop_duplicates("sequence").reset_index(drop=True)
+    train, validation, test = frame[:150].copy(), frame[150:270].copy(), frame[270:330].copy()
+    train["target"] = [i % 2 for i in range(len(train))]
+    validation["target"] = [1 if i % 5 == 0 else 0 for i in range(len(validation))]   # 20% positive
+    test["target"] = [i % 2 for i in range(len(test))]                                 # 50% positive
+    test = pd.concat([test, train[:7]])                                                # 7 leaked rows
+    for name, part in [("train", train), ("validation", validation), ("test", test)]:
+        part.to_csv(project / "task" / "data" / f"{name}.csv", index=False)
+
+    assert run(project, "init") == 0, "checks warn; they do not refuse"
+    out = capsys.readouterr().out
+    assert "7 input rows appear in both train and test" in out
+    assert "test has only 67 rows" in out
+    assert "80% of validation but" in out and "balanced_accuracy" in out

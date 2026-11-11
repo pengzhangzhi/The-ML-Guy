@@ -87,3 +87,15 @@ def test_check_predictions_returns_the_optional_score_column():
     assert list(scores) == [0.3, 0.8]
     with pytest.raises(SubmissionError, match="score"):
         judge.check_predictions(pd.DataFrame({"prediction": [0, 1], "score": [0.3, None]}), 2)
+
+
+def test_noise_estimates():
+    rng = np.random.default_rng(0)
+    y = rng.normal(size=300)
+    good, poor = y + rng.normal(scale=0.3, size=300), y + rng.normal(scale=3.0, size=300)
+    low, high = judge.interval(y, good, "spearman")
+    assert low < judge.score(y, good, ["spearman"])["spearman"] < high
+    assert judge.chance_better(y, (good, None), (poor, None), "spearman") > 0.99
+    assert judge.chance_better(y, (good, None), (good, None), "spearman") == 0.5
+    assert judge.chance_better(y, (good, None), (poor, None), "rmse") > 0.99, "lower is better for rmse"
+    assert judge.interval(y, np.zeros(300), "spearman") is None, "undefined everywhere: no interval, no crash"

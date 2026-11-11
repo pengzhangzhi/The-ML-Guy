@@ -43,8 +43,13 @@ code and model, and tells you the score and the remaining budget. It refuses onc
 spent. A crash or a malformed predictions file is recorded as an error, not as a score of zero,
 but it still uses up a submission, so test your prediction command before you submit.
 
-Never score the test set. `mlguy finish` does that once, at the end, on whichever submission
-scored best on validation. Looking at it earlier makes the final number meaningless.
+Every score comes with its noise: the range it would fall in on another draw of the validation
+rows, and how often it beats the best so far when both are scored on the same resampled rows.
+A gain the data cannot tell from noise is not a gain. Do not build on it as if it were, and
+between two models that cannot be told apart, prefer the simpler.
+
+Never score the test set. Only `mlguy finish` can, once, at the end, on whichever submission
+scored best on validation. Looking at it earlier would make the final number meaningless.
 
 ## Working well
 

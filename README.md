@@ -52,6 +52,21 @@ uv venv --python 3.11 && source .venv/bin/activate
 uv pip install -e ".[dashboard,examples,dev]"
 ```
 
+## What keeps the score honest
+
+The rubric is the one thing the framework owns outright, so it is the one thing it is strict
+about.
+
+- **The task is frozen.** `task/` is hashed when the brief is approved; a changed task is
+  refused, and cannot be re-frozen once anything has been scored against it.
+- **The test set is scored once,** by `mlguy finish`, on the submission that did best on
+  validation. No other command touches it.
+- **The split is checked before it is frozen:** rows shared between splits, sets too small to
+  measure anything, a validation set that looks unlike the test set.
+- **Every score carries its noise:** a 95% interval, and how often a submission beats the best
+  so far on the same resampled rows. "0.6935 against 0.6933" is reported as what it is.
+- **A failure is an error, never a zero,** and still uses up budget.
+
 ## Metrics
 
 | Regression | Classification |
