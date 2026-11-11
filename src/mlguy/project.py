@@ -32,6 +32,18 @@ def load_task(project_dir: str | Path) -> dict:
     return task
 
 
+def validation_caveat(task: dict) -> str | None:
+    """The warning to carry everywhere when validation does not ask the test set's question."""
+    data = task.get("data", {})
+    if data.get("validation_matches_test", True):
+        return None
+    note = data.get("validation_note", "").strip()
+    return (
+        "Validation does not ask the same question as the test set, so a better validation "
+        "score does not reliably mean a better model." + (f" {note}" if note else "")
+    )
+
+
 def state_dir(task: dict) -> Path:
     """Where things the project's code must not see are kept: outside the project folder."""
     home = Path(os.environ.get("MLGUY_HOME", Path.home() / ".mlguy"))

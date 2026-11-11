@@ -23,6 +23,8 @@ test = "data/test.csv"               # labelled; `mlguy init` consumes this and 
 test_inputs = "data/test_inputs.csv" # what is left in the project after init
 sequence_column = "sequence"
 target_column = "target"
+validation_matches_test = false
+validation_note = "Validation rows are multi-mutants, like the training rows, while the test rows are single mutants. A model that ranks multi-mutants better does not necessarily rank single mutants better."
 
 [metric]
 primary = "spearman"

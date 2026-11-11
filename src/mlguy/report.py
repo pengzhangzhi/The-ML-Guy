@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from mlguy import budget
+from mlguy.project import validation_caveat
 
 
 def _row(record: dict, primary: str) -> str:
@@ -55,6 +56,10 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
             f"| {name} | {test_value:.4f} | {best['metrics'][name]:.4f} |"
         )
     lines += ["", f"The score that counts is **{primary} = {test_result['metrics'][primary]:.4f}**.", ""]
+
+    caveat = validation_caveat(task)
+    if caveat:
+        lines += ["> **Read the two columns above with care.** " + caveat, ""]
 
     if baseline and baseline["number"] != best["number"]:
         delta = best["metrics"][primary] - baseline["metrics"][primary]

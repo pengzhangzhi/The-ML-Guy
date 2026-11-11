@@ -15,9 +15,12 @@ The design rule: **be exact about the problem and the scoring, and leave the mod
 
 ## Status
 
-Early. Milestones 1 and 2 of 4 are in place: the reference project, the scoring rubric, the
+Early. Milestones 1 to 3 of 4 are in place: the project contract, the scoring rubric, the
 hill-climbing loop with its budget and experiment records, the dashboard, the prediction page,
-and the `research` skill. The builder skill, which turns a conversation into a project, is next.
+and all three skills. What is left is running the whole flow on a dataset from a different
+problem, to find where the design is still shaped around the first one.
+
+See [INSTALL.md](INSTALL.md) to set it up for Claude Code or Codex.
 
 There is no sandbox. The agent runs with your permissions. Scores are protected against
 accidents (test labels live outside the project folder), not against an agent that
@@ -99,9 +102,20 @@ shape, because both the rubric and the prediction page call it.
 
 ## For agents
 
-The `skills/` folder holds the skills a coding agent loads. `skills/research/SKILL.md` covers
-the loop: it states the goal, the rubric, the fixed interface and the commands, and leaves the
-modelling entirely to the agent.
+The `skills/` folder holds what a coding agent loads. Each skill states the goal, the rules and
+the commands, and leaves the judgment to the agent.
+
+| Skill | What it covers |
+| --- | --- |
+| `build-project` | Look at the data, ask only what is missing, write the brief, get it approved, scaffold and validate |
+| `research` | The loop: the goal, the rubric, the budget, the commands. The approach is the agent's own |
+| `deploy` | Score the test set once, write the report and the page in the user's language, record what was learned |
+
+Starting a project by hand:
+
+```bash
+mlguy new my-project --name my-project   # skeleton: task.toml, brief.md, predict.py, a baseline
+```
 
 ## Licence
 

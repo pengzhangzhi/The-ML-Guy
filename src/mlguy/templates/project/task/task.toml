@@ -1,0 +1,45 @@
+# The task. Everything here is settled with the user before any modelling starts, and frozen
+# by `mlguy init`. Replace every TODO, then delete this comment block.
+schema_version = "0.1"
+name = "TODO-project-name"           # short, kebab-case; names the folder under ~/.mlguy/projects/
+
+[task]
+type = "regression"                  # regression | classification
+input = "protein_sequence"
+output = "TODO_what_is_predicted"    # e.g. stability, solubility, activity
+higher_is_better = true              # does a larger predicted value mean a better example?
+
+[input]
+alphabet = "ACDEFGHIKLMNPQRSTVWY"
+# length = 425                       # set only if every sequence must be the same length
+# reference = "MKT..."               # wild type, if there is one: lets the app name mutations
+
+[data]
+source = "TODO where the data came from"
+split = "TODO how train/validation/test were separated, in one line"
+train = "data/train.csv"
+validation = "data/validation.csv"
+test = "data/test.csv"               # labelled; `mlguy init` consumes this and hides the labels
+test_inputs = "data/test_inputs.csv" # what is left in the project after init
+sequence_column = "sequence"
+target_column = "target"
+
+# Does the validation set ask the same question as the test set? If it does not, hill-climbing
+# on validation can move away from what the user actually wants. Say so here, and the warning
+# follows through to the report.
+validation_matches_test = true
+# validation_note = "Validation is drawn like the training set, the test set is not, so ..."
+
+[metric]
+primary = "spearman"                 # spearman | pearson | ndcg | rmse | mae
+secondary = ["ndcg"]
+
+[budget]
+max_submissions = 10
+# max_hours = 6
+# deadline = "2026-12-01T09:00:00"
+
+[page]
+title = "TODO Predictor"
+description = "TODO one or two sentences a scientist would recognise, in their language."
+tested = "TODO how the model was tested, in one sentence."

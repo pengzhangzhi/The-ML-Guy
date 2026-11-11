@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pandas as pd
+
+TEMPLATES = Path(__file__).parent / "templates"
 
 from mlguy import budget, report
 from mlguy.judge import SubmissionError
@@ -20,6 +23,7 @@ from mlguy.project import (
     state_dir,
     store_test_labels,
     test_labels_path,
+    validation_caveat,
 )
 from mlguy.records import Experiments, git_commit, hash_task, now
 
@@ -83,6 +87,28 @@ def _print_scored(record: dict, task: dict, experiments: Experiments) -> None:
     print(budget.describe(task, experiments.all()))
 
 
+def cmd_new(args: argparse.Namespace) -> int:
+    target = Path(args.dir).resolve()
+    if target.exists() and any(target.iterdir()):
+        raise CommandError(f"{target} already exists and is not empty")
+    shutil.copytree(TEMPLATES / "project", target)
+    shutil.copy2(TEMPLATES / "proposal.md", target / "proposal.md")
+
+    toml_path = target / "task" / "task.toml"
+    toml_path.write_text(toml_path.read_text().replace("TODO-project-name", args.name))
+    brief = target / "task" / "brief.md"
+    brief.write_text(brief.read_text().replace("TODO name", args.name))
+    (target / ".gitignore").write_text("model/\nwork/\n__pycache__/\n.gradio/\n")
+    subprocess.run(["git", "init", "-q"], cwd=target, capture_output=True)
+
+    print(f"created {target}")
+    print("  task/task.toml   the task: fill in every TODO, then agree it with the user")
+    print("  task/brief.md    the one page the user approves")
+    print("  predict.py       the fixed interface; src/train.py the baseline")
+    print("next: write task/data/{train,validation,test}.csv, then `mlguy init`")
+    return 0
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     task = load_task(args.project)
     _check_keys(task)
@@ -121,6 +147,9 @@ def cmd_init(args: argparse.Namespace) -> int:
           f"test {len(pd.read_csv(inputs_path))}")
     print(f"  metric {task['metric']['primary']}  |  {budget.describe(task, [])}")
     print(f"  task frozen (hash {digest[:12]})")
+    caveat = validation_caveat(task)
+    if caveat:
+        print(f"  note: {caveat}")
     print("next: train a model into model/, then run `mlguy validate`")
     return 0
 
@@ -291,6 +320,11 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--project", default=".", help="project folder (default: current directory)")
         p.set_defaults(func=func)
         return p
+
+    p = sub.add_parser("new", help="create an empty project from the template")
+    p.add_argument("dir", help="folder to create")
+    p.add_argument("--name", required=True, help="short kebab-case project name")
+    p.set_defaults(func=cmd_new)
 
     p = add("init", "check the task, hide the test labels, freeze task/", cmd_init)
 

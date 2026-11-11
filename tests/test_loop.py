@@ -189,3 +189,32 @@ def test_dashboard_renders_without_error(project, monkeypatch):
     import mlguy.dashboard  # noqa: F401  (importing runs the page)
 
     assert stub.line_chart.called and stub.dataframe.called
+
+
+def test_new_scaffolds_a_runnable_project(tmp_path):
+    target = tmp_path / "fresh"
+    assert main(["new", str(target), "--name", "fresh-project"]) == 0
+    for name in ["task/task.toml", "task/brief.md", "predict.py", "src/train.py", "app.py",
+                 "proposal.md", "PROJECT_MEMORY.md"]:
+        assert (target / name).exists(), name
+    assert "fresh-project" in (target / "task" / "task.toml").read_text()
+    assert main(["new", str(target), "--name", "again"]) == 2, "must not overwrite a project"
+
+
+def test_validation_test_mismatch_is_carried_into_init_and_report(project, capsys):
+    toml = project / "task" / "task.toml"
+    toml.write_text(toml.read_text().replace(
+        "[metric]",
+        'validation_matches_test = false\n'
+        'validation_note = "Validation is drawn like training; the test set is not."\n\n[metric]',
+    ))
+    run(project, "init")
+    assert "does not ask the same question" in capsys.readouterr().out
+
+    run(project, "validate")
+    _write_model(project, 2.0)
+    run(project, "submit", "--note", "double the scale")
+    run(project, "finish")
+    report = (project / "REPORT.md").read_text()
+    assert "does not ask the same question" in report
+    assert "Validation is drawn like training" in report
