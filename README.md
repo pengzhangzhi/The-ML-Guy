@@ -15,10 +15,11 @@ The design rule: **be exact about the problem and the scoring, and leave the mod
 
 ## Status
 
-Early. Milestones 1 to 3 of 4 are in place: the project contract, the scoring rubric, the
-hill-climbing loop with its budget and experiment records, the dashboard, the prediction page,
-and all three skills. What is left is running the whole flow on a dataset from a different
-problem, to find where the design is still shaped around the first one.
+Early but complete end to end. All four milestones are in place: the project contract, the
+scoring rubric, the hill-climbing loop with its budget and experiment records, the dashboard,
+the prediction page, the three skills, and two worked examples from different problem shapes
+(a variant landscape with a continuous target, and binary classification over unrelated
+proteins of varying length).
 
 See [INSTALL.md](INSTALL.md) to set it up for Claude Code or Codex.
 
@@ -33,7 +34,18 @@ uv venv --python 3.11 && source .venv/bin/activate
 uv pip install -e ".[app,examples,dev]"
 ```
 
-## Reference project: amylase
+## Metrics
+
+| Regression | Classification |
+| --- | --- |
+| `spearman`, `pearson`, `ndcg`, `rmse`, `mae` | `accuracy`, `balanced_accuracy`, `f1`, `mcc`, `roc_auc` |
+
+A predictions file has one row per input row, in the same order, with a `prediction` column:
+the number for regression, the class label for classification. Classification projects may add
+a `score` column holding the probability of the positive class, which `roc_auc` needs and the
+prediction page ranks by.
+
+## Example: amylase
 
 One-hot ridge regression on the [FLIP2](https://flip.protein.properties/) alpha-amylase
 one-to-many split.
@@ -79,6 +91,38 @@ different questions has this problem, and the brief should say so.
 
 NDCG here is over the full ranking with linear gain and targets shifted to start at zero. It
 has not been checked against FLIP2's own definition.
+
+## Example: solubility
+
+Binary classification over 71,000 unrelated proteins of varying length
+([DeepSol](https://huggingface.co/datasets/proteinea/solubility), MIT), a deliberately
+different shape from amylase: no fixed length, no reference sequence, no position that means
+the same thing twice.
+
+```bash
+cd examples/solubility
+python make_task.py && mlguy init && python src/train.py && mlguy validate
+```
+
+Three submissions, CPU only, about four minutes of training in total:
+
+| # | What was tried | Validation accuracy |
+| --- | --- | --- |
+| 0 | Logistic regression on residue composition (baseline) | 0.6263 |
+| 1 | Add adjacent-pair (dipeptide) composition, 421 features | 0.6878 |
+| 2 | Gradient-boosted trees on the same features | 0.6949 |
+| 3 | Larger, slower-learning trees | **0.6995** |
+
+Test: accuracy 0.6627, balanced accuracy 0.6626, MCC 0.338, ROC AUC 0.766. For context, the
+PEER benchmark reports roughly 0.64 for a CNN and 0.70 for ESM-1b on this split, so simple
+counting features on a CPU land within a few points of a pretrained protein language model.
+Those comparison numbers are quoted from a secondary summary and have not been checked against
+the paper.
+
+This project declares `validation_matches_test = false`: training and validation are 42%
+soluble while the test set is balanced 50/50, so plain accuracy is not comparable between
+them. `PROJECT_MEMORY.md` records why the rubric cannot select the class-balanced model that
+would probably score better on test, and what to set differently next time.
 
 ## Project layout
 

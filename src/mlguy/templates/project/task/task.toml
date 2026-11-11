@@ -11,7 +11,8 @@ higher_is_better = true              # does a larger predicted value mean a bett
 
 [input]
 alphabet = "ACDEFGHIKLMNPQRSTVWY"
-# length = 425                       # set only if every sequence must be the same length
+# length = 425                       # set only if every sequence must be the same length;
+                                     # leave unset for unrelated proteins of varying length
 # reference = "MKT..."               # wild type, if there is one: lets the app name mutations
 
 [data]
@@ -31,7 +32,9 @@ validation_matches_test = true
 # validation_note = "Validation is drawn like the training set, the test set is not, so ..."
 
 [metric]
-primary = "spearman"                 # spearman | pearson | ndcg | rmse | mae
+# regression:     spearman | pearson | ndcg | rmse | mae
+# classification: accuracy | balanced_accuracy | f1 | mcc | roc_auc
+primary = "spearman"
 secondary = ["ndcg"]
 
 [budget]

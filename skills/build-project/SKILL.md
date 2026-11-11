@@ -60,7 +60,19 @@ published split is being reproduced, or the data only allows one sensible divisi
 the brief, and set `validation_matches_test = false` with a `validation_note` in `task.toml`.
 The warning then follows through to the report.
 
-## 4. Write the brief and get it approved
+## 4. Choose a metric that cannot be gamed by the split
+
+Pick the metric from what they will do with the predictions, then check it against the split
+you just chose. A metric that moves with something other than model quality will mislead the
+search.
+
+The common trap is a class balance that differs between validation and test: plain accuracy
+then measures the base rate as much as the model, and the loop will prefer a model fitted to
+the wrong one. When the balance differs, prefer `balanced_accuracy` or `mcc` over `accuracy`.
+If you keep a base-rate-dependent metric anyway — to stay comparable with published numbers,
+say — record that reason in the brief, because the search will be ranked by it.
+
+## 5. Write the brief and get it approved
 
 Fill in `task/brief.md`: goal, input, output, data, how it is tested, how it is scored, the
 starting model, the budget, and the assumptions you made rather than were told. Every line in
@@ -69,7 +81,7 @@ their language. Then show it and ask them to approve or correct it.
 **Do not build anything before they approve.** This is the one point where a wrong metric or a
 wrong split is cheap to fix.
 
-## 5. Build it
+## 6. Build it
 
 ```bash
 mlguy new <folder> --name <project-name>
@@ -85,7 +97,7 @@ research step's job, and `validate` does not count against the budget.
 
 If `mlguy validate` fails, the project is not finished. Fix it before handing over.
 
-## 6. Hand over
+## 7. Hand over
 
 Tell them, in their language: what the model will predict, how it will be judged, what the
 baseline already scores, and what the budget allows. Then start the research loop, or tell

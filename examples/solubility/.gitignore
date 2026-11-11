@@ -1,0 +1,4 @@
+model/
+work/
+__pycache__/
+.gradio/

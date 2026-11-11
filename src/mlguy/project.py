@@ -130,7 +130,12 @@ def score_split(project_dir: str | Path, split: str, run_dir: str | Path | None 
         except Exception as e:
             raise SubmissionError(f"could not read the predictions file: {e}")
 
-    y_pred = judge.check_predictions(preds, len(y_true))
+    y_pred, y_score = judge.check_predictions(preds, len(y_true))
     primary = task["metric"]["primary"]
     names = [primary] + [m for m in task["metric"].get("secondary", []) if m != primary]
-    return {"split": split, "n": int(len(y_true)), "primary": primary, "metrics": judge.score(y_true, y_pred, names)}
+    return {
+        "split": split,
+        "n": int(len(y_true)),
+        "primary": primary,
+        "metrics": judge.score(y_true, y_pred, names, y_score=y_score),
+    }

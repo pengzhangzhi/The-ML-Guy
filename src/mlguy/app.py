@@ -33,7 +33,7 @@ def predict_table(project_dir: str | Path, ids: list[str], seqs: list[str]) -> t
         input_csv, output_csv = Path(tmp) / "inputs.csv", Path(tmp) / "predictions.csv"
         pd.DataFrame({seq_col: [s for _, s in keep]}).to_csv(input_csv, index=False)
         run_predict(task["_project_dir"], input_csv, output_csv)
-        values = check_predictions(pd.read_csv(output_csv), len(keep))
+        values, scores = check_predictions(pd.read_csv(output_csv), len(keep))
 
     reference = spec.get("reference")
     table = pd.DataFrame(
@@ -44,8 +44,13 @@ def predict_table(project_dir: str | Path, ids: list[str], seqs: list[str]) -> t
             "sequence": [s for _, s in keep],
         }
     )
+    sort_by = "prediction"
+    if scores is not None:
+        table.insert(2, "score", scores)
+        columns.insert(3, "score")
+        sort_by = "score"
     best_first = task["task"].get("higher_is_better", True)
-    table = table.sort_values("prediction", ascending=not best_first, kind="stable").reset_index(drop=True)
+    table = table.sort_values(sort_by, ascending=not best_first, kind="stable").reset_index(drop=True)
     table.insert(0, "rank", range(1, len(table) + 1))
     return table[columns], rejected
 
@@ -87,9 +92,11 @@ def make_app(project_dir: str | Path):
         fig = None
         download = None
         if len(table):
+            column = "score" if "score" in table.columns else "prediction"
             fig, ax = plt.subplots(figsize=(6, 3.2))
-            ax.hist(table["prediction"], bins=min(40, max(5, len(table) // 5)), color="#4c72b0")
-            ax.set_xlabel(f"predicted {output_name}")
+            ax.hist(table[column], bins=min(40, max(5, len(table) // 5)), color="#4c72b0")
+            ax.set_xlabel(f"predicted {output_name}" if column == "prediction"
+                          else f"probability of {output_name}")
             ax.set_ylabel("number of sequences")
             ax.spines[["top", "right"]].set_visible(False)
             fig.tight_layout()

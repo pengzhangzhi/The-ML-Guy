@@ -2,8 +2,10 @@
 
     python predict.py --model model --input sequences.csv --output predictions.csv
 
-Input is a CSV with a sequence column, or a FASTA file. Output is a CSV with one
-'prediction' per input row, in the same order.
+Input is a CSV with a sequence column, or a FASTA file. Output is a CSV with one row per
+input row, in the same order, holding:
+  prediction   the predicted value, or the class label if this is a classification task
+  score        classification only: the probability of the positive class
 
 Everything inside this file is yours to change. The command line is not: the rubric and the
 prediction page both call it exactly as above.
@@ -33,8 +35,16 @@ def main() -> None:
 
     bundle = joblib.load(args.model / "bundle.joblib")
     _, seqs = read_sequences(args.input)
-    predictions = bundle["model"].predict(features.build(seqs, bundle))
-    pd.DataFrame({"sequence": seqs, "prediction": predictions}).to_csv(args.output, index=False)
+    x = features.build(seqs, bundle)
+    if bundle.get("scaler") is not None:
+        x = bundle["scaler"].transform(x)
+
+    model = bundle["model"]
+    out = {"sequence": seqs, "prediction": model.predict(x)}
+    if bundle.get("classification"):
+        positive = max(model.classes_)
+        out["score"] = model.predict_proba(x)[:, list(model.classes_).index(positive)]
+    pd.DataFrame(out).to_csv(args.output, index=False)
 
 
 if __name__ == "__main__":
