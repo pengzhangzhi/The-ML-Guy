@@ -1,0 +1,37 @@
+# Frozen task definition. Everything here is strict; everything about modeling is free.
+schema_version = "0.1"
+name = "amylase-one-to-many"
+
+[task]
+type = "regression"
+input = "protein_sequence"
+output = "stain_removal_activity"
+higher_is_better = true
+
+[input]
+alphabet = "ACDEFGHIKLMNPQRSTVWY"
+length = 425
+# Wild-type B. subtilis alpha-amylase as it appears in the data; used to display mutations.
+reference = "LTAPSIKSGTILHAWNWSFNTLKHNMKDIHDAGYTAIQTSPINQVKEGNQGDKSMSNWYWLYQPTSYQIGNRYLGTEQEFKEMCAAAEEYGIKVIVDAVINHTTSDYAAISNEVKSIPNWTHGNTPIKNWSDRWDVTQNSLSGLYDWNTQNTQVQSYLKRFLDRALNDGADGFRFDAAKHIELPDDGSYGSQFWPNITNTSAEFQYGEILQDSVSRDAAYANYMDVTASNYGHSIRSALKNRNLGVSNISHYAVDVSADKLVTWVESHDTYANDDEESTWMSDDDIRLGWAVIASRSGSTPLFFSRPEGGGNGVRFPGKSQIGDRGSALFEDQAITAVNRFHNVMAGQPEELSNPNGNNQIFMNQRGSHGVVLANAGSSSVSINTATKLPDGRYDNKAGAGSFQVNDGKLTGTINARSVAVLYPD"
+
+[data]
+source = "https://flip.protein.properties/assets/splits/amylase/one_to_many.csv.gz"
+split = "FLIP2 amylase one_to_many, as published"
+train = "data/train.csv"
+validation = "data/validation.csv"
+test = "data/test.csv"               # labelled; `mlguy init` consumes this and hides the labels
+test_inputs = "data/test_inputs.csv" # what is left in the project after init
+sequence_column = "sequence"
+target_column = "target"
+
+[metric]
+primary = "spearman"
+secondary = ["ndcg"]
+
+[budget]
+max_submissions = 3
+
+[page]
+title = "Amylase stain-removal predictor"
+description = "Predicts the stain-removal activity of *Bacillus subtilis* alpha-amylase variants from their amino-acid sequence. Upload variants to get them ranked, best first."
+tested = "Trained on variants with 2 to 8 mutations and tested on single mutants it had never seen (FLIP2 one-to-many split)."
