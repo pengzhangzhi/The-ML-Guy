@@ -305,10 +305,17 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
-    from mlguy.app import launch
-
-    launch(args.project, port=args.port, share=args.share)
-    return 0
+    """Run the project's own page. The framework ships none: the agent builds it for the problem."""
+    project_dir = Path(args.project).resolve()
+    if not (project_dir / "app.py").exists():
+        raise CommandError(f"no app.py in {project_dir}: this project's page has not been built yet "
+                           "(the deploy skill covers it)")
+    cmd = [sys.executable, "app.py"]
+    if args.port:
+        cmd += ["--port", str(args.port)]
+    if args.share:
+        cmd += ["--share"]
+    return subprocess.call(cmd, cwd=project_dir)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -348,9 +355,9 @@ def main(argv: list[str] | None = None) -> int:
     p = add("dashboard", "watch the experiments in a browser", cmd_dashboard)
     p.add_argument("--port", type=int, default=8501)
 
-    p = add("serve", "launch the prediction page", cmd_serve)
+    p = add("serve", "run the project's own page (app.py)", cmd_serve)
     p.add_argument("--port", type=int, default=None)
-    p.add_argument("--share", action="store_true", help="create a public Gradio link")
+    p.add_argument("--share", action="store_true", help="passed to app.py as --share")
 
     args = parser.parse_args(argv)
     try:

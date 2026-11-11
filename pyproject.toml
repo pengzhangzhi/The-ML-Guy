@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "mlguy"
 version = "0.0.1"
-description = "The-ML-Guy: describe a prediction problem to a coding agent, get back a scored model and a prediction page."
+description = "The-ML-Guy: describe a prediction problem to a coding agent, get back a scored model and a page for using it."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-app = ["gradio>=4.44", "matplotlib>=3.8"]
+examples = ["gradio>=4.44"]   # the example projects' pages
 dashboard = ["streamlit>=1.37"]
 dev = ["pytest>=8"]
 

@@ -36,7 +36,7 @@ def main() -> None:
     maximise = METRICS[primary][1] == "maximize"
     best = experiments.best(primary)
 
-    st.title(task.get("page", {}).get("title", task["name"]))
+    st.title(task["name"])
     st.caption(
         f"Predicting {task['task']['output'].replace('_', ' ')} from a "
         f"{task['task']['input'].replace('_', ' ')} · hill-climbing on validation {primary}"

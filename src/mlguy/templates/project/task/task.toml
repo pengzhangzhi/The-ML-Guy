@@ -37,19 +37,3 @@ secondary = []
 max_submissions = 10
 # max_hours = 6
 # deadline = "2026-12-01T09:00:00"
-
-[page]
-title = "TODO Predictor"
-description = "TODO one or two sentences a scientist would recognise, in their language."
-tested = "TODO how the model was tested, in one sentence."
-# row_name = "variant"               # what one row is called on the page; default "row"
-
-# Optional, only when an input column is a biological sequence:
-# fasta_column = "sequence"          # also accept FASTA uploads and pasted sequences
-# mutations_from = "sequence"        # name mutations against [input].reference
-
-# Optional checks for a sequence column, used by the prediction page to reject bad input:
-# [input]
-# alphabet = "ACDEFGHIKLMNPQRSTVWY"
-# length = 425                       # only if every value has the same length
-# reference = "MKT..."               # wild type, for naming mutations

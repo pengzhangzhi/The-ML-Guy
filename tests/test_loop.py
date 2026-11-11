@@ -194,7 +194,7 @@ def test_dashboard_renders_without_error(project, monkeypatch):
 def test_new_scaffolds_a_runnable_project(tmp_path):
     target = tmp_path / "fresh"
     assert main(["new", str(target), "--name", "fresh-project"]) == 0
-    for name in ["task/task.toml", "task/brief.md", "predict.py", "src/train.py", "app.py",
+    for name in ["task/task.toml", "task/brief.md", "predict.py", "src/train.py",
                  "proposal.md", "PROJECT_MEMORY.md"]:
         assert (target / name).exists(), name
     assert "fresh-project" in (target / "task" / "task.toml").read_text()
@@ -313,34 +313,12 @@ def _tabular_project(tmp_path, monkeypatch):
     return project
 
 
-def test_the_page_handles_a_project_with_no_sequences(tmp_path, monkeypatch):
-    from mlguy.app import parse_pasted, predict_table, read_table
-    from mlguy.project import load_task
-
+def test_serve_runs_the_projects_own_page(tmp_path, monkeypatch, capfd):
+    """The framework ships no page: `serve` runs whatever app.py the agent built."""
     project = _tabular_project(tmp_path, monkeypatch)
-    task = load_task(project)
+    assert run(project, "serve") == 2, "no app.py yet, so there is nothing to serve"
+    assert "not been built" in capfd.readouterr().err
 
-    upload = tmp_path / "new.csv"
-    pd.DataFrame({"cell_line": ["A", "B"], "dose": [1.0, 2.0], "replicate": [1, 1],
-                  "note": ["ignored", "ignored"]}).to_csv(upload, index=False)
-    result, rejected = predict_table(project, read_table(upload, task))
-    assert list(result.columns) == ["rank", "id", "prediction", "cell_line", "dose", "replicate"]
-    assert len(result) == 2 and len(rejected) == 0
-
-    missing = tmp_path / "missing.csv"
-    pd.DataFrame({"cell_line": ["A"]}).to_csv(missing, index=False)
-    with pytest.raises(ValueError, match="dose"):
-        read_table(missing, task)
-
-    with pytest.raises(ValueError, match="upload a CSV"):
-        parse_pasted("A,1.0,1", task)
-
-
-def test_the_page_rejects_rows_with_missing_values(tmp_path, monkeypatch):
-    from mlguy.app import predict_table
-
-    project = _tabular_project(tmp_path, monkeypatch)
-    table = pd.DataFrame({"cell_line": ["A", None], "dose": [1.0, 2.0], "replicate": [1, 1]})
-    result, rejected = predict_table(project, table)
-    assert len(result) == 1 and len(rejected) == 1
-    assert "missing" in rejected.iloc[0]["reason"]
+    (project / "app.py").write_text("import sys; print('page', *sys.argv[1:])\n")
+    assert run(project, "serve", "--port", "7001", "--share") == 0
+    assert "page --port 7001 --share" in capfd.readouterr().out

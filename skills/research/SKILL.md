@@ -19,7 +19,7 @@ python predict.py --model model --input rows.csv --output predictions.csv
 ```
 
 It reads a CSV holding the task's input columns and writes a CSV with one `prediction` per
-input row, in the same order (plus a `score` column for classification). The rubric and the prediction page both call it, so it must
+input row, in the same order (plus a `score` column for classification). The rubric and the project's page both call it, so it must
 keep working.
 
 ## What is yours

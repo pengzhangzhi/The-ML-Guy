@@ -10,7 +10,7 @@ Needs Python 3.11 or newer.
 ```bash
 git clone https://github.com/pengzhangzhi/The-ML-Guy.git
 cd The-ML-Guy
-pip install -e ".[app,dashboard]"
+pip install -e ".[dashboard]"
 mlguy --help          # should list: new, init, validate, submit, finish, status, ...
 ```
 
@@ -18,11 +18,11 @@ With `uv`, which is faster and keeps the environment separate:
 
 ```bash
 uv venv --python 3.11 && source .venv/bin/activate
-uv pip install -e ".[app,dashboard]"
+uv pip install -e ".[dashboard]"
 ```
 
-Both extras are optional: `app` for the prediction page, `dashboard` for the experiment
-dashboard. Everything a generated project needs to train is in the core install.
+The `dashboard` extra is optional. There is no page to install: the agent builds one per
+project with whatever library suits it. Everything a generated project needs to train is in the core install.
 
 ## 2. Install the skills
 

@@ -1,6 +1,6 @@
 ---
 name: deploy
-description: Finish a The-ML-Guy project: score the test set once, write the report and the prediction page in the user's language, and record what was learned. Use when the budget is spent or the user wants to stop and use the model.
+description: Finish a The-ML-Guy project: score the test set once, write the report and build a page for the user's problem, and record what was learned. Use when the budget is spent or the user wants to stop and use the model.
 ---
 
 # Finishing a project
@@ -10,7 +10,7 @@ between the experiments and that: a report they can read, and a page they can us
 
 ```bash
 mlguy finish    # scores the best submission on the test set once, writes REPORT.md
-mlguy serve     # the prediction page
+mlguy serve     # runs the page you build: app.py
 ```
 
 ## The report
@@ -29,20 +29,24 @@ the top of it answer the question they actually asked, in the words of `task/bri
 - **Be straight when nothing improved.** If no submission beat the baseline, say that plainly
   and say what you would try next. A report that oversells is worse than no report.
 
-## The prediction page
+## The page
 
-`mlguy serve` runs the generic page: upload a CSV of the task's input columns, get ranked
-predictions, a plot and a download. It reads its wording from `[page]` in `task.toml`, so adjust that rather than
-rewriting the page:
+There is no built-in page. You build `app.py` for this user and this problem, because only
+you know what they will actually do with the model: rank candidates, check one case at a
+time, compare two conditions, draw samples. Re-read `task/brief.md` and design for that. The
+layout, the inputs it accepts, the plots and the library are all your call.
 
-- `title`: what it predicts, named as they would name it.
-- `row_name`: what one row is called, so the page says "42 variants" or "42 patients" rather
-  than "42 rows".
-- `description`: one or two sentences a colleague could read cold.
-- `tested`: how it was tested, so nobody applies it to the wrong thing.
+Three things are not:
 
-Check it yourself before handing it over: start it, upload a few rows of real data, and see
-that the output is sensible and the rejected-row messages make sense.
+- **It runs the scored model.** Get outputs by calling `predict.py`, the code path the report's
+  numbers were measured on, not a reimplementation.
+- **It says what the model was tested on and what it was not,** in their words, where someone
+  using it cold will see it.
+- **`python app.py [--port N] [--share]` starts it,** so `mlguy serve` works.
+
+Accept input in the form they already have it, and when a row cannot be used, say why in
+their terms. Check it yourself before handing over: start it, feed it real data, and feed it
+something broken.
 
 ## Project memory
 

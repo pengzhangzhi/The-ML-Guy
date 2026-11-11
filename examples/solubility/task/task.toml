@@ -30,10 +30,3 @@ secondary = ["balanced_accuracy", "mcc", "roc_auc"]
 
 [budget]
 max_submissions = 3
-
-[page]
-title = "Protein solubility predictor"
-description = "Predicts whether a protein will be soluble when expressed in *E. coli*, from its amino-acid sequence alone. Paste or upload sequences to get a soluble/insoluble call and the probability behind it."
-row_name = "protein"
-fasta_column = "sequence"
-tested = "Tested on 2,001 proteins held out by sequence similarity, so the test proteins are not close relatives of anything the model was trained on."

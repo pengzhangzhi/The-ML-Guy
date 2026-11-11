@@ -37,7 +37,7 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
     output = task["task"]["output"].replace("_", " ")
 
     lines = [
-        f"# {task.get('page', {}).get('title', task['name'])}: result",
+        f"# {task['name']}: result",
         "",
         f"Predicts **{output}** from {task['task']['input'].replace('_', ' ')}. {direction}.",
         "",
@@ -90,7 +90,7 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
         "## Using the model",
         "",
         "```bash",
-        "mlguy serve                 # a page for uploading data and getting predictions",
+        "mlguy serve                 # this project's page, once app.py has been built",
         f"python predict.py --model experiments/{best['number']:04d}/submission/model \\",
         "    --input my_data.csv --output predictions.csv",
         "```",

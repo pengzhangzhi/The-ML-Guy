@@ -1,7 +1,7 @@
 # The-ML-Guy
 
 Describe a prediction problem to a coding agent (Claude Code or Codex) and get back a trained
-model, a report, and a web page for running predictions. No ML background needed.
+model, a report, and a web page for using it. No ML background needed.
 
 The design rule: **be exact about the problem and the scoring, and leave the modelling open.**
 
@@ -35,7 +35,7 @@ The-ML-Guy is a thin layer on top of a coding agent, not a framework that runs o
 
 Early but complete end to end. All four milestones are in place: the project contract, the
 scoring rubric, the hill-climbing loop with its budget and experiment records, the dashboard,
-the prediction page, the three skills, and two worked examples from different problem shapes
+the three skills, and two worked examples from different problem shapes
 (a variant landscape with a continuous target, and binary classification over unrelated
 proteins of varying length).
 
@@ -49,7 +49,7 @@ deliberately goes looking for them.
 
 ```bash
 uv venv --python 3.11 && source .venv/bin/activate
-uv pip install -e ".[app,examples,dev]"
+uv pip install -e ".[dashboard,examples,dev]"
 ```
 
 ## Metrics
@@ -60,8 +60,7 @@ uv pip install -e ".[app,examples,dev]"
 
 A predictions file has one row per input row, in the same order, with a `prediction` column:
 the number for regression, the class label for classification. Classification projects may add
-a `score` column holding the probability of the positive class, which `roc_auc` needs and the
-prediction page ranks by.
+a `score` column holding the probability of the positive class, which `roc_auc` needs.
 
 Only supervised prediction is supported today. Generative tasks are scored a different way —
 by an external model or a problem-specific check rather than a held-out answer key — and need
@@ -86,7 +85,7 @@ mlguy status                        # what has been tried, what is best, what bu
 mlguy dashboard                     # the same, in a browser
 
 mlguy finish                        # scores the best submission on test once, writes REPORT.md
-mlguy serve                         # prediction page: upload CSV or FASTA, get ranked predictions
+mlguy serve                         # this project's own page (app.py)
 ```
 
 `mlguy submit` scores `model/` on validation, keeps a snapshot of the code and model that
@@ -156,7 +155,7 @@ project/
 ├── model/           the model as it stands now
 ├── experiments/     written only by `mlguy submit`: log.jsonl + a snapshot per submission
 ├── REPORT.md        written by `mlguy finish`
-└── app.py           prediction page
+└── app.py           FREE: the page, built by the agent for this problem
 ```
 
 Test labels live in `~/.mlguy/projects/<name>/`, outside the project folder, along with the
@@ -164,7 +163,7 @@ hash of `task/` taken when the brief was approved.
 
 `predict.py` reads a CSV holding the task's input columns and writes a CSV with one
 `prediction` per input row, in the same order. It is the only agent-written code with a fixed
-shape, because both the rubric and the prediction page call it.
+shape, because both the rubric and the project's page call it.
 
 The input columns are whatever the problem needs: a protein sequence, a cell type and a dose,
 a set of clinical measurements, paths to image files. The core treats them as opaque and hands
@@ -176,14 +175,9 @@ input_columns = ["cell_line", "dose"]
 target_column = "response"
 ```
 
-A project whose input is a biological sequence can switch on two conveniences, which are off
-by default and live in an optional `mlguy.sequence` module:
-
-```toml
-[page]
-fasta_column = "sequence"      # also accept FASTA uploads and pasted sequences
-mutations_from = "sequence"    # name mutations (Q68S) against [input].reference
-```
+There is no built-in page and no domain code in the core. The agent writes `app.py` for the
+problem in front of it: the amylase example accepts FASTA and names each variant by its
+mutations; a clinical model would look nothing like it. `mlguy serve` just runs it.
 
 ## For agents
 
@@ -194,7 +188,7 @@ the commands, and leaves the judgment to the agent.
 | --- | --- |
 | `build-project` | Look at the data, ask only what is missing, write the brief, get it approved, scaffold and validate |
 | `research` | The loop: the goal, the rubric, the budget, the commands. The approach is the agent's own |
-| `deploy` | Score the test set once, write the report and the page in the user's language, record what was learned |
+| `deploy` | Score the test set once, write the report, build a page for the user's problem, record what was learned |
 
 Starting a project by hand:
 

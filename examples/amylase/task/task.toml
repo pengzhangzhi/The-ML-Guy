@@ -32,11 +32,3 @@ secondary = ["ndcg"]
 
 [budget]
 max_submissions = 3
-
-[page]
-title = "Amylase stain-removal predictor"
-description = "Predicts the stain-removal activity of *Bacillus subtilis* alpha-amylase variants from their amino-acid sequence. Upload variants to get them ranked, best first."
-row_name = "variant"
-fasta_column = "sequence"
-mutations_from = "sequence"
-tested = "Trained on variants with 2 to 8 mutations and tested on single mutants it had never seen (FLIP2 one-to-many split)."

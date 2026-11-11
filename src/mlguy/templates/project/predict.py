@@ -8,7 +8,7 @@ the same order, with:
   score        classification only: the probability of the positive class
 
 Everything inside this file is yours to change. The command line is not: the rubric and the
-prediction page both call it exactly as above.
+project's page both call it exactly as above.
 """
 
 from __future__ import annotations
