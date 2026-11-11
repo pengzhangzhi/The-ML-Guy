@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from helpers import DATA_TOML, write_splits
 from mlguy.cli import main
 from mlguy.records import Experiments
 
@@ -22,11 +23,7 @@ input = "a group"
 output = "measurements"
 
 [data]
-train = "data/train.csv"
-validation = "data/validation.csv"
-test = "data/test.csv"
-input_columns = ["group"]
-
+""" + DATA_TOML + """
 [sampling]
 n = 20
 seed = 0
@@ -54,7 +51,7 @@ a = p.parse_args()
 samples, truth = pd.read_csv(a.outputs), pd.read_csv(a.reference)
 if "value" not in samples:
     raise SystemExit("samples need a 'value' column")
-distance = (samples["value"] - samples["condition"].map(truth["mean"])).abs()
+distance = (samples["value"] - samples["id"].map(truth.set_index("id")["mean"])).abs()
 json.dump({"metrics": {"distance": float(distance.mean()), "spread": float(samples["value"].std()),
                        "final": float(a.split == "final")},
            "per_item": distance.tolist()}, open(a.result, "w"))
@@ -66,14 +63,14 @@ from pathlib import Path
 import numpy as np, pandas as pd
 
 p = argparse.ArgumentParser()
-p.add_argument("--model", type=Path); p.add_argument("--conditions"); p.add_argument("--n", type=int)
+p.add_argument("--model", type=Path); p.add_argument("--input"); p.add_argument("--n", type=int)
 p.add_argument("--seed", type=int); p.add_argument("--output")
 a = p.parse_args()
 
 means = json.loads((a.model / "means.json").read_text())
 rng = np.random.default_rng(a.seed)
-rows = [{"condition": i, "value": means.get(g, 0.0) + rng.normal(scale=0.1)}
-        for i, g in enumerate(pd.read_csv(a.conditions)["group"]) for _ in range(a.n)]
+rows = [{"id": c.id, "value": means.get(c.group, 0.0) + rng.normal(scale=0.1)}
+        for c in pd.read_csv(a.input).itertuples() for _ in range(a.n)]
 pd.DataFrame(rows)%s.to_csv(a.output, index=False)
 '''
 
@@ -97,11 +94,9 @@ def generation(tmp_path, monkeypatch):
     (project / "task" / "task.toml").write_text(GEN_TOML)
     (project / "task" / "evaluate.py").write_text(EVALUATE_PY)
     reference = pd.DataFrame({"group": list(TRUE_MEANS), "mean": list(TRUE_MEANS.values())})
-    pd.DataFrame({"group": ["a", "b", "c"] * 10, "value": [1.0, 5.0, 9.0] * 10}).to_csv(
-        project / "task" / "data" / "train.csv", index=False)
-    reference.to_csv(project / "task" / "data" / "validation.csv", index=False)
-    reference.iloc[::-1].to_csv(project / "task" / "data" / "test.csv", index=False)
-    (project / "generate.py").write_text(GENERATE_PY % "")
+    write_splits(project / "task" / "data", pd.DataFrame({"group": ["a", "b", "c"] * 10, "value": [1.0, 5.0, 9.0] * 10}),
+                 reference, reference.iloc[::-1], target="mean")
+    (project / "infer.py").write_text(GENERATE_PY % "")
     _model(project, error=2.0)
     return project
 
@@ -112,7 +107,7 @@ def test_generation_loop(generation, capsys):
     out = capsys.readouterr().out
     assert "20 per condition on every submission" in out and "50 per condition for the final" in out
     data = project / "task" / "data"
-    assert not (data / "test.csv").exists() and not (data / "test_inputs.csv").exists(), \
+    assert not (data / "test_labels.csv").exists() and not (data / "test_inputs.csv").exists(), \
         "the final conditions stay unseen until finish"
 
     assert run(project, "validate") == 0
@@ -128,14 +123,14 @@ def test_generation_loop(generation, capsys):
     better = experiments.all()[-1]
     assert better["vs_best"] == {"number": 0, "chance_better": 1.0}, "lower distance is better"
     assert experiments.best("distance", "minimize")["number"] == 1
-    assert (experiments.dir / "0001" / "submission" / "generate.py").exists()
+    assert (experiments.dir / "0001" / "submission" / "infer.py").exists()
 
     assert run(project, "finish") == 0
     final = json.loads((project.parent / "state/projects/toy-generation/test_score.json").read_text())
     assert final["number"] == 1 and final["n"] == 150, "50 fresh samples for each held-out condition"
     assert final["metrics"]["final"] == 1.0, "the evaluator is told this is the final check"
     report = (project / "REPORT.md").read_text()
-    assert "Generates **measurements**" in report and "generate.py" in report
+    assert "Generates **measurements**" in report and "--n 100" in report
     assert run(project, "finish") == 2
 
 
@@ -143,11 +138,11 @@ def test_malformed_samples_are_an_error_not_a_score(generation):
     project = generation
     run(project, "init")
     run(project, "validate")
-    (project / "generate.py").write_text(GENERATE_PY % ".iloc[:-3]")     # three samples short
+    (project / "infer.py").write_text(GENERATE_PY % ".iloc[:-3]")     # three samples short
     assert run(project, "submit", "--note", "drop some") == 1
     assert "20 samples for each of 3 conditions" in Experiments(project).all()[-1]["error"]
 
-    (project / "generate.py").write_text(GENERATE_PY % '.rename(columns={"value": "v"})')
+    (project / "infer.py").write_text(GENERATE_PY % '.rename(columns={"value": "v"})')
     assert run(project, "submit", "--note", "wrong column") == 1
     assert "samples need a 'value' column" in Experiments(project).all()[-1]["error"], \
         "the evaluator's own complaint reaches the agent"
@@ -159,7 +154,7 @@ def test_an_evaluator_can_be_tried_on_a_file(generation, capsys, tmp_path):
     run(project, "init")
     capsys.readouterr()
     for name, offset in [("good", 0.0), ("bad", 4.0)]:
-        pd.DataFrame({"condition": [0, 1, 2], "value": [1.0 + offset, 5.0 + offset, 9.0 + offset]}).to_csv(
+        pd.DataFrame({"id": ["v0", "v1", "v2"], "value": [1.0 + offset, 5.0 + offset, 9.0 + offset]}).to_csv(
             tmp_path / f"{name}.csv", index=False)
     scores = {}
     for name in ("good", "bad"):
@@ -195,10 +190,7 @@ input = "a number"
 output = "another_number"
 
 [data]
-train = "data/train.csv"
-validation = "data/validation.csv"
-test = "data/test.csv"
-input_columns = ["x"]
+""" + DATA_TOML + """target_column = "y"
 
 [evaluator]
 script = "evaluate.py"
@@ -215,7 +207,8 @@ import pandas as pd
 p = argparse.ArgumentParser()
 p.add_argument("--outputs"); p.add_argument("--reference"); p.add_argument("--split"); p.add_argument("--result")
 a = p.parse_args()
-error = (pd.read_csv(a.outputs)["prediction"] - pd.read_csv(a.reference)["y"]).abs()
+both = pd.read_csv(a.outputs).merge(pd.read_csv(a.reference), on="id")
+error = (both["prediction"] - both["y"]).abs()
 json.dump({"metrics": {"worst_error": float(error.max())}}, open(a.result, "w"))
 '''
 
@@ -228,7 +221,8 @@ p = argparse.ArgumentParser()
 p.add_argument("--model", type=Path); p.add_argument("--input"); p.add_argument("--output")
 a = p.parse_args()
 slope = json.loads((a.model / "w.json").read_text())["slope"]
-pd.DataFrame({"prediction": pd.read_csv(a.input)["x"] * slope}).to_csv(a.output, index=False)
+rows = pd.read_csv(a.input)
+rows.assign(prediction=rows["x"] * slope)[["id", "prediction"]].to_csv(a.output, index=False)
 '''
 
 
@@ -240,14 +234,13 @@ def test_a_prediction_task_can_bring_its_own_metric(tmp_path, monkeypatch, capsy
     (project / "task" / "evaluate.py").write_text(PRED_EVALUATE)
     frame = pd.DataFrame({"x": [float(i) for i in range(300)]})
     frame["y"] = frame["x"] * 2
-    for name, part in [("train", frame[:100]), ("validation", frame[100:200]), ("test", frame[200:])]:
-        part.to_csv(project / "task" / "data" / f"{name}.csv", index=False)
-    (project / "predict.py").write_text(PRED_PREDICT)
+    write_splits(project / "task" / "data", frame[:100], frame[100:200], frame[200:], target="y")
+    (project / "infer.py").write_text(PRED_PREDICT)
     (project / "model").mkdir()
     (project / "model" / "w.json").write_text(json.dumps({"slope": 1.0}))
 
     assert run(project, "init") == 0
-    assert list(pd.read_csv(project / "task" / "data" / "test_inputs.csv").columns) == ["x"]
+    assert list(pd.read_csv(project / "task" / "data" / "test_inputs.csv").columns) == ["id", "x"]
     assert run(project, "validate") == 0
     assert Experiments(project).all()[0]["interval"] is None, "no per-item scores, so no interval is claimed"
     (project / "model" / "w.json").write_text(json.dumps({"slope": 2.0}))

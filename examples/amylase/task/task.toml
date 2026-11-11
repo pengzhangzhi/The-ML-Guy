@@ -17,12 +17,11 @@ reference = "LTAPSIKSGTILHAWNWSFNTLKHNMKDIHDAGYTAIQTSPINQVKEGNQGDKSMSNWYWLYQPTSY
 [data]
 source = "https://flip.protein.properties/assets/splits/amylase/one_to_many.csv.gz"
 split = "FLIP2 amylase one_to_many, as published"
-train = "data/train.csv"
-validation = "data/validation.csv"
-test = "data/test.csv"               # labelled; `mlguy init` consumes this and hides the labels
-test_inputs = "data/test_inputs.csv" # what is left in the project after init
-input_columns = ["sequence"]
-target_column = "target"
+train = "data/train.csv"                        # sequence, target
+validation_inputs = "data/validation_inputs.csv" # id, sequence
+validation_labels = "data/validation_labels.csv" # id, target
+test_inputs = "data/test_inputs.csv"
+test_labels = "data/test_labels.csv"            # `mlguy init` moves this out of the project
 validation_matches_test = false
 validation_note = "Validation rows are multi-mutants, like the training rows, while the test rows are single mutants. A model that ranks multi-mutants better does not necessarily rank single mutants better."
 

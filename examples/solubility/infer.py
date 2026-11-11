@@ -1,14 +1,9 @@
-"""The project's one fixed interface: a table in, a prediction per row out.
+"""The project's one fixed interface: run the model on some sequences.
 
-    python predict.py --model model --input sequences.csv --output predictions.csv
+    python infer.py --model model --input sequences.csv --output outputs.csv
 
-Input is a CSV with a sequence column, or a FASTA file. Output is a CSV with one row per
-input row, in the same order, holding:
-  prediction   the predicted value, or the class label if this is a classification task
-  score        classification only: the probability of the positive class
-
-Everything inside this file is yours to change. The command line is not: the rubric and the
-project's page both call it exactly as above.
+--input is a CSV with `id` and `sequence` columns. --output is a CSV with one row per id:
+`prediction` (the class label) and `score` (the probability of being soluble).
 """
 
 from __future__ import annotations
@@ -33,13 +28,14 @@ def main() -> None:
     args = parser.parse_args()
 
     bundle = joblib.load(args.model / "bundle.joblib")
-    seqs = pd.read_csv(args.input)["sequence"].astype(str).tolist()
+    rows = pd.read_csv(args.input)
+    seqs = rows["sequence"].astype(str).tolist()
     x = features.build(seqs, bundle)
     if bundle.get("scaler") is not None:
         x = bundle["scaler"].transform(x)
 
     model = bundle["model"]
-    out = {"sequence": seqs, "prediction": model.predict(x)}
+    out = {"id": rows["id"], "prediction": model.predict(x)}
     if bundle.get("classification"):
         positive = max(model.classes_)
         out["score"] = model.predict_proba(x)[:, list(model.classes_).index(positive)]

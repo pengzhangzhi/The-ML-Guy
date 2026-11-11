@@ -10,6 +10,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from helpers import DATA_TOML, write_splits
 from mlguy.cli import main
 from mlguy.records import Experiments
 
@@ -28,13 +29,7 @@ alphabet = "ACDE"
 length = 8
 
 [data]
-train = "data/train.csv"
-validation = "data/validation.csv"
-test = "data/test.csv"
-test_inputs = "data/test_inputs.csv"
-input_columns = ["sequence"]
-target_column = "target"
-
+""" + DATA_TOML + """
 [metric]
 primary = "spearman"
 secondary = ["ndcg"]
@@ -55,8 +50,9 @@ p.add_argument("--output", type=Path, required=True)
 a = p.parse_args()
 
 scale = json.loads((a.model / "weights.json").read_text())["scale"]
-seqs = pd.read_csv(a.input)["sequence"].tolist()
-pd.DataFrame({{"prediction": [scale * s.count("A") + {offset} for s in seqs]}}).to_csv(a.output, index=False)
+rows = pd.read_csv(a.input)
+rows["prediction"] = [scale * s.count("A") + {offset} for s in rows["sequence"]]
+rows[["id", "prediction"]].to_csv(a.output, index=False)
 '''
 
 
@@ -66,7 +62,7 @@ def _write_model(project: Path, scale: float) -> None:
 
 
 def _write_predict(project: Path, offset: str = "0") -> None:
-    (project / "predict.py").write_text(PREDICT_PY.format(offset=offset))
+    (project / "infer.py").write_text(PREDICT_PY.format(offset=offset))
 
 
 @pytest.fixture()
@@ -82,8 +78,7 @@ def project(tmp_path, monkeypatch):
         seq = "".join(rng.choice("ACDE") for _ in range(8))
         rows.append({"sequence": seq, "target": seq.count("A") + rng.random()})
     frame = pd.DataFrame(rows).drop_duplicates("sequence")
-    for name, part in [("train", frame[:60]), ("validation", frame[60:90]), ("test", frame[90:])]:
-        part.to_csv(project / "task" / "data" / f"{name}.csv", index=False)
+    write_splits(project / "task" / "data", frame[:60], frame[60:90], frame[90:])
 
     _write_predict(project)
     _write_model(project, 1.0)
@@ -96,7 +91,7 @@ def run(project: Path, *args: str) -> int:
 
 def test_full_loop(project, capsys):
     assert run(project, "init") == 0
-    assert not (project / "task" / "data" / "test.csv").exists(), "labelled test file should be gone"
+    assert not (project / "task" / "data" / "test_labels.csv").exists(), "the test labels should be gone"
     assert (project / "task" / "data" / "test_inputs.csv").exists()
     assert "target" not in pd.read_csv(project / "task" / "data" / "test_inputs.csv").columns
 
@@ -122,13 +117,15 @@ def test_full_loop(project, capsys):
     assert run(project, "finish") == 0
     report = (project / "REPORT.md").read_text()
     assert "flip the sign" in report and "test" in report.lower()
+    kept = json.loads((project / "final" / "model" / "weights.json").read_text())
+    assert kept == {"scale": 1.0}, "final/ holds the best submission, not whatever was tried last"
     assert run(project, "finish") == 2, "the test set must not be scored twice"
 
 
 def test_broken_submission_is_an_error_not_a_zero(project, capsys):
     run(project, "init")
     run(project, "validate")
-    (project / "predict.py").write_text("raise SystemExit('boom')")
+    (project / "infer.py").write_text("raise SystemExit('boom')")
     assert run(project, "submit", "--note", "break it") == 1
     record = Experiments(project).all()[-1]
     assert record["status"] == "error" and "metrics" not in record
@@ -194,8 +191,7 @@ def test_dashboard_renders_without_error(project, monkeypatch):
 def test_new_scaffolds_a_runnable_project(tmp_path):
     target = tmp_path / "fresh"
     assert main(["new", str(target), "--name", "fresh-project"]) == 0
-    for name in ["task/task.toml", "task/brief.md", "predict.py", "src/train.py",
-                 "proposal.md", "PROJECT_MEMORY.md"]:
+    for name in ["task/task.toml", "task/brief.md", "infer.py", "proposal.md", "PROJECT_MEMORY.md"]:
         assert (target / name).exists(), name
     assert "fresh-project" in (target / "task" / "task.toml").read_text()
     assert main(["new", str(target), "--name", "again"]) == 2, "must not overwrite a project"
@@ -231,13 +227,7 @@ output = "response"
 higher_is_better = true
 
 [data]
-train = "data/train.csv"
-validation = "data/validation.csv"
-test = "data/test.csv"
-test_inputs = "data/test_inputs.csv"
-input_columns = ["cell_line", "dose", "replicate"]
-target_column = "target"
-
+""" + DATA_TOML + """
 [metric]
 primary = "pearson"
 
@@ -258,9 +248,9 @@ a = p.parse_args()
 
 w = json.loads((a.model / "weights.json").read_text())
 rows = pd.read_csv(a.input)
-assert list(rows.columns) == ["cell_line", "dose", "replicate"], rows.columns
-pred = rows["dose"] * w["slope"] + rows["cell_line"].map({"A": 1.0, "B": 2.0}).fillna(0)
-pd.DataFrame({"prediction": pred}).to_csv(a.output, index=False)
+assert list(rows.columns) == ["id", "cell_line", "dose", "replicate"], rows.columns
+rows["prediction"] = rows["dose"] * w["slope"] + rows["cell_line"].map({"A": 1.0, "B": 2.0}).fillna(0)
+rows[["id", "prediction"]].sample(frac=1, random_state=0).to_csv(a.output, index=False)   # any order
 '''
 
 
@@ -277,16 +267,15 @@ def test_a_project_with_no_sequences_at_all(tmp_path, monkeypatch):
     for row in rows:
         row["target"] = row["dose"] * 1.5 + (1.0 if row["cell_line"] == "A" else 2.0) + rng.random()
     frame = pd.DataFrame(rows)
-    for name, part in [("train", frame[:50]), ("validation", frame[50:70]), ("test", frame[70:])]:
-        part.to_csv(project / "task" / "data" / f"{name}.csv", index=False)
+    write_splits(project / "task" / "data", frame[:50], frame[50:70], frame[70:])
 
-    (project / "predict.py").write_text(TABULAR_PREDICT)
+    (project / "infer.py").write_text(TABULAR_PREDICT)
     (project / "model").mkdir()
     (project / "model" / "weights.json").write_text(json.dumps({"slope": 1.5}))
 
     assert run(project, "init") == 0
     hidden = pd.read_csv(project / "task" / "data" / "test_inputs.csv")
-    assert list(hidden.columns) == ["cell_line", "dose", "replicate"], "init must keep every input column"
+    assert list(hidden.columns) == ["id", "cell_line", "dose", "replicate"], "init leaves the inputs alone"
     assert run(project, "validate") == 0
     assert Experiments(project).best("pearson")["metrics"]["pearson"] > 0.9
     assert run(project, "finish") == 0
@@ -304,9 +293,8 @@ def _tabular_project(tmp_path, monkeypatch):
     for row in rows:
         row["target"] = row["dose"] * 1.5 + rng.random()
     frame = pd.DataFrame(rows)
-    for name, part in [("train", frame[:30]), ("validation", frame[30:45]), ("test", frame[45:])]:
-        part.to_csv(project / "task" / "data" / f"{name}.csv", index=False)
-    (project / "predict.py").write_text(TABULAR_PREDICT)
+    write_splits(project / "task" / "data", frame[:30], frame[30:45], frame[45:])
+    (project / "infer.py").write_text(TABULAR_PREDICT)
     (project / "model").mkdir()
     (project / "model" / "weights.json").write_text(json.dumps({"slope": 1.5}))
     run(project, "init")
@@ -394,11 +382,54 @@ def test_init_flags_a_split_that_would_mislead(tmp_path, monkeypatch, capsys):
     validation["target"] = [1 if i % 5 == 0 else 0 for i in range(len(validation))]   # 20% positive
     test["target"] = [i % 2 for i in range(len(test))]                                 # 50% positive
     test = pd.concat([test, train[:7]])                                                # 7 leaked rows
-    for name, part in [("train", train), ("validation", validation), ("test", test)]:
-        part.to_csv(project / "task" / "data" / f"{name}.csv", index=False)
+    write_splits(project / "task" / "data", train, validation, test)
 
     assert run(project, "init") == 0, "checks warn; they do not refuse"
     out = capsys.readouterr().out
-    assert "7 input rows appear in both train and test" in out
-    assert "test has only 67 rows" in out
+    assert "7 rows have identical inputs in train and test" in out
+    assert "test has only 67 examples" in out
     assert "80% of validation but" in out and "balanced_accuracy" in out
+
+
+FOLDER_INFER = '''\
+import argparse, json
+from pathlib import Path
+import pandas as pd
+
+p = argparse.ArgumentParser()
+p.add_argument("--model", type=Path); p.add_argument("--input", type=Path); p.add_argument("--output")
+a = p.parse_args()
+rows = [{"id": f.stem, "prediction": json.loads(f.read_text())["reading"] * 2} for f in sorted(a.input.glob("*.json"))]
+pd.DataFrame(rows).to_csv(a.output, index=False)
+'''
+
+
+def test_inputs_can_be_anything_the_projects_code_can_read(tmp_path, monkeypatch):
+    """One file per example in a folder, no table anywhere: the core only needs ids and labels."""
+    monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
+    project = tmp_path / "files"
+    data = project / "task" / "data"
+    toml = TABULAR_TOML.replace(DATA_TOML, 'train = "data/train"\nvalidation_inputs = "data/validation"\n'
+                                'validation_labels = "data/validation_labels.csv"\ntest_inputs = "data/test"\n'
+                                'test_labels = "data/test_labels.csv"\n')
+    assert "data/validation\"" in toml
+    data.mkdir(parents=True)
+    (project / "task" / "task.toml").write_text(toml)
+    rng = random.Random(4)
+    for split, count in [("train", 20), ("validation", 120), ("test", 120)]:
+        (data / split).mkdir()
+        labels = []
+        for i in range(count):
+            reading = rng.random()
+            (data / split / f"{split}-{i}.json").write_text(json.dumps({"reading": reading}))
+            labels.append({"id": f"{split}-{i}", "target": reading * 2 + rng.random() * 0.1})
+        if split != "train":
+            pd.DataFrame(labels).to_csv(data / f"{split}_labels.csv", index=False)
+    (project / "infer.py").write_text(FOLDER_INFER)
+    (project / "model").mkdir()
+
+    assert run(project, "init") == 0
+    assert (data / "test").is_dir() and not (data / "test_labels.csv").exists()
+    assert run(project, "validate") == 0
+    assert Experiments(project).best("pearson")["metrics"]["pearson"] > 0.99
+    assert run(project, "finish") == 0

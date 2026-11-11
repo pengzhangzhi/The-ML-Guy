@@ -3,7 +3,8 @@
 This module is the only place scores come from. Project code never grades itself.
 A broken submission raises SubmissionError; it is never turned into a score of zero.
 
-A predictions file has one row per input row, in the same order, with:
+An output file has one row per example, in any order, with:
+  id           which example this is, as given in the inputs
   prediction   the predicted value: the number for regression, the class label for classification
   score        optional, classification only: the probability of the positive class.
                Needed by metrics that rank examples, such as roc_auc.
@@ -133,14 +134,25 @@ def _numeric_column(preds: pd.DataFrame, name: str, n_expected: int) -> np.ndarr
     return values
 
 
-def check_predictions(preds: pd.DataFrame, n_expected: int) -> tuple[np.ndarray, np.ndarray | None]:
-    """Return (predictions, scores) as float arrays, or raise SubmissionError saying what is wrong."""
-    if "prediction" not in preds.columns:
-        raise SubmissionError(f"predictions file needs a 'prediction' column; found {list(preds.columns)}")
-    if len(preds) != n_expected:
-        raise SubmissionError(f"expected {n_expected} predictions (one per input row, same order), got {len(preds)}")
-    values = _numeric_column(preds, "prediction", n_expected)
-    scores = _numeric_column(preds, "score", n_expected) if "score" in preds.columns else None
+def check_predictions(preds: pd.DataFrame, ids: list[str]) -> tuple[np.ndarray, np.ndarray | None]:
+    """Match predictions to the expected ids. Returns (predictions, scores) as float arrays in
+    the order of `ids`, or raises SubmissionError saying what is wrong."""
+    for column in ("id", "prediction"):
+        if column not in preds.columns:
+            raise SubmissionError(f"the output file needs 'id' and 'prediction' columns; found {list(preds.columns)}")
+    given = preds["id"].astype(str)
+    if given.duplicated().any():
+        raise SubmissionError(f"{int(given.duplicated().sum())} ids appear more than once in the output file")
+    expected = pd.Index([str(i) for i in ids])
+    missing, extra = expected.difference(given), pd.Index(given).difference(expected)
+    if len(missing) or len(extra):
+        raise SubmissionError(
+            f"expected one prediction for each of {len(expected)} ids; {len(missing)} are missing"
+            + (f" (such as {list(missing[:3])})" if len(missing) else "")
+            + (f", and {len(extra)} are not ids of this split (such as {list(extra[:3])})" if len(extra) else ""))
+    preds = preds.assign(id=given).set_index("id").loc[expected]
+    values = _numeric_column(preds, "prediction", len(expected))
+    scores = _numeric_column(preds, "score", len(expected)) if "score" in preds.columns else None
     return values, scores
 
 
@@ -180,23 +192,23 @@ def is_better(new: float, old: float | None, metric: str, direction: str | None 
     return new > old if (direction or METRICS[metric][1]) == "maximize" else new < old
 
 
-def check_generated(outputs: pd.DataFrame, n: int, n_conditions: int | None) -> None:
-    """Generated samples: n rows, or n per condition with a `condition` column holding the
-    0-based row number of the condition each sample was drawn for. Other columns are free."""
-    if n_conditions is None:
+def check_generated(outputs: pd.DataFrame, n: int, condition_ids: list[str] | None) -> None:
+    """Generated samples: n rows, or n per condition with an `id` column naming the condition
+    each sample was drawn for. Other columns are free."""
+    if condition_ids is None:
         if len(outputs) != n:
             raise SubmissionError(f"expected {n} generated samples, got {len(outputs)}")
         return
-    if "condition" not in outputs.columns:
-        raise SubmissionError("generated samples need a 'condition' column: the 0-based row number of "
-                              f"the condition each one was drawn for; found {list(outputs.columns)}")
-    counts = outputs["condition"].value_counts()
-    wrong = [c for c in range(n_conditions) if counts.get(c, 0) != n]
-    extra = sorted(set(counts.index) - set(range(n_conditions)))
+    if "id" not in outputs.columns:
+        raise SubmissionError("generated samples need an 'id' column naming the condition each one "
+                              f"was drawn for; found {list(outputs.columns)}")
+    counts = outputs["id"].astype(str).value_counts()
+    wrong = [c for c in condition_ids if counts.get(str(c), 0) != n]
+    extra = sorted(set(counts.index) - {str(c) for c in condition_ids})
     if wrong or extra:
-        raise SubmissionError(f"expected {n} samples for each of {n_conditions} conditions; "
+        raise SubmissionError(f"expected {n} samples for each of {len(condition_ids)} conditions; "
                               f"{len(wrong)} conditions have a different number"
-                              + (f", and 'condition' holds unknown values {extra[:5]}" if extra else ""))
+                              + (f", and 'id' holds unknown values {extra[:5]}" if extra else ""))
 
 
 # --------------------------------------------------------------------- noise

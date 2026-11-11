@@ -30,15 +30,16 @@ def test_constant_predictions_are_an_error_not_a_zero():
 @pytest.mark.parametrize(
     "frame",
     [
-        pd.DataFrame({"pred": [1.0, 2.0]}),  # wrong column
-        pd.DataFrame({"prediction": [1.0]}),  # wrong row count
-        pd.DataFrame({"prediction": [1.0, None]}),  # missing value
-        pd.DataFrame({"prediction": [1.0, "abc"]}),  # non-numeric
+        pd.DataFrame({"id": ["a", "b"], "pred": [1.0, 2.0]}),  # wrong column
+        pd.DataFrame({"id": ["a"], "prediction": [1.0]}),  # an example is missing
+        pd.DataFrame({"prediction": [1.0, 2.0]}),  # no ids
+        pd.DataFrame({"id": ["a", "b"], "prediction": [1.0, None]}),  # missing value
+        pd.DataFrame({"id": ["a", "b"], "prediction": [1.0, "abc"]}),  # non-numeric
     ],
 )
 def test_bad_prediction_files_are_rejected(frame):
     with pytest.raises(SubmissionError):
-        judge.check_predictions(frame, 2)
+        judge.check_predictions(frame, ["a", "b"])
 
 
 def test_is_better_respects_direction():
@@ -80,13 +81,18 @@ def test_probabilities_in_the_prediction_column_are_rejected():
         judge.score(y_true, np.array([0.2, 0.9, 0.4, 0.7]), ["accuracy"])
 
 
-def test_check_predictions_returns_the_optional_score_column():
-    values, scores = judge.check_predictions(pd.DataFrame({"prediction": [0, 1]}), 2)
-    assert scores is None and list(values) == [0.0, 1.0]
-    values, scores = judge.check_predictions(pd.DataFrame({"prediction": [0, 1], "score": [0.3, 0.8]}), 2)
-    assert list(scores) == [0.3, 0.8]
+def test_check_predictions_matches_by_id_and_returns_the_optional_score():
+    values, scores = judge.check_predictions(pd.DataFrame({"id": ["b", "a"], "prediction": [1, 0]}), ["a", "b"])
+    assert scores is None and list(values) == [0.0, 1.0], "returned in the order of the expected ids"
+    values, scores = judge.check_predictions(
+        pd.DataFrame({"id": [2, 1], "prediction": [1, 0], "score": [0.8, 0.3]}), ["1", "2"])
+    assert list(scores) == [0.3, 0.8], "ids are compared as text, so 1 and '1' are the same example"
     with pytest.raises(SubmissionError, match="score"):
-        judge.check_predictions(pd.DataFrame({"prediction": [0, 1], "score": [0.3, None]}), 2)
+        judge.check_predictions(pd.DataFrame({"id": ["a", "b"], "prediction": [0, 1], "score": [0.3, None]}), ["a", "b"])
+    with pytest.raises(SubmissionError, match="1 are missing"):
+        judge.check_predictions(pd.DataFrame({"id": ["a", "x"], "prediction": [0, 1]}), ["a", "b"])
+    with pytest.raises(SubmissionError, match="more than once"):
+        judge.check_predictions(pd.DataFrame({"id": ["a", "a"], "prediction": [0, 1]}), ["a", "b"])
 
 
 def test_noise_estimates():

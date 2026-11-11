@@ -1,7 +1,7 @@
 """Experiment records: the append-only history of submissions.
 
 Only `mlguy validate` and `mlguy submit` write here. Each submission keeps a self-contained snapshot of
-everything needed to reproduce its score (the entry point, src/, model/), so a later
+everything needed to reproduce its score (infer.py, src/, model/), so a later
 experiment cannot change what an earlier one scored.
 """
 
@@ -16,7 +16,7 @@ from pathlib import Path
 
 from mlguy import judge
 
-SNAPSHOT_PATHS = ("predict.py", "generate.py", "src", "model")
+SNAPSHOT_PATHS = ("infer.py", "src", "model")
 SNAPSHOT_WARN_MB = 200
 
 

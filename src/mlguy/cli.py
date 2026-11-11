@@ -20,22 +20,26 @@ from mlguy.project import (
     check_task_unchanged,
     compare_with,
     direction,
-    entry_point,
+    ENTRY_POINT,
+    data_path,
+    hidden_inputs_path,
+    id_column,
+    target_column,
     evaluator_script,
     is_generation,
     sampling,
     load_task,
     score_split,
     state_dir,
-    store_test_labels,
     test_labels_path,
     validation_caveat,
 )
 from mlguy.records import Experiments, git_commit, hash_task, now
 
 REQUIRED_KEYS = [("name",), ("task", "type"), ("task", "output"), ("data", "train"), ("metric", "primary")]
-# a built-in metric scores one prediction per row against a label column
-BUILTIN_KEYS = [("data", "validation"), ("data", "input_columns"), ("data", "target_column")]
+# prediction: each split is inputs (any format) plus a table of id and label
+PREDICTION_KEYS = [("data", "validation_inputs"), ("data", "validation_labels"),
+                   ("data", "test_inputs"), ("data", "test_labels")]
 # the task's own evaluator names its metric, so the task must say which way is better
 EVALUATOR_KEYS = [("metric", "direction")]
 
@@ -49,7 +53,8 @@ def _check_keys(task: dict) -> None:
     custom = "script" in task.get("evaluator", {})
     if task.get("task", {}).get("type") == "generation" and not custom:
         raise CommandError("a generation task needs its own evaluator: set [evaluator] script in task.toml")
-    for path in REQUIRED_KEYS + (EVALUATOR_KEYS if custom else BUILTIN_KEYS):
+    generation = task.get("task", {}).get("type") == "generation"
+    for path in REQUIRED_KEYS + (EVALUATOR_KEYS if custom else []) + ([] if generation else PREDICTION_KEYS):
         node = task
         for key in path:
             if not isinstance(node, dict) or key not in node:
@@ -64,13 +69,14 @@ def _check_keys(task: dict) -> None:
             raise CommandError("metric.direction must be 'maximize' or 'minimize'")
         if not evaluator_script(task).exists():
             raise CommandError(f"the evaluator {evaluator_script(task)} does not exist")
-        if task["data"].get("input_columns") and "validation" not in task["data"]:
-            raise CommandError("task.toml is missing: data.validation (the rows to produce outputs for)")
     elif primary not in judge.METRICS:
         raise CommandError(f"unknown metric '{primary}'; built in: {', '.join(sorted(judge.METRICS))}. "
                            "For anything else, give the task its own evaluator.")
     elif judge.METRICS[primary][2] != task["task"]["type"]:
         raise CommandError(f"'{primary}' is a {judge.METRICS[primary][2]} metric, but the task is {task['task']['type']}")
+    for inputs, labels in (("validation_inputs", "validation_labels"), ("test_inputs", "test_labels")):
+        if inputs in task["data"] and labels not in task["data"]:
+            raise CommandError(f"task.toml has data.{inputs} but no data.{labels} (the ids to produce outputs for)")
 
 
 def _freeze_task(task: dict) -> str:
@@ -145,8 +151,8 @@ def cmd_new(args: argparse.Namespace) -> int:
     print(f"created {target}")
     print("  task/task.toml   the task: fill in every TODO, then agree it with the user")
     print("  task/brief.md    the one page the user approves")
-    print("  predict.py       the fixed interface; src/train.py the baseline")
-    print("next: write task/data/{train,validation,test}.csv, then `mlguy init`")
+    print("  infer.py         the one fixed interface, as a stub; src/ is yours")
+    print("next: prepare task/data, write the simplest model that runs, then `mlguy init`")
     return 0
 
 
@@ -154,7 +160,8 @@ def cmd_init(args: argparse.Namespace) -> int:
     task = load_task(args.project)
     _check_keys(task)
     project_dir, data = task["_project_dir"], task["data"]
-    in_cols, tgt_col = list(data.get("input_columns", [])), data.get("target_column")
+    id_col, tgt_col = id_column(task), target_column(task)
+    builtin, generation = evaluator_script(task) is None, is_generation(task)
 
     frozen = state_dir(task) / "task_hash.txt"
     if frozen.exists() and Experiments(project_dir).all() and frozen.read_text().strip() != hash_task(project_dir):
@@ -164,57 +171,55 @@ def cmd_init(args: argparse.Namespace) -> int:
             "or start a new project for the new task."
         )
 
-    builtin, generation = evaluator_script(task) is None, is_generation(task)
-    needed = [*in_cols, tgt_col] if builtin else in_cols
-    for key in ("train", "validation"):
-        if key not in data:
-            continue
-        path = project_dir / "task" / data[key]
-        if not path.exists():
-            raise CommandError(f"{key} data not found at {path}")
-        columns = pd.read_csv(path, nrows=1).columns
-        for column in needed:
-            if column not in columns:
-                raise CommandError(f"{path.name} has no '{column}' column; found {list(columns)}")
+    def labels_table(path: Path, name: str) -> pd.DataFrame:
+        frame = pd.read_csv(path, dtype={id_col: str})
+        for column in [id_col] + ([tgt_col] if builtin else []):
+            if column not in frame.columns:
+                raise CommandError(f"{path.name} has no '{column}' column; found {list(frame.columns)}")
+        if frame[id_col].duplicated().any():
+            raise CommandError(f"{path.name}: {int(frame[id_col].duplicated().sum())} ids are repeated; "
+                               f"every {name} example needs its own id")
+        return frame
 
-    # Hold back the test rows. Prediction keeps the inputs in the project and hides the rest;
-    # generation hides the rows entirely, so the final conditions are unseen until `finish`.
-    labeled_test = project_dir / "task" / data["test"] if "test" in data else None
-    inputs_path = project_dir / "task" / data.get("test_inputs", "data/test_inputs.csv")
-    test_frame = None
-    if labeled_test and labeled_test.exists():
-        test_frame = pd.read_csv(labeled_test)
-        for column in needed:
-            if column not in test_frame.columns:
-                raise CommandError(f"{labeled_test.name} has no '{column}' column")
-        if not generation:
-            test_frame[in_cols].to_csv(inputs_path, index=False)
-        stored = store_test_labels(task, test_frame)
-        labeled_test.unlink()
-        print(f"test {'rows' if generation else 'labels'} moved out of the project: {stored}")
+    for key in ("train", "validation_inputs", "validation_labels"):
+        if key in data and not data_path(task, key).exists():
+            raise CommandError(f"{key} not found at {data_path(task, key)}")
+    validation_frame = labels_table(data_path(task, "validation_labels"), "validation") \
+        if "validation_labels" in data else None
+
+    # Hold back the test set. Prediction keeps the inputs in the project and hides the labels;
+    # generation hides the inputs too, so the final conditions are unseen until `finish`.
+    test_labels, test_inputs, test_frame = data_path(task, "test_labels"), data_path(task, "test_inputs"), None
+    if test_labels is not None and test_labels.exists():
+        if not test_inputs.exists():
+            raise CommandError(f"test_inputs not found at {test_inputs}")
+        test_frame = labels_table(test_labels, "test")
+        test_labels_path(task).parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(test_labels, test_labels_path(task))
+        if generation:
+            shutil.move(test_inputs, hidden_inputs_path(task))
+        print(f"test {'set' if generation else 'labels'} moved out of the project: {test_labels_path(task).parent}")
     elif test_labels_path(task).exists():
-        test_frame = pd.read_csv(test_labels_path(task))
-        if not generation and not inputs_path.exists():
-            raise CommandError(f"test labels are stored but the test inputs are missing at {inputs_path}")
-        if not generation and not set(in_cols) <= set(test_frame.columns):   # stored by an older version
-            test_frame = pd.concat([pd.read_csv(inputs_path), test_frame], axis=1)
+        test_frame = pd.read_csv(test_labels_path(task), dtype={id_col: str})
+        if not generation and not test_inputs.exists():
+            raise CommandError(f"test labels are stored but the test inputs are missing at {test_inputs}")
     elif not generation:
-        raise CommandError(f"no test data: expected {labeled_test or 'data.test in task.toml'}")
+        raise CommandError(f"no test labels: expected {test_labels}")
 
-    train_frame = pd.read_csv(project_dir / "task" / data["train"])
-    validation_frame = pd.read_csv(project_dir / "task" / data["validation"]) if "validation" in data else None
-    found = checks.split_checks(task, train_frame, validation_frame, test_frame, compare_targets=builtin)
-    (state_dir(task)).mkdir(parents=True, exist_ok=True)
+    state_dir(task).mkdir(parents=True, exist_ok=True)
+    stored = {"train": data_path(task, "train"), "validation": data_path(task, "validation_inputs"),
+              "test": None if generation else test_inputs}
+    found = checks.split_checks(task, validation_frame, test_frame, stored, id_col, tgt_col, compare_targets=builtin)
     (state_dir(task) / "split_checks.json").write_text(json.dumps(found, indent=2))
 
     Experiments(project_dir).create()
     digest = _freeze_task(task)
     print(f"project '{task['name']}' ready")
-    sizes = [("train", train_frame), ("validation", validation_frame), ("test", test_frame)]
-    print("  " + "  ".join(f"{name} {len(frame)}" for name, frame in sizes if frame is not None))
+    sizes = [("validation", validation_frame), ("test", test_frame)]
+    print(f"  train {data['train']}  " + "  ".join(f"{name} {len(frame)}" for name, frame in sizes if frame is not None))
     if generation:
         (n, seed), (final_n, final_seed) = sampling(task, "validation"), sampling(task, "test")
-        per = " per condition" if in_cols else ""
+        per = " per condition" if validation_frame is not None else ""
         print(f"  sampling: {n}{per} on every submission (seed {seed}); {final_n}{per} for the final "
               f"check (seed {final_seed}" + (", held-out conditions)" if test_frame is not None else ")"))
     scored_by = "built in" if builtin else f"task/{task['evaluator']['script']}"
@@ -227,7 +232,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         print(f"  check: {item}")
     if found:
         print("  fix each check above, or explain it in task/brief.md; they are repeated in the final report")
-    print(f"next: train a model into model/, make {entry_point(task)} work, then run `mlguy validate`")
+    print(f"next: train a model into model/, make {ENTRY_POINT} work, then run `mlguy validate`")
     return 0
 
 
@@ -250,7 +255,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     number = 0
     experiments.snapshot(task["_project_dir"], number)
     record = _record_score(experiments, task, number, args.note, False, result, None)
-    print(f"{entry_point(task)} and scoring work end to end.")
+    print(f"{ENTRY_POINT} and scoring work end to end.")
     _print_scored(record, task, experiments)
     print("the loop is open: change the modelling however you like, then `mlguy submit --note \"...\"`")
     return 0
@@ -320,6 +325,13 @@ def cmd_finish(args: argparse.Namespace) -> int:
         test_result = score_split(project_dir, "test", run_dir=snapshot)
     except SubmissionError as e:
         raise CommandError(f"the best submission failed the final check:\n{e}")
+
+    # The working folder holds whatever was tried last. final/ holds what was scored: the page
+    # and the user run the model from there.
+    final_dir = project_dir / "final"
+    if final_dir.exists():
+        shutil.rmtree(final_dir)
+    shutil.copytree(snapshot, final_dir)
 
     final_path.parent.mkdir(parents=True, exist_ok=True)
     final_path.write_text(json.dumps({"number": best["number"], "time": now(), **test_result}, indent=2))
@@ -422,7 +434,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = add("init", "check the task, hide the test labels, freeze task/", cmd_init)
 
-    p = add("validate", "check that prediction and scoring work; records the baseline as experiment 0", cmd_validate)
+    p = add("validate", "check that infer.py and scoring work; records the baseline as experiment 0", cmd_validate)
     p.add_argument("--note", default="baseline", help="one line on what this model is")
     p.add_argument("--again", action="store_true", help="redo the baseline (only before the first submission)")
 

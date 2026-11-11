@@ -5,7 +5,7 @@
 Written for this problem, not supplied by the framework. It takes what an enzyme engineer
 has to hand (a FASTA file, a CSV with a `sequence` column, or pasted sequences), names each
 variant by its mutations against the wild type, and ranks them best first. Predictions come
-from predict.py, the same code path the scores in REPORT.md were measured on.
+from infer.py, the same code path the scores in REPORT.md were measured on.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from pathlib import Path
 import pandas as pd
 
 HERE = Path(__file__).resolve().parent
+FINAL = HERE / "final"   # the submission that was scored, put there by `mlguy finish`
 with open(HERE / "task" / "task.toml", "rb") as f:
     SPEC = tomllib.load(f)["input"]
 
@@ -83,12 +84,12 @@ def rank_variants(text: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     with tempfile.TemporaryDirectory() as tmp:
         inputs, outputs = Path(tmp) / "in.csv", Path(tmp) / "out.csv"
-        kept[["sequence"]].to_csv(inputs, index=False)
-        proc = subprocess.run([sys.executable, "predict.py", "--model", "model", "--input", str(inputs),
-                               "--output", str(outputs)], cwd=HERE, capture_output=True, text=True)
+        kept.assign(id=kept.index)[["id", "sequence"]].to_csv(inputs, index=False)
+        proc = subprocess.run([sys.executable, "infer.py", "--model", "model", "--input", str(inputs),
+                               "--output", str(outputs)], cwd=FINAL, capture_output=True, text=True)
         if proc.returncode != 0:
             raise RuntimeError(f"the model failed to run:\n{proc.stderr.strip()[-1000:]}")
-        kept["predicted activity"] = pd.read_csv(outputs)["prediction"].to_numpy()
+        kept["predicted activity"] = pd.read_csv(outputs).set_index("id")["prediction"].loc[kept.index].to_numpy()
 
     kept["mutations"] = kept["sequence"].map(mutations)
     kept = kept.sort_values("predicted activity", ascending=False, kind="stable").reset_index(drop=True)

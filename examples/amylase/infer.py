@@ -1,9 +1,9 @@
-"""The project's one fixed interface: a table in, a prediction per row out.
+"""The project's one fixed interface: run the model on some sequences.
 
-    python predict.py --model model --input variants.csv --output predictions.csv
+    python infer.py --model model --input sequences.csv --output outputs.csv
 
-Input is a CSV with a 'sequence' column. Output is a CSV with one
-'prediction' per input row, in the same order.
+--input is a CSV with `id` and `sequence` columns. --output is a CSV with one row per id:
+`prediction`.
 """
 
 from __future__ import annotations
@@ -39,8 +39,9 @@ def main() -> None:
     args = parser.parse_args()
 
     bundle = joblib.load(args.model / "bundle.joblib")
-    seqs = pd.read_csv(args.input)["sequence"].astype(str).tolist()
-    pd.DataFrame({"sequence": seqs, "prediction": predict(bundle, seqs)}).to_csv(args.output, index=False)
+    rows = pd.read_csv(args.input)
+    seqs = rows["sequence"].astype(str).tolist()
+    pd.DataFrame({"id": rows["id"], "prediction": predict(bundle, seqs)}).to_csv(args.output, index=False)
 
 
 if __name__ == "__main__":

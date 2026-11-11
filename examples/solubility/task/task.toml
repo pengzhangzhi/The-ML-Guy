@@ -15,12 +15,11 @@ alphabet = "ACDEFGHIKLMNPQRSTVWY"
 [data]
 source = "https://huggingface.co/datasets/proteinea/solubility (DeepSol, Khurana et al. 2018)"
 split = "The DeepSol split as published: sequences clustered by similarity, so the test proteins are not near-duplicates of training ones"
-train = "data/train.csv"
-validation = "data/validation.csv"
-test = "data/test.csv"
+train = "data/train.csv"                        # sequence, target
+validation_inputs = "data/validation_inputs.csv" # id, sequence
+validation_labels = "data/validation_labels.csv" # id, target
 test_inputs = "data/test_inputs.csv"
-input_columns = ["sequence"]
-target_column = "target"
+test_labels = "data/test_labels.csv"            # `mlguy init` moves this out of the project
 validation_matches_test = false
 validation_note = "The validation set is 58% insoluble, while the test set is a balanced 50/50. Plain accuracy is therefore not comparable between the two, and a model tuned to the validation base rate can look worse on test than it is. Balanced accuracy is the secondary metric for that reason."
 

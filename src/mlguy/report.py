@@ -115,13 +115,11 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
         "| --- | --- | " + " | ".join("---" for _ in names) + " |",
     ]
     lines += [_row(r, primary) for r in records]
-    model = f"experiments/{best['number']:04d}/submission/model"
-    usage = ([f"python generate.py --model {model} --n 100 --seed 0 --output samples.csv"] if is_generation(task)
-             else [f"python predict.py --model {model} \\", "    --input my_data.csv --output predictions.csv"])
+    usage = ["cd final", "python infer.py --model model --input my_data --output outputs.csv"
+             + (" --n 100 --seed 0" if is_generation(task) else "")]
     lines += [
         "",
-        f"Experiment {best['number']} is the result. Its exact code and model are kept in "
-        f"`experiments/{best['number']:04d}/submission/`.",
+        f"Experiment {best['number']} is the result. Its exact code and model are in `final/`.",
         "",
         "## Budget",
         "",

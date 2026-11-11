@@ -8,10 +8,10 @@ The design rule: **be exact about the problem and the scoring, and leave the mod
 | Strict: fixed when you approve the brief | Free: the agent's call |
 | --- | --- |
 | Task: input, output, prediction or generation | Model family and architecture |
-| Data: train, validation and test sets | Features and encodings |
+| Data: train, validation and test sets | How the data is read, features and encodings |
 | Metric or evaluator, and its direction | Hyperparameters and training procedure |
 | Budget | Code structure, libraries, order of work |
-| The command that runs the model: `predict.py` or `generate.py` | What to try next, and how to sample |
+| The command that runs the model: `infer.py` | What to try next |
 
 ## Philosophy
 
@@ -23,9 +23,9 @@ The-ML-Guy is a thin layer on top of a coding agent, not a framework that runs o
 - **Maximum room for the agent.** The task, the data, the metric and the budget are fixed. The
   modelling is not: any architecture, any library, any code structure. Autoresearch is only as
   good as the freedom it has, so the tool stays out of it.
-- **Domain-agnostic.** The core knows nothing about proteins, cells, patients or images, and
-  nothing about what makes an output good beyond what the task tells it. Domain knowledge
-  lives in the projects, not in the framework.
+- **Domain- and format-agnostic.** The core knows nothing about proteins, cells, patients or
+  images, does not depend on how a task stores its inputs, and knows nothing about what makes
+  an output good beyond what the task tells it. Domain knowledge lives in the projects.
 - **Agent-agnostic.** The contract is a command line and files on disk, so Claude Code, Codex
   or anything else can drive it, and a fresh session can pick up where the last one stopped.
 - **No safety theatre.** Coding agents already carry their own controls. The-ML-Guy adds no
@@ -61,7 +61,7 @@ about.
   refused, and cannot be re-frozen once anything has been scored against it.
 - **The test set is scored once,** by `mlguy finish`, on the submission that did best on
   validation. No other command touches it.
-- **The split is checked before it is frozen:** rows shared between splits, sets too small to
+- **The split is checked before it is frozen:** identical inputs in two splits, sets too small to
   measure anything, a validation set that looks unlike the test set.
 - **Every score carries its noise:** a 95% interval, and how often a submission beats the best
   so far on the same resampled rows. "0.6935 against 0.6933" is reported as what it is.
@@ -73,51 +73,32 @@ about.
 | --- | --- |
 | `spearman`, `pearson`, `ndcg`, `rmse`, `mae` | `accuracy`, `balanced_accuracy`, `f1`, `mcc`, `roc_auc` |
 
-A predictions file has one row per input row, in the same order, with a `prediction` column:
-the number for regression, the class label for classification. Classification projects may add
-a `score` column holding the probability of the positive class, which `roc_auc` needs.
+The model's output file has one row per example: its `id`, and a `prediction` (the number for
+regression, the class label for classification). Classification projects may add a `score`
+column holding the probability of the positive class, which `roc_auc` needs.
 
-## Generation, and metrics of your own
+## Metrics of your own
 
-Scoring is always two steps: the project **produces** outputs, and something **evaluates** them.
-
-| | Produce | Evaluate |
-| --- | --- | --- |
-| Prediction | `predict.py`: one output per input row | a built-in metric against held-back labels |
-| Generation | `generate.py`: `N` samples per condition | the task's own evaluator |
-
-A generative model has no answer key. What makes a sample good is specific to the problem and
-is the user's call: a folding model's confidence, a self-consistency check, a distance to real
-data. So the task can carry its own evaluator, `task/evaluate.py`, agreed with the user and
-frozen like the rest of `task/`. A prediction task can use one too, when its real measure of
-success is not a built-in metric.
+When the real measure of success is not a built-in metric, the task carries its own evaluator:
+a script in `task/`, agreed with the user and frozen like the rest of it.
 
 ```toml
-[task]
-type = "generation"
-
-[data]
-input_columns = ["cell_type"]        # the conditions; empty for unconditional generation
-test = "data/test.csv"               # conditions kept unseen until the final check
-
-[sampling]
-n = 100                              # per condition, on every submission
-final_n = 1000                       # for the one final check
-
 [evaluator]
 script = "evaluate.py"
 
 [metric]
-primary = "self_consistency"
+primary = "top_decile_recall"
 direction = "maximize"
 ```
 
-The evaluator is called as `python evaluate.py --outputs FILE --split validation|final
---result FILE [--reference FILE]` and writes `{"metrics": {...}, "per_item": [...]}`. The
-final check is the generative counterpart of the test set: run once by `mlguy finish`, on fresh
-samples, on conditions the search never saw, and the evaluator is told it is the final one so
-it can ask more. `mlguy score --outputs FILE` runs the evaluator on any file, to check that it
-can tell good outputs from bad before it is trusted.
+It is called as `python evaluate.py --outputs FILE --reference LABELS --split validation|final
+--result FILE` and writes `{"metrics": {...}, "per_item": [...]}`. `mlguy score --outputs FILE`
+runs it on any file, to check that it can tell good outputs from bad before it is trusted.
+
+**Generation is experimental.** A generative model has no answer key, so it always needs an
+evaluator, and the same `infer.py` is asked for `--n N --seed S` samples per condition. The
+mechanics are in place and tested on a toy problem; they have not yet been proven on a real
+one. Prediction is what the framework is being hardened for first.
 
 ## Example: amylase
 
@@ -128,7 +109,7 @@ one-to-many split.
 cd examples/amylase
 python make_task.py                 # download the split, write task/data
 mlguy init                          # check the task, hide the test labels, freeze task/
-python src/train.py                 # fit the baseline into model/
+python src/train.py                 # this example's own baseline, into model/
 mlguy validate                      # check prediction and scoring work; records experiment 0
 
 # the loop: change the modelling however you like, then
@@ -203,10 +184,11 @@ would probably score better on test, and what to set differently next time.
 ```
 project/
 ├── task/            STRICT: brief.md, task.toml, data, and evaluate.py if the task has its own
-├── predict.py       FIXED INTERFACE: --model DIR --input FILE --output FILE  (generate.py for generation)
+├── infer.py         FIXED INTERFACE: --model DIR --input PATH --output FILE
 ├── src/             FREE: any code, any structure
 ├── model/           the model as it stands now
 ├── experiments/     written only by `mlguy submit`: log.jsonl + a snapshot per submission
+├── final/           the best submission, copied here by `mlguy finish`
 ├── REPORT.md        written by `mlguy finish`
 └── app.py           FREE: the page, built by the agent for this problem
 ```
@@ -214,18 +196,20 @@ project/
 Test labels live in `~/.mlguy/projects/<name>/`, outside the project folder, along with the
 hash of `task/` taken when the brief was approved.
 
-`predict.py` reads a CSV holding the task's input columns and writes a CSV with one
-`prediction` per input row, in the same order. It is the only agent-written code with a fixed
-shape, because both the rubric and the project's page call it.
+`infer.py` is the only agent-written code with a fixed shape, because both the rubric and the
+project's page call it.
 
-The input columns are whatever the problem needs: a protein sequence, a cell type and a dose,
-a set of clinical measurements, paths to image files. The core treats them as opaque and hands
-them to `predict.py` untouched.
+**The framework does not depend on the form of a task's inputs.** They can be a table, an expression matrix, a
+folder of images or structures; only the project's code has to open them. The framework knows two
+things about an example, its id and its label, and matches outputs to labels by id.
 
 ```toml
 [data]
-input_columns = ["cell_line", "dose"]
-target_column = "response"
+train             = "data/train.h5ad"            # anything
+validation_inputs = "data/validation.h5ad"       # anything
+validation_labels = "data/validation_labels.csv" # id, target
+test_inputs       = "data/test.h5ad"
+test_labels       = "data/test_labels.csv"       # moved out of the project by `mlguy init`
 ```
 
 There is no built-in page and no domain code in the core. The agent writes `app.py` for the
@@ -246,7 +230,7 @@ the commands, and leaves the judgment to the agent.
 Starting a project by hand:
 
 ```bash
-mlguy new my-project --name my-project   # skeleton: task.toml, brief.md, predict.py, a baseline
+mlguy new my-project --name my-project   # skeleton: task.toml, brief.md, a stub infer.py
 ```
 
 ## Licence

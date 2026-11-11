@@ -17,15 +17,13 @@ refuses if it changed. That includes `task/evaluate.py`, when the task has its o
 One more thing is fixed, the command that runs your model:
 
 ```
-python predict.py  --model model --input rows.csv --output predictions.csv
-python generate.py --model model [--conditions rows.csv] --n N --seed S --output samples.csv
+python infer.py --model model --input PATH --output outputs.csv
 ```
 
-A prediction task uses the first: one `prediction` per input row, in the same order (plus a
-`score` column for classification). A generation task uses the second: `N` samples for each
-condition, with a `condition` column holding the 0-based row number each was drawn for, or `N`
-samples in all when there are no conditions. The other columns are whatever the evaluator
-reads. How you sample is yours; how many samples are drawn, and the seed, are the task's.
+`PATH` is a split's inputs, in whatever form the task stores them. The output is a CSV with one
+row per example: its `id` and your `prediction` (plus a `score` column, the probability of the
+positive class, for classification). `mlguy` and the project's page both call it, so it must
+keep working.
 
 ## What is yours
 
@@ -54,8 +52,7 @@ A gain the data cannot tell from noise is not a gain. Do not build on it as if i
 between two models that cannot be told apart, prefer the simpler.
 
 The final check belongs to `mlguy finish`: once, at the end, on whichever submission scored
-best. It is the held-out test set, or for generation fresh samples on conditions you have not
-seen. Do not go looking for it, and do not tune a model to an evaluator's blind spots: a score
+best. Do not go looking for the test labels, and do not tune a model to an evaluator's blind spots: a score
 won that way will not survive the final check or the user.
 
 ## Working well

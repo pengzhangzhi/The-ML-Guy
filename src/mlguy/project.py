@@ -2,12 +2,16 @@
 
 Scoring is always the same two steps, whatever the problem:
 
-  1. produce   run the project's entry point to turn inputs into outputs
-               prediction:  predict.py  --model DIR --input FILE --output FILE
-               generation:  generate.py --model DIR [--conditions FILE] --n N --seed S --output FILE
+  1. produce   run the project's one entry point to turn inputs into outputs
+                   infer.py --model DIR --input PATH --output FILE
+               (generation, experimental, adds --n N --seed S)
   2. evaluate  turn those outputs into numbers
                by default:  a built-in metric against held-back labels
                otherwise:   the task's own evaluator, task/<script>, frozen with the task
+
+The inputs are opaque. They can be a table, a matrix, a folder of images or structures: only
+the project's own code reads them. The framework knows two things about an example, its id
+and (for a built-in metric) its label, and matches outputs to labels by id.
 """
 
 from __future__ import annotations
@@ -26,7 +30,7 @@ import pandas as pd
 from mlguy import judge
 from mlguy.judge import SubmissionError
 
-PREDICT_TIMEOUT_S = 3600
+INFER_TIMEOUT_S = 3600
 EVALUATOR_TIMEOUT_MIN = 60
 
 
@@ -64,19 +68,17 @@ def state_dir(task: dict) -> Path:
 
 
 def test_labels_path(task: dict) -> Path:
-    """The held-back test rows: labels for prediction, conditions and references for generation."""
+    """The held-back half of the test set: an id per example, and whatever it is scored against."""
     return state_dir(task) / "test_labels.csv"
+
+
+def hidden_inputs_path(task: dict) -> Path:
+    """Generation only: test conditions are kept out of the project until the final check."""
+    return state_dir(task) / ("test_inputs" + Path(task["data"]["test_inputs"]).suffix)
 
 
 def task_hash_path(task: dict) -> Path:
     return state_dir(task) / "task_hash.txt"
-
-
-def store_test_labels(task: dict, labels: pd.DataFrame) -> Path:
-    path = test_labels_path(task)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    labels.to_csv(path, index=False)
-    return path
 
 
 def check_task_unchanged(task: dict) -> None:
@@ -93,18 +95,24 @@ def check_task_unchanged(task: dict) -> None:
         )
 
 
-def input_columns(task: dict) -> list[str]:
-    """The columns handed to the model: what it predicts from, or the conditions it generates
-    for. Anything: text, numbers, categories, file paths. Empty means unconditional generation."""
-    return list(task["data"].get("input_columns", []))
+ENTRY_POINT = "infer.py"
+
+
+def id_column(task: dict) -> str:
+    return task["data"].get("id_column", "id")
+
+
+def target_column(task: dict) -> str:
+    return task["data"].get("target_column", "target")
+
+
+def data_path(task: dict, key: str) -> Path | None:
+    name = task["data"].get(key)
+    return task["_project_dir"] / "task" / name if name else None
 
 
 def is_generation(task: dict) -> bool:
     return task["task"]["type"] == "generation"
-
-
-def entry_point(task: dict) -> str:
-    return "generate.py" if is_generation(task) else "predict.py"
 
 
 def evaluator_script(task: dict) -> Path | None:
@@ -121,8 +129,8 @@ def direction(task: dict) -> str:
 
 
 def sampling(task: dict, split: str) -> tuple[int, int]:
-    """(samples per condition, seed). Fixed by the task so two submissions are comparable; the
-    final check draws fresh samples, and more of them if the task says so."""
+    """Generation: (samples per condition, seed). Fixed by the task so two submissions are
+    comparable; the final check draws fresh samples, and more of them if the task says so."""
     spec = task.get("sampling", {})
     n, seed = int(spec.get("n", 100)), int(spec.get("seed", 0))
     if split == "test":
@@ -130,39 +138,33 @@ def sampling(task: dict, split: str) -> tuple[int, int]:
     return n, seed
 
 
-def _run_entry(run_dir: Path, script: str, arguments: list[str], output: Path, timeout: int) -> None:
-    if not (run_dir / script).exists():
-        raise SubmissionError(f"no {script} in {run_dir}")
+def run_infer(run_dir: Path, inputs: Path | None, output: Path, n: int | None = None, seed: int | None = None,
+              timeout: int = INFER_TIMEOUT_S) -> None:
+    """The one fixed interface: infer.py --model DIR --input PATH --output FILE."""
+    if not (run_dir / ENTRY_POINT).exists():
+        raise SubmissionError(f"no {ENTRY_POINT} in {run_dir}")
     if not (run_dir / "model").exists():
         raise SubmissionError(f"no model/ directory in {run_dir}; train a model before scoring")
-    cmd = [sys.executable, script, "--model", "model", *arguments, "--output", str(output)]
+    cmd = [sys.executable, ENTRY_POINT, "--model", "model"]
+    if inputs is not None:
+        cmd += ["--input", str(inputs)]
+    if n is not None:
+        cmd += ["--n", str(n), "--seed", str(seed)]
+    cmd += ["--output", str(output)]
     try:
         proc = subprocess.run(cmd, cwd=run_dir, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
-        raise SubmissionError(f"{script} did not finish within {timeout} s")
+        raise SubmissionError(f"{ENTRY_POINT} did not finish within {timeout} s")
     if proc.returncode != 0:
-        raise SubmissionError(f"{script} failed (exit {proc.returncode}):\n{proc.stderr.strip()[-2000:]}")
+        raise SubmissionError(f"{ENTRY_POINT} failed (exit {proc.returncode}):\n{proc.stderr.strip()[-2000:]}")
     if not output.exists():
-        raise SubmissionError(f"{script} exited cleanly but wrote no output file")
-
-
-def run_predict(run_dir: Path, input_csv: Path, output_csv: Path, timeout: int = PREDICT_TIMEOUT_S) -> None:
-    """predict.py --model DIR --input FILE --output FILE: one output per input row."""
-    _run_entry(run_dir, "predict.py", ["--input", str(input_csv)], output_csv, timeout)
-
-
-def run_generate(run_dir: Path, conditions_csv: Path | None, n: int, seed: int, output_csv: Path,
-                 timeout: int = PREDICT_TIMEOUT_S) -> None:
-    """generate.py --model DIR [--conditions FILE] --n N --seed S --output FILE: n samples per condition."""
-    arguments = (["--conditions", str(conditions_csv)] if conditions_csv else []) + ["--n", str(n), "--seed", str(seed)]
-    _run_entry(run_dir, "generate.py", arguments, output_csv, timeout)
+        raise SubmissionError(f"{ENTRY_POINT} exited cleanly but wrote no output file")
 
 
 def _reference(task: dict, split: str) -> Path | None:
-    """The rows of this split that the evaluator may see and the model may not."""
+    """The half of a split that the evaluator sees and the model does not: ids, and labels."""
     if split == "validation":
-        name = task["data"].get("validation")
-        return task["_project_dir"] / "task" / name if name else None
+        return data_path(task, "validation_labels")
     if split == "test":
         path = test_labels_path(task)
         if path.exists():
@@ -173,20 +175,17 @@ def _reference(task: dict, split: str) -> Path | None:
     raise ValueError("split must be 'validation' or 'test'")
 
 
-def _produce(task: dict, split: str, run_dir: Path, reference: Path | None, output: Path) -> None:
-    columns, work = input_columns(task), output.parent
-    if not is_generation(task):
-        source = reference if split == "validation" else task["_project_dir"] / "task" / task["data"].get("test_inputs", "data/test_inputs.csv")
-        pd.read_csv(source)[columns].to_csv(work / "inputs.csv", index=False)
-        run_predict(run_dir, work / "inputs.csv", output)
-        return
-    n, seed = sampling(task, split)
-    conditions = None
-    if columns:
-        conditions = pd.read_csv(reference)[columns]
-        conditions.to_csv(work / "conditions.csv", index=False)
-    run_generate(run_dir, work / "conditions.csv" if columns else None, n, seed, output)
-    judge.check_generated(_read_outputs(output), n, None if conditions is None else len(conditions))
+def _inputs(task: dict, split: str) -> Path | None:
+    """The half of a split handed to the model, exactly as the task stores it."""
+    if split == "test" and not is_generation(task):
+        return data_path(task, "test_inputs")
+    if split == "test" and "test_inputs" in task["data"] and hidden_inputs_path(task).exists():
+        return hidden_inputs_path(task)
+    return data_path(task, "validation_inputs")
+
+
+def read_ids(task: dict, reference: Path) -> list[str]:
+    return pd.read_csv(reference, dtype={id_column(task): str})[id_column(task)].tolist()
 
 
 def _read_outputs(path: Path) -> pd.DataFrame:
@@ -196,14 +195,24 @@ def _read_outputs(path: Path) -> pd.DataFrame:
         raise SubmissionError(f"could not read the output file: {e}")
 
 
+def _produce(task: dict, split: str, run_dir: Path, reference: Path | None, output: Path) -> None:
+    if not is_generation(task):
+        run_infer(run_dir, _inputs(task, split), output)
+        return
+    n, seed = sampling(task, split)
+    run_infer(run_dir, _inputs(task, split), output, n=n, seed=seed)
+    judge.check_generated(_read_outputs(output), n, read_ids(task, reference) if reference else None)
+
+
 def _builtin_scores(task: dict, reference: Path, outputs: Path, keep: Path | None) -> tuple[dict, list | None, int]:
-    y_true = pd.read_csv(reference)[task["data"]["target_column"]].to_numpy()
-    y_pred, y_score = judge.check_predictions(_read_outputs(outputs), len(y_true))
+    labels = pd.read_csv(reference, dtype={id_column(task): str})
+    y_true = labels[target_column(task)].to_numpy()
+    y_pred, y_score = judge.check_predictions(_read_outputs(outputs), labels[id_column(task)].tolist())
     primary = task["metric"]["primary"]
     names = [primary] + [m for m in task["metric"].get("secondary", []) if m != primary]
     metrics = judge.score(y_true, y_pred, names, y_score=y_score)
     if keep is not None:
-        saved = pd.DataFrame({"prediction": y_pred})
+        saved = pd.DataFrame({"id": labels[id_column(task)], "prediction": y_pred})
         if y_score is not None:
             saved["score"] = y_score
         saved.to_csv(keep, index=False)
@@ -253,7 +262,7 @@ def score_split(project_dir: str | Path, split: str, run_dir: str | Path | None 
                 keep_predictions: Path | None = None, outputs: str | Path | None = None) -> dict:
     """Produce outputs for one split and evaluate them.
 
-    `run_dir` is where the entry point, src/ and model/ live; it defaults to the project itself,
+    `run_dir` is where infer.py, src/ and model/ live; it defaults to the project itself,
     and is an experiment snapshot when scoring a past submission. `keep_predictions` saves what
     is needed to compare a later submission with this one. `outputs` skips the first step and
     evaluates a file that already exists.
@@ -295,7 +304,7 @@ def compare_with(project_dir: Path, new_file: Path, old_file: Path) -> float | N
     if evaluator_script(task) is not None:
         return judge.mean_chance_better(new["item"].to_numpy(dtype=float), old["item"].to_numpy(dtype=float),
                                         direction(task))
-    y_true = pd.read_csv(_reference(task, "validation"))[task["data"]["target_column"]].to_numpy(dtype=float)
+    y_true = pd.read_csv(_reference(task, "validation"))[target_column(task)].to_numpy(dtype=float)
     if len(new) != len(y_true):
         return None
     pairs = [(f["prediction"].to_numpy(dtype=float), f["score"].to_numpy(dtype=float) if "score" in f else None)

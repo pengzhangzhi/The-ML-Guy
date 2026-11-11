@@ -44,13 +44,14 @@ def main() -> None:
 
     with open(args.task / "task.toml", "rb") as f:
         task = tomllib.load(f)
-    seq, tgt = task["data"]["input_columns"][0], task["data"]["target_column"]
+    seq, tgt = "sequence", "target"
     alphabet = task["input"]["alphabet"]
     primary = task["metric"]["primary"]
     report = [primary] + [m for m in task["metric"]["secondary"] if m != primary]
 
     train = pd.read_csv(args.task / task["data"]["train"])
-    val = pd.read_csv(args.task / task["data"]["validation"])
+    val = pd.read_csv(args.task / task["data"]["validation_inputs"]).merge(
+        pd.read_csv(args.task / task["data"]["validation_labels"]), on="id")
     y_train, y_val = train[tgt].to_numpy(), val[tgt].to_numpy()
 
     kind = "composition" if args.approach == "composition" else "dipeptide"

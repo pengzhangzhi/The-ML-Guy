@@ -38,7 +38,8 @@ layout, the inputs it accepts, the plots and the library are all your call.
 
 Three things are not:
 
-- **It runs the scored model.** Get outputs by calling `predict.py` or `generate.py`, the code path the report's
+- **It runs the scored model.** `mlguy finish` puts the best submission in `final/`. Get outputs by
+  calling `final/infer.py`, the code path the report's
   numbers were measured on, not a reimplementation.
 - **It says what the model was tested on and what it was not,** in their words, where someone
   using it cold will see it.

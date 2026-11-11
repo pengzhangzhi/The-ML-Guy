@@ -22,7 +22,7 @@ yourself.
 ## 1. Look at the data first
 
 Before asking anything, open the data and find out what you can: columns, number of rows,
-value ranges, duplicates, missing values, which columns are inputs and which is the target,
+value ranges, duplicates, missing values, what the inputs are and what the target is,
 and anything domain-specific worth noticing (whether sequences vary in length, whether rows
 repeat a subject, whether measurements come from different batches). Questions you could have answered yourself
 waste their attention, and a question phrased around what you saw ("your file has 488 single
@@ -74,11 +74,11 @@ the wrong one. When the balance differs, prefer `balanced_accuracy` or `mcc` ove
 If you keep a base-rate-dependent metric anyway — to stay comparable with published numbers,
 say — record that reason in the brief, because the search will be ranked by it.
 
-## 5. When there is no answer key, write the evaluator
+## 5. When no built-in metric fits, write the evaluator
 
-The built-in metrics cover one prediction per row scored against a label. Anything else needs
-the task to carry its own evaluator: a generative model, where there is no right answer to
-compare with, or a prediction task whose real measure of success is not on the list.
+The built-in metrics cover one prediction per example scored against a label. When the real
+measure of success is something else, the task carries its own evaluator. (Generative tasks
+always need one. Support for them is experimental; say so if a user asks for one.)
 
 **How good outputs are recognised is the user's knowledge, not yours.** Ask how they would
 judge a batch of outputs by hand, and what they already trust to do it: a folding model, a
@@ -90,7 +90,7 @@ with the task.
 python evaluate.py --outputs FILE --split validation|final --result FILE [--reference FILE]
 ```
 
-It reads the model's outputs (and the held-back rows of that split, when there are any) and
+It reads the model's outputs and the labels file of that split, matched by `id`, and
 writes `{"metrics": {"name": number, ...}, "per_item": [number, ...]}`. Set `[evaluator]
 script`, and `[metric] primary` and `direction`, in `task.toml`.
 
@@ -104,42 +104,54 @@ The search will optimise exactly what this script rewards, so:
   scores do not separate, it cannot guide a search.
 - **Return `per_item`** — one number per scored item, whose mean is the primary metric — so
   that noise can be measured. Without it no submission can be shown to beat another.
-- **Make the final check ask more.** `--split final` runs once, at the end. Give it conditions
-  the search never saw (`data.test`), more samples (`[sampling] final_n`), and where you can a
-  second scorer the search never optimised against.
 - **It runs on every submission,** so its cost is part of the budget.
-
-For generation, `[sampling] n` and `seed` fix how many samples are drawn each time, so that two
-submissions are comparable. How the model samples is the research step's business.
 
 ## 6. Write the brief and get it approved
 
 Fill in `task/brief.md`: goal, input, output, data, how it is tested, how it is scored, the
 starting model, the budget, and the assumptions you made rather than were told. Every line in
-their language. Then show it and ask them to approve or correct it.
+their language.
 
-**Do not build anything before they approve.** This is the one point where a wrong metric or a
-wrong split is cheap to fix.
+**Show them examples, not descriptions.** They cannot judge "held out by similarity" or
+"Spearman correlation", but they can judge what those mean on their own data:
+
+- For the split, put a handful of real test examples in the brief beside the training
+  examples most like them, and ask: are these the kind of new cases you will have?
+- For the score, say what a given value would let them do: "of the 50 this model ranks
+  highest, about this many would really be in your top 10%."
+
+Then ask them to approve or correct it. **Do not build anything before they approve.** This is
+the one point where a wrong metric or a wrong split is cheap to fix.
 
 ## 7. Build it
 
 ```bash
 mlguy new <folder> --name <project-name>
-# write task/task.toml from the approved brief; prepare task/data/{train,validation,test}.csv
-mlguy init          # checks the task, hides the test labels, freezes task/
-python src/train.py # the baseline
-mlguy validate      # proves predict.py (or generate.py) and scoring work; records experiment 0
+# write task/task.toml from the approved brief, and prepare task/data
+# write the simplest model that runs: train it into model/, and make infer.py work
+mlguy init          # checks the task and the split, moves the test labels out, freezes task/
+mlguy validate      # proves infer.py and scoring work; records experiment 0
 ```
 
-`mlguy init` checks the split before freezing it: rows shared between splits, a validation or
-test set too small to measure anything, and a validation set that looks unlike the test set.
-Each `check:` line it prints is a way the final score could mislead. Fix it, or explain it in
-the brief and to the user, before going on; once anything is scored, the task can no longer
-be changed.
+**The data.** Keep the inputs in whatever form suits them: a table, an expression matrix, a
+folder of images or structures. `mlguy` never reads them; only your code does. What it needs is
+an `id` for every validation and test example, carried by the inputs, and a small labels CSV
+for each of those two splits with `id` and `target`. Training data is yours to lay out.
 
-The baseline exists to prove the pipeline runs and to give later work a number to beat. Keep
-it simple and fast. Do not spend the user's budget trying to make it good — that is the
-research step's job, and `validate` does not count against the budget.
+**The one fixed interface** is `python infer.py --model model --input PATH --output FILE`,
+where `PATH` is a split's inputs exactly as `task.toml` names them, and the output is a CSV
+with `id` and `prediction` (plus `score`, the positive-class probability, for classification).
+
+**The split is checked** before it is frozen: identical inputs in two splits, a validation or
+test set too small to measure anything, a validation set whose labels look unlike the test
+set's. Each `check:` line `mlguy init` prints is a way the final score could mislead. Fix it,
+or explain it in the brief and to the user, before going on; once anything is scored, the task
+can no longer be changed.
+
+**The starting model** exists to prove the pipeline runs and to give later work a number to
+beat. Choose the simplest thing that is reasonable for this data, keep it fast, and do not
+spend the user's budget making it good: that is the research step's job, and `validate` does
+not count against the budget.
 
 If `mlguy validate` fails, the project is not finished. Fix it before handing over.
 

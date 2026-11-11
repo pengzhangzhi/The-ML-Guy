@@ -4,7 +4,7 @@
 
 Written for this problem, not supplied by the framework. The user has a list of proteins and
 wants to know which to try first, so the page gives a call and the probability behind it,
-most likely soluble first. Predictions come from predict.py, the same code path the scores in
+most likely soluble first. Predictions come from infer.py, the same code path the scores in
 REPORT.md were measured on.
 """
 
@@ -20,6 +20,7 @@ from pathlib import Path
 import pandas as pd
 
 HERE = Path(__file__).resolve().parent
+FINAL = HERE / "final"   # the submission that was scored, put there by `mlguy finish`
 AMINO_ACIDS = set("ACDEFGHIKLMNPQRSTVWY")
 
 TITLE = "Protein solubility predictor"
@@ -73,12 +74,12 @@ def call_proteins(text: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     with tempfile.TemporaryDirectory() as tmp:
         inputs, outputs = Path(tmp) / "in.csv", Path(tmp) / "out.csv"
-        kept[["sequence"]].to_csv(inputs, index=False)
-        proc = subprocess.run([sys.executable, "predict.py", "--model", "model", "--input", str(inputs),
-                               "--output", str(outputs)], cwd=HERE, capture_output=True, text=True)
+        kept.assign(id=kept.index)[["id", "sequence"]].to_csv(inputs, index=False)
+        proc = subprocess.run([sys.executable, "infer.py", "--model", "model", "--input", str(inputs),
+                               "--output", str(outputs)], cwd=FINAL, capture_output=True, text=True)
         if proc.returncode != 0:
             raise RuntimeError(f"the model failed to run:\n{proc.stderr.strip()[-1000:]}")
-        out = pd.read_csv(outputs)
+        out = pd.read_csv(outputs).set_index("id").loc[kept.index]
 
     kept["call"] = out["prediction"].map({1: "soluble", 0: "insoluble"}).to_numpy()
     kept["probability soluble"] = out["score"].round(3).to_numpy()
