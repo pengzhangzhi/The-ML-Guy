@@ -7,6 +7,7 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pandas as pd
@@ -18,6 +19,7 @@ from mlguy.judge import SubmissionError
 from mlguy.project import (
     TaskChanged,
     check_task_unchanged,
+    task_changes,
     compare_with,
     direction,
     ENTRY_POINT,
@@ -34,7 +36,7 @@ from mlguy.project import (
     test_labels_path,
     validation_caveat,
 )
-from mlguy.records import Experiments, git_commit, hash_task, now
+from mlguy.records import Experiments, git_commit, hash_task, now, task_manifest
 
 REQUIRED_KEYS = [("name",), ("task", "type"), ("task", "output"), ("data", "train"), ("metric", "primary")]
 # prediction: each split is inputs (any format) plus a table of id and label
@@ -80,11 +82,11 @@ def _check_keys(task: dict) -> None:
 
 
 def _freeze_task(task: dict) -> str:
-    digest = hash_task(task["_project_dir"])
-    path = state_dir(task) / "task_hash.txt"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(digest)
-    return digest
+    state_dir(task).mkdir(parents=True, exist_ok=True)
+    (state_dir(task) / "project_path.txt").write_text(str(task["_project_dir"]))
+    manifest = task_manifest(task["_project_dir"])
+    (state_dir(task) / "task_files.json").write_text(json.dumps(manifest, indent=1, sort_keys=True))
+    return hash_task(task["_project_dir"])
 
 
 def _record_score(experiments: Experiments, task: dict, number: int, note: str,
@@ -139,7 +141,6 @@ def cmd_new(args: argparse.Namespace) -> int:
     if target.exists() and any(target.iterdir()):
         raise CommandError(f"{target} already exists and is not empty")
     shutil.copytree(TEMPLATES / "project", target)
-    shutil.copy2(TEMPLATES / "proposal.md", target / "proposal.md")
 
     toml_path = target / "task" / "task.toml"
     toml_path.write_text(toml_path.read_text().replace("TODO-project-name", args.name))
@@ -151,6 +152,7 @@ def cmd_new(args: argparse.Namespace) -> int:
     print(f"created {target}")
     print("  task/task.toml   the task: fill in every TODO, then agree it with the user")
     print("  task/brief.md    the one page the user approves")
+    print("  this folder is a git repository: `mlguy submit` and `finish` commit to it")
     print("  infer.py         the one fixed interface, as a stub; src/ is yours")
     print("next: prepare task/data, write the simplest model that runs, then `mlguy init`")
     return 0
@@ -163,10 +165,18 @@ def cmd_init(args: argparse.Namespace) -> int:
     id_col, tgt_col = id_column(task), target_column(task)
     builtin, generation = evaluator_script(task) is None, is_generation(task)
 
-    frozen = state_dir(task) / "task_hash.txt"
-    if frozen.exists() and Experiments(project_dir).all() and frozen.read_text().strip() != hash_task(project_dir):
+    owner = state_dir(task) / "project_path.txt"
+    if owner.exists() and owner.read_text().strip() != str(project_dir):
         raise CommandError(
-            "task/ has changed since it was frozen, and this project already has recorded experiments. "
+            f"another project called '{task['name']}' already keeps its state in {state_dir(task)} "
+            f"(it lives at {owner.read_text().strip()}). Give this project a different name in task.toml."
+        )
+
+    frozen = state_dir(task) / "task_files.json"
+    if frozen.exists() and Experiments(project_dir).all() and task_changes(task):
+        raise CommandError(
+            f"task/ has changed since it was frozen ({', '.join(task_changes(task)[:3])}), and this project "
+            "already has recorded experiments. "
             "Their scores were measured against the old task, so it cannot be re-frozen. Restore task/, "
             "or start a new project for the new task."
         )
@@ -232,6 +242,17 @@ def cmd_init(args: argparse.Namespace) -> int:
         print(f"  check: {item}")
     if found:
         print("  fix each check above, or explain it in task/brief.md; they are repeated in the final report")
+    skipped = []
+    if not builtin:
+        skipped.append("the label distributions of validation and test were not compared, because the task "
+                       "scores with its own evaluator")
+    elif caveat:
+        skipped.append("the label distributions of validation and test were not compared, because the "
+                       "difference is already on record (validation_matches_test = false)")
+    for item in skipped:
+        print(f"  not checked: {item}")
+    if not found:
+        print("  split checks: nothing raised")
     print(f"next: train a model into model/, make {ENTRY_POINT} work, then run `mlguy validate`")
     return 0
 
@@ -322,16 +343,22 @@ def cmd_finish(args: argparse.Namespace) -> int:
     if not snapshot.exists():
         raise CommandError(f"no saved submission for experiment {best['number']} at {snapshot}")
     try:
-        test_result = score_split(project_dir, "test", run_dir=snapshot)
+        with tempfile.TemporaryDirectory() as tmp:
+            outputs = Path(tmp) / "test_outputs.csv"
+            test_result = score_split(project_dir, "test", run_dir=snapshot, keep_outputs=outputs)
+            final_dir = project_dir / "final"
+            if final_dir.exists():
+                shutil.rmtree(final_dir)
+            shutil.copytree(snapshot, final_dir)
+            shutil.copy2(outputs, final_dir / "test_outputs.csv")
     except SubmissionError as e:
         raise CommandError(f"the best submission failed the final check:\n{e}")
 
-    # The working folder holds whatever was tried last. final/ holds what was scored: the page
-    # and the user run the model from there.
-    final_dir = project_dir / "final"
-    if final_dir.exists():
-        shutil.rmtree(final_dir)
-    shutil.copytree(snapshot, final_dir)
+    # The working folder holds whatever was tried last; final/ holds what was scored, and the
+    # page and the user run the model from there. The test set is now spent, so its labels go
+    # beside the outputs: the report can say what the score means case by case.
+    if test_labels_path(task).exists():
+        shutil.copy2(test_labels_path(task), final_dir / "test_labels.csv")
 
     final_path.parent.mkdir(parents=True, exist_ok=True)
     final_path.write_text(json.dumps({"number": best["number"], "time": now(), **test_result}, indent=2))
@@ -343,6 +370,7 @@ def cmd_finish(args: argparse.Namespace) -> int:
         print(f"  it would fall between {test_result['interval'][0]:.4f} and {test_result['interval'][1]:.4f} "
               "on another draw")
     print(f"report written to {path}")
+    print("final/ holds the scored model, with its test outputs and the test labels beside them")
     return 0
 
 
@@ -448,10 +476,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--json", action="store_true")
     p.add_argument("--last", type=int, default=20, help="how many experiments to list")
 
-    p = add("score", "score the current model on validation without recording it (the final check is "
-                     "only ever run by `finish`)", cmd_score)
-    p.add_argument("--outputs", default=None,
-                   help="evaluate this file of outputs instead of running the model (to try out an evaluator)")
+    p = add("score", "run the task's scoring on a file of outputs, to check that it tells good from bad "
+                     "before the task is frozen. Records nothing.", cmd_score)
+    p.add_argument("--outputs", required=True, help="a file of outputs for the validation examples")
 
     p = add("dashboard", "watch the experiments in a browser", cmd_dashboard)
     p.add_argument("--port", type=int, default=8501)

@@ -6,7 +6,6 @@ name = "protein-solubility"
 type = "classification"
 input = "a protein sequence"
 output = "soluble_when_expressed"
-higher_is_better = true              # label 1 = soluble, and that is the outcome we want
 
 [input]
 alphabet = "ACDEFGHIKLMNPQRSTVWY"

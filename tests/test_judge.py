@@ -105,3 +105,28 @@ def test_noise_estimates():
     assert judge.chance_better(y, (good, None), (good, None), "spearman") == 0.5
     assert judge.chance_better(y, (good, None), (poor, None), "rmse") > 0.99, "lower is better for rmse"
     assert judge.interval(y, np.zeros(300), "spearman") is None, "undefined everywhere: no interval, no crash"
+
+
+def test_multiclass_text_labels():
+    y = np.array(["alpha", "beta", "beta", "delta", "delta", "delta"])
+    pred = np.array(["alpha", "beta", "delta", "delta", "delta", "gamma"])   # gamma never occurs: just wrong
+    got = judge.score(y, pred, ["accuracy", "balanced_accuracy", "f1", "mcc"])
+    assert got["accuracy"] == pytest.approx(4 / 6)
+    assert got["balanced_accuracy"] == pytest.approx((1 + 0.5 + 2 / 3) / 3)
+    assert 0 < got["f1"] < 1 and 0 < got["mcc"] < 1
+    with pytest.raises(SubmissionError, match="two classes"):
+        judge.score(y, pred, ["roc_auc"], y_score=np.zeros(6))
+    values, _ = judge.check_predictions(pd.DataFrame({"id": ["a", "b"], "prediction": ["beta", "alpha"]}),
+                                        ["a", "b"], numeric=False)
+    assert list(values) == ["beta", "alpha"]
+    low, high = judge.interval(np.repeat(y, 20), np.repeat(pred, 20), "balanced_accuracy")
+    assert low < high <= 1.0
+
+
+def test_binary_metrics_unchanged_and_labels_match_across_types():
+    y = np.array([1, 1, 1, 0, 0, 0, 0, 0])
+    pred = np.array(["1", "1", "0", "1", "0", "0", "0", "0"])          # text that holds numbers
+    got = judge.score(y, pred, ["accuracy", "f1", "mcc"])
+    assert got["accuracy"] == pytest.approx(6 / 8)
+    assert got["f1"] == pytest.approx(2 / 3)
+    assert got["mcc"] == pytest.approx((2 * 4 - 1 * 1) / np.sqrt(3 * 3 * 5 * 5))

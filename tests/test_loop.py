@@ -22,7 +22,6 @@ name = "tiny-test-project"
 type = "regression"
 input = "protein_sequence"
 output = "activity"
-higher_is_better = true
 
 [input]
 alphabet = "ACDE"
@@ -191,7 +190,7 @@ def test_dashboard_renders_without_error(project, monkeypatch):
 def test_new_scaffolds_a_runnable_project(tmp_path):
     target = tmp_path / "fresh"
     assert main(["new", str(target), "--name", "fresh-project"]) == 0
-    for name in ["task/task.toml", "task/brief.md", "infer.py", "proposal.md", "PROJECT_MEMORY.md"]:
+    for name in ["task/task.toml", "task/brief.md", "infer.py", "PROJECT_MEMORY.md"]:
         assert (target / name).exists(), name
     assert "fresh-project" in (target / "task" / "task.toml").read_text()
     assert main(["new", str(target), "--name", "again"]) == 2, "must not overwrite a project"
@@ -224,7 +223,6 @@ name = "tabular-test-project"
 type = "regression"
 input = "a cell line and a drug dose"
 output = "response"
-higher_is_better = true
 
 [data]
 """ + DATA_TOML + """
@@ -315,11 +313,45 @@ def test_serve_runs_the_projects_own_page(tmp_path, monkeypatch, capfd):
 # ------------------------------------------------------------ the rubric cannot be bypassed
 
 
-def test_the_test_set_cannot_be_scored_outside_finish(project):
+def test_score_only_checks_a_given_file(project, tmp_path, capsys):
+    """Neither split can be scored by running the model outside submit and finish."""
     run(project, "init")
-    with pytest.raises(SystemExit):
-        run(project, "score", "--split", "test")
-    assert run(project, "score") == 0, "validation scoring stays available"
+    for args in (["score"], ["score", "--split", "test"]):
+        with pytest.raises(SystemExit):
+            run(project, *args)
+    ids = pd.read_csv(project / "task" / "data" / "validation_labels.csv")["id"]
+    pd.DataFrame({"id": ids, "prediction": range(len(ids))}).to_csv(tmp_path / "out.csv", index=False)
+    capsys.readouterr()
+    assert run(project, "score", "--outputs", str(tmp_path / "out.csv")) == 0
+    assert "spearman" in capsys.readouterr().out
+    assert Experiments(project).all() == [], "nothing is recorded"
+
+
+def test_finish_leaves_the_test_outputs_and_labels_in_final(project):
+    run(project, "init")
+    run(project, "validate")
+    run(project, "finish")
+    outputs = pd.read_csv(project / "final" / "test_outputs.csv")
+    labels = pd.read_csv(project / "final" / "test_labels.csv")
+    assert set(outputs["id"]) == set(labels["id"]) and "target" in labels
+    report = (project / "REPORT.md").read_text()
+    assert "0 of 2 submissions used" in report and "after the budget was spent" not in report
+    assert "(higher is better)" in report
+
+
+def test_python_caches_in_task_do_not_count_as_a_change(project, capsys):
+    """Importing task/evaluate.py from training code makes Python write task/__pycache__."""
+    run(project, "init")
+    run(project, "validate")
+    cache = project / "task" / "__pycache__"
+    cache.mkdir()
+    (cache / "evaluate.cpython-311.pyc").write_bytes(b"\x00")
+    _write_model(project, 2.0)
+    assert run(project, "submit", "--note", "after a cache appeared") == 0
+
+    (project / "task" / "data" / "validation_labels.csv").write_text("id,target\nv0,1\n")
+    assert run(project, "submit", "--note", "after the labels changed") == 2
+    assert "data/validation_labels.csv (changed)" in capsys.readouterr().err, "the error names the file"
 
 
 def test_the_baseline_cannot_become_a_free_submission(project):
@@ -433,3 +465,13 @@ def test_inputs_can_be_anything_the_projects_code_can_read(tmp_path, monkeypatch
     assert run(project, "validate") == 0
     assert Experiments(project).best("pearson")["metrics"]["pearson"] > 0.99
     assert run(project, "finish") == 0
+
+
+def test_two_projects_cannot_share_a_name(project, tmp_path, capsys):
+    import shutil
+
+    other = tmp_path / "copy"
+    shutil.copytree(project, other)
+    assert run(project, "init") == 0
+    assert run(other, "init") == 2
+    assert "different name" in capsys.readouterr().err

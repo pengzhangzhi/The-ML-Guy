@@ -62,12 +62,6 @@ def _mae(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 # ------------------------------------------------------------ classification
 
 
-def _counts(y_true: np.ndarray, y_pred: np.ndarray, positive: float) -> tuple[int, int, int, int]:
-    true_pos, pred_pos = y_true == positive, y_pred == positive
-    return (int((true_pos & pred_pos).sum()), int((~true_pos & pred_pos).sum()),
-            int((~true_pos & ~pred_pos).sum()), int((true_pos & ~pred_pos).sum()))
-
-
 def _accuracy(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return float(np.mean(y_true == y_pred))
 
@@ -79,26 +73,31 @@ def _balanced_accuracy(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 
 def _f1(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    positive = max(np.unique(y_true))
-    tp, fp, _, fn = _counts(y_true, y_pred, positive)
-    if tp == 0:
-        return 0.0
-    precision, recall = tp / (tp + fp), tp / (tp + fn)
-    return float(2 * precision * recall / (precision + recall))
+    """Two classes: F1 of the positive (larger) class. More: the mean F1 over the classes."""
+    from sklearn.metrics import f1_score
+
+    classes = np.unique(y_true)
+    if len(classes) == 2:
+        return float(f1_score(y_true, y_pred, pos_label=classes[-1], average="binary", zero_division=0))
+    return float(f1_score(y_true, y_pred, labels=classes, average="macro", zero_division=0))
 
 
 def _mcc(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    positive = max(np.unique(y_true))
-    tp, fp, tn, fn = _counts(y_true, y_pred, positive)
-    denominator = np.sqrt(float(tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
-    if denominator == 0:
-        raise SubmissionError("one predicted class is empty, so the correlation is undefined")
-    return float((tp * tn - fp * fn) / denominator)
+    """Matthews correlation; the multi-class form reduces to the usual one for two classes."""
+    from sklearn.metrics import matthews_corrcoef
+
+    if len(np.unique(y_pred)) < 2:
+        raise SubmissionError("every prediction is the same class, so the correlation is undefined")
+    return float(matthews_corrcoef(y_true, y_pred))
 
 
 def _roc_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
-    """Mann-Whitney form, so tied scores are handled by rank averaging."""
-    positive = max(np.unique(y_true))
+    """Two classes only. Mann-Whitney form, so tied scores are handled by rank averaging.
+    `score` is the probability of the larger class label (1 when the labels are 0 and 1)."""
+    classes = np.unique(y_true)
+    if len(classes) > 2:
+        raise SubmissionError(f"roc_auc needs two classes; this task has {len(classes)}")
+    positive = classes[-1]
     is_positive = y_true == positive
     n_pos, n_neg = int(is_positive.sum()), int((~is_positive).sum())
     if n_pos == 0 or n_neg == 0:
@@ -134,9 +133,11 @@ def _numeric_column(preds: pd.DataFrame, name: str, n_expected: int) -> np.ndarr
     return values
 
 
-def check_predictions(preds: pd.DataFrame, ids: list[str]) -> tuple[np.ndarray, np.ndarray | None]:
-    """Match predictions to the expected ids. Returns (predictions, scores) as float arrays in
-    the order of `ids`, or raises SubmissionError saying what is wrong."""
+def check_predictions(preds: pd.DataFrame, ids: list[str],
+                      numeric: bool = True) -> tuple[np.ndarray, np.ndarray | None]:
+    """Match predictions to the expected ids. Returns (predictions, scores) in the order of
+    `ids`, or raises SubmissionError saying what is wrong. Predictions are numbers when
+    `numeric`, and class labels of any kind (numbers or text) otherwise."""
     for column in ("id", "prediction"):
         if column not in preds.columns:
             raise SubmissionError(f"the output file needs 'id' and 'prediction' columns; found {list(preds.columns)}")
@@ -151,27 +152,45 @@ def check_predictions(preds: pd.DataFrame, ids: list[str]) -> tuple[np.ndarray, 
             + (f" (such as {list(missing[:3])})" if len(missing) else "")
             + (f", and {len(extra)} are not ids of this split (such as {list(extra[:3])})" if len(extra) else ""))
     preds = preds.assign(id=given).set_index("id").loc[expected]
-    values = _numeric_column(preds, "prediction", len(expected))
+    if numeric:
+        values = _numeric_column(preds, "prediction", len(expected))
+    else:
+        if preds["prediction"].isna().any():
+            raise SubmissionError(f"{int(preds['prediction'].isna().sum())} predictions are missing")
+        values = preds["prediction"].to_numpy()
     scores = _numeric_column(preds, "score", len(expected)) if "score" in preds.columns else None
     return values, scores
 
 
+def as_labels(y_true, y_pred) -> tuple[np.ndarray, np.ndarray]:
+    """Class labels in comparable form: numbers when both sides are numeric (so 1 and 1.0 are
+    the same class), text otherwise."""
+    true_num = pd.to_numeric(pd.Series(y_true), errors="coerce")
+    pred_num = pd.to_numeric(pd.Series(y_pred), errors="coerce")
+    if true_num.notna().all() and pred_num.notna().all():
+        return true_num.to_numpy(dtype=float), pred_num.to_numpy(dtype=float)
+    as_text = lambda v: pd.Series(v).astype(str).str.strip().to_numpy()
+    return as_text(y_true), as_text(y_pred)
+
+
 def score(y_true, y_pred, metrics: list[str], y_score=None) -> dict[str, float]:
-    """Compute each named metric. Rows of y_true, y_pred and y_score must be in the same order."""
-    y_true = np.asarray(y_true, dtype=float)
-    y_pred = np.asarray(y_pred, dtype=float)
+    """Compute each named metric. Rows of y_true, y_pred and y_score must be in the same order.
+
+    For classification, a predicted class that is not among the true labels is simply wrong.
+    A prediction that looks like a probability on numeric labels is refused, because it almost
+    always means the probability was written where the label belongs."""
     unknown = [m for m in metrics if m not in METRICS]
     if unknown:
         raise ValueError(f"unknown metrics {unknown}; available: {sorted(METRICS)}")
 
     if any(METRICS[m][2] == "classification" for m in metrics):
-        extra = sorted(set(y_pred.tolist()) - set(y_true.tolist()))
-        if extra:
+        y_true, y_pred = as_labels(y_true, y_pred)
+        if y_true.dtype.kind == "f" and np.all(y_true == np.round(y_true)) and np.any(y_pred != np.round(y_pred)):
             raise SubmissionError(
-                f"the 'prediction' column must hold class labels, but it contains {extra[:5]}, "
-                f"which are not among the real labels {sorted(set(y_true.tolist()))}. "
-                "Put probabilities in a 'score' column instead."
-            )
+                "the 'prediction' column must hold class labels, but it contains fractions. "
+                "Put probabilities in a 'score' column instead.")
+    else:
+        y_true, y_pred = np.asarray(y_true, dtype=float), np.asarray(y_pred, dtype=float)
 
     results = {}
     for name in metrics:
@@ -230,9 +249,15 @@ def _resamples(n: int, seed: int = 0) -> np.ndarray:
     return np.random.default_rng(seed).integers(0, n, size=(RESAMPLES, n))
 
 
+def _prepared(y_true, y_pred, metric: str) -> tuple[np.ndarray, np.ndarray]:
+    if METRICS[metric][2] == "classification":
+        return as_labels(y_true, y_pred)
+    return np.asarray(y_true, dtype=float), np.asarray(y_pred, dtype=float)
+
+
 def interval(y_true, y_pred, metric: str, y_score=None) -> list[float] | None:
     """The 95% bootstrap interval of a score: where it would fall on another draw of the rows."""
-    y_true, y_pred = np.asarray(y_true, dtype=float), np.asarray(y_pred, dtype=float)
+    y_true, y_pred = _prepared(y_true, y_pred, metric)
     y_score = None if y_score is None else np.asarray(y_score, dtype=float)
     values = [_one(metric, y_true[i], y_pred[i], None if y_score is None else y_score[i])
               for i in _resamples(len(y_true))]
@@ -249,7 +274,13 @@ def chance_better(y_true, new: tuple, old: tuple, metric: str) -> float | None:
     `new` and `old` are (predictions, scores-or-None). Near 0.5 means the two cannot be told
     apart on this data; near 1.0 means the improvement is real.
     """
-    y_true = np.asarray(y_true, dtype=float)
+    n = len(new[0])
+    # prepare both prediction sets together, so they end up as the same kind of label
+    y_both, pred_both = _prepared(np.concatenate([np.asarray(y_true, dtype=object)] * 2),
+                                  np.concatenate([np.asarray(new[0], dtype=object), np.asarray(old[0], dtype=object)]),
+                                  metric)
+    y_true = y_both[:n]
+    new, old = (pred_both[:n], new[1]), (pred_both[n:], old[1])
     wins = total = 0.0
     for i in _resamples(len(y_true)):
         a = _one(metric, y_true[i], new[0][i], None if new[1] is None else new[1][i])
@@ -276,7 +307,8 @@ def verdict(chance: float) -> str:
 
 
 def mean_interval(items) -> list[float] | None:
-    """The 95% interval of a score that is the mean of per-item scores."""
+    """The 95% interval of a score that is the plain mean of independent per-item scores.
+    Not valid for a weighted or per-class average; such an evaluator reports its own interval."""
     items = np.asarray(items, dtype=float)
     if len(items) < 2 or not np.all(np.isfinite(items)):
         return None

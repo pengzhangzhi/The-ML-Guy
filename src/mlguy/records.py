@@ -24,14 +24,31 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+IGNORED_IN_TASK = ("__pycache__", ".ipynb_checkpoints", ".DS_Store")
+
+
+def _task_files(task_dir: Path) -> list[Path]:
+    return sorted(p for p in task_dir.rglob("*") if p.is_file() and p.suffix != ".pyc"
+                  and not any(part in IGNORED_IN_TASK for part in p.relative_to(task_dir).parts))
+
+
+def task_manifest(project_dir: Path) -> dict[str, str]:
+    """A hash of every file in task/, by path, so a changed task is noticed and named.
+    Caches that Python and editors write by themselves are ignored."""
+    task_dir = Path(project_dir) / "task"
+    manifest = {}
+    for path in _task_files(task_dir):
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for block in iter(lambda: f.read(1 << 20), b""):
+                h.update(block)
+        manifest[str(path.relative_to(task_dir))] = h.hexdigest()
+    return manifest
+
+
 def hash_task(project_dir: Path) -> str:
-    """A hash over every file in task/, so a changed task is noticed."""
-    h = hashlib.sha256()
-    task_dir = project_dir / "task"
-    for path in sorted(p for p in task_dir.rglob("*") if p.is_file()):
-        h.update(str(path.relative_to(task_dir)).encode())
-        h.update(path.read_bytes())
-    return h.hexdigest()
+    """One hash over the whole of task/, for display."""
+    return hashlib.sha256(json.dumps(task_manifest(project_dir), sort_keys=True).encode()).hexdigest()
 
 
 class Experiments:

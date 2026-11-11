@@ -46,7 +46,8 @@ answers, and ask at most five, each with the answer you would guess.
 6. How much time and compute can this use?
 7. Anything you want followed or avoided, and what would be good enough?
 
-`proposal.md` in a new project has these as headings, if they would rather write than talk.
+If they would rather write than talk, `src/mlguy/templates/proposal.md` in the tool's repository has
+these as headings.
 
 ## 3. Choose the split with care
 
@@ -54,6 +55,10 @@ Build the split so that scoring on it resembles the use they described in questi
 split is almost always wrong when rows are related to each other — similar sequences, repeat
 measurements on the same subject, cells from one donor: near-duplicates land on both sides
 and every number comes out flattering. 
+
+Once the test set is drawn, do not score anything on it, not even a simple rule for the
+brief. Every number in the brief comes from training or validation data; the test set is
+opened once, by `mlguy finish`.
 
 Make the validation set resemble the test set. Hill-climbing happens on validation, so if
 validation asks an easier or simply different question, the search will optimise for the wrong
@@ -71,6 +76,8 @@ search.
 The common trap is a class balance that differs between validation and test: plain accuracy
 then measures the base rate as much as the model, and the loop will prefer a model fitted to
 the wrong one. When the balance differs, prefer `balanced_accuracy` or `mcc` over `accuracy`.
+All the classification metrics take any number of classes, with labels as numbers or text,
+except `roc_auc`, which needs exactly two.
 If you keep a base-rate-dependent metric anyway — to stay comparable with published numbers,
 say — record that reason in the brief, because the search will be ranked by it.
 
@@ -87,12 +94,13 @@ describe in the brief what it rewards in plain words, and have them approve it. 
 with the task.
 
 ```
-python evaluate.py --outputs FILE --split validation|final --result FILE [--reference FILE]
+python evaluate.py --outputs FILE --reference LABELS --split validation|final --result FILE
 ```
 
-It reads the model's outputs and the labels file of that split, matched by `id`, and
-writes `{"metrics": {"name": number, ...}, "per_item": [number, ...]}`. Set `[evaluator]
-script`, and `[metric] primary` and `direction`, in `task.toml`.
+It reads the model's outputs and the labels file of that split, matched by `id`, and writes
+`{"metrics": {"name": number, ...}}` plus the noise on the primary metric (below). Set
+`[evaluator] script`, and `[metric] primary` and `direction`, in `task.toml`. Training code may
+import from it to tune against the same measure.
 
 The search will optimise exactly what this script rewards, so:
 
@@ -102,8 +110,11 @@ The search will optimise exactly what this script rewards, so:
 - **Prove it can tell good from bad before freezing it.** Run `mlguy score --outputs FILE` on
   real held-out data and on something broken (shuffled, random, copied from training). If the
   scores do not separate, it cannot guide a search.
-- **Return `per_item`** — one number per scored item, whose mean is the primary metric — so
-  that noise can be measured. Without it no submission can be shown to beat another.
+- **Report its noise.** If the primary metric is the plain mean of independent per-example
+  scores, return them as `per_item`, in the same order every time (sorted by id); the
+  framework then computes the interval and compares submissions. For anything else (a
+  per-class average, a share of a top fraction, a distribution distance) return your own 95%
+  `interval: [low, high]`, for instance from a bootstrap that resamples within each class.
 - **It runs on every submission,** so its cost is part of the budget.
 
 ## 6. Write the brief and get it approved
@@ -115,12 +126,14 @@ their language.
 **Show them examples, not descriptions.** They cannot judge "held out by similarity" or
 "Spearman correlation", but they can judge what those mean on their own data:
 
-- For the split, put a handful of real test examples in the brief beside the training
-  examples most like them, and ask: are these the kind of new cases you will have?
+- For the split, show a handful of real test examples, and where it makes sense the training
+  examples most like them, and ask: are these the kind of new cases you will have? Where single
+  examples mean little (single cells, say), show what each set contains instead.
 - For the score, say what a given value would let them do: "of the 50 this model ranks
   highest, about this many would really be in your top 10%."
 
-Then ask them to approve or correct it. **Do not build anything before they approve.** This is
+Then ask them to approve or correct it. **Do not build anything before they approve.** Drafting
+`task.toml` or the evaluator to show them is fine; nothing is frozen until `mlguy init`. This is
 the one point where a wrong metric or a wrong split is cheap to fix.
 
 ## 7. Build it
@@ -140,7 +153,12 @@ for each of those two splits with `id` and `target`. Training data is yours to l
 
 **The one fixed interface** is `python infer.py --model model --input PATH --output FILE`,
 where `PATH` is a split's inputs exactly as `task.toml` names them, and the output is a CSV
-with `id` and `prediction` (plus `score`, the positive-class probability, for classification).
+with `id` and `prediction` (plus `score`, the positive-class probability, for two-class tasks).
+`infer.py` only ever sees inputs, so the inputs must carry the `id`; the model should ignore it.
+
+`mlguy init` moves the test labels to `~/.mlguy/projects/<name>/`, outside the project, along
+with the record of the frozen task. Set `MLGUY_HOME` first to keep them somewhere else. The
+project folder is a git repository, and `mlguy submit` and `finish` commit to it.
 
 **The split is checked** before it is frozen: identical inputs in two splits, a validation or
 test set too small to measure anything, a validation set whose labels look unlike the test

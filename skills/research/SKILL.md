@@ -22,8 +22,9 @@ python infer.py --model model --input PATH --output outputs.csv
 
 `PATH` is a split's inputs, in whatever form the task stores them. The output is a CSV with one
 row per example: its `id` and your `prediction` (plus a `score` column, the probability of the
-positive class, for classification). `mlguy` and the project's page both call it, so it must
-keep working.
+positive class, for two-class tasks). Extra columns are allowed and ignored by the scoring,
+so `infer.py` can also give the page what it needs, such as a confidence. `mlguy` and the
+project's page both call it, so it must keep working.
 
 ## What is yours
 
@@ -38,7 +39,7 @@ not a template.
 mlguy status                       # what has been tried, what is best, what budget is left
 # ... change whatever you want, retrain into model/ ...
 mlguy submit --note "one line on what you changed and why"
-mlguy finish                       # when the budget is spent
+mlguy finish                       # when you judge the work is done
 ```
 
 `mlguy submit` runs your model, scores what it produces, records the experiment with a snapshot of the
@@ -50,6 +51,14 @@ Every score comes with its noise: the range it would fall in on another draw of 
 rows, and how often it beats the best so far when both are scored on the same resampled rows.
 A gain the data cannot tell from noise is not a gain. Do not build on it as if it were, and
 between two models that cannot be told apart, prefer the simpler.
+
+Validation is the shared yardstick, and its labels are in the project only so that it can be
+scored. Make your own choices — hyperparameters, which idea to submit — on the training data,
+by cross-validation or however you like. Tuning against the validation labels outside `submit`
+makes every recorded score optimistic.
+
+The budget is a ceiling, not a target. When you judge that more submissions would mostly fit
+noise, stop, and tell the user why.
 
 The final check belongs to `mlguy finish`: once, at the end, on whichever submission scored
 best. Do not go looking for the test labels, and do not tune a model to an evaluator's blind spots: a score

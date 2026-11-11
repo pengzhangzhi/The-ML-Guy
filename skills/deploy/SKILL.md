@@ -1,6 +1,6 @@
 ---
 name: deploy
-description: Finish a The-ML-Guy project: score the test set once, write the report and build a page for the user's problem, and record what was learned. Use when the budget is spent or the user wants to stop and use the model.
+description: Finish a The-ML-Guy project: score the test set once, write the report and build a page for the user's problem, and record what was learned. Use when the research is done: the budget is spent, more would not help, or the user wants to stop.
 ---
 
 # Finishing a project
@@ -15,8 +15,12 @@ mlguy serve     # runs the page you build: app.py
 
 ## The report
 
-`mlguy finish` writes `REPORT.md` with the scores and the experiment table. Your job is to make
-the top of it answer the question they actually asked, in the words of `task/brief.md`.
+`mlguy finish` writes `REPORT.md` with the scores and the experiment table, and puts the scored
+submission in `final/`, together with its outputs on the test set (`test_outputs.csv`) and the
+test labels (`test_labels.csv`). The test set is spent once it is scored, so use them freely
+from here on. Your job is to make the top of `REPORT.md` answer the question they actually
+asked, in the words of `task/brief.md`; edit it as you see fit, since `finish` will not write it
+again.
 
 - **Lead with what the number means for them,** not with the number. A Spearman of 0.63 means
   little; "if you pick the 50 variants this model ranks highest, about N of them are in the
@@ -34,13 +38,14 @@ the top of it answer the question they actually asked, in the words of `task/bri
 There is no built-in page. You build `app.py` for this user and this problem, because only
 you know what they will actually do with the model: rank candidates, check one case at a
 time, compare two conditions, draw samples. Re-read `task/brief.md` and design for that. The
-layout, the inputs it accepts, the plots and the library are all your call.
+layout, the inputs it accepts, the plots and the library are all your call; install whatever
+it needs.
 
 Three things are not:
 
-- **It runs the scored model.** `mlguy finish` puts the best submission in `final/`. Get outputs by
-  calling `final/infer.py`, the code path the report's
-  numbers were measured on, not a reimplementation.
+- **It runs the scored model.** Get outputs by calling `final/infer.py`, the code path the
+  report's numbers were measured on, not a reimplementation. If the page needs more from the
+  model than a prediction, have `infer.py` write it as extra columns.
 - **It says what the model was tested on and what it was not,** in their words, where someone
   using it cold will see it.
 - **`python app.py [--port N] [--share]` starts it,** so `mlguy serve` works.

@@ -7,7 +7,6 @@ name = "TODO-project-name"           # short, kebab-case; names the folder under
 type = "regression"                  # regression | classification | generation
 input = "TODO what one example is"   # e.g. "a protein sequence", "a cell", "a chest X-ray"
 output = "TODO_what_is_predicted"    # e.g. stability, solubility, response, readmission
-higher_is_better = true              # does a larger predicted value mean a better outcome?
 
 [data]
 source = "TODO where the data came from"

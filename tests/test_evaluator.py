@@ -248,3 +248,26 @@ def test_a_prediction_task_can_bring_its_own_metric(tmp_path, monkeypatch, capsy
     assert Experiments(project).best("worst_error", "minimize")["number"] == 1
     assert run(project, "finish") == 0
     assert "worst_error = 0.0000" in capsys.readouterr().out
+
+
+OWN_INTERVAL = PRED_EVALUATE.replace(
+    'json.dump({"metrics": {"worst_error": float(error.max())}}, open(a.result, "w"))',
+    'json.dump({"metrics": {"worst_error": float(error.max())}, "interval": [0.0, 9.0]}, open(a.result, "w"))')
+
+
+def test_an_evaluator_can_report_its_own_interval(tmp_path, monkeypatch):
+    """For a score that is not a plain mean, the evaluator knows its noise better than a bootstrap."""
+    monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
+    project = tmp_path / "custom"
+    (project / "task" / "data").mkdir(parents=True)
+    (project / "task" / "task.toml").write_text(PRED_TOML)
+    (project / "task" / "evaluate.py").write_text(OWN_INTERVAL)
+    frame = pd.DataFrame({"x": [float(i) for i in range(300)]})
+    frame["y"] = frame["x"] * 2
+    write_splits(project / "task" / "data", frame[:100], frame[100:200], frame[200:], target="y")
+    (project / "infer.py").write_text(PRED_PREDICT)
+    (project / "model").mkdir()
+    (project / "model" / "w.json").write_text(json.dumps({"slope": 1.0}))
+    run(project, "init")
+    run(project, "validate")
+    assert Experiments(project).all()[0]["interval"] == [0.0, 9.0]

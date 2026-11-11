@@ -74,8 +74,9 @@ about.
 | `spearman`, `pearson`, `ndcg`, `rmse`, `mae` | `accuracy`, `balanced_accuracy`, `f1`, `mcc`, `roc_auc` |
 
 The model's output file has one row per example: its `id`, and a `prediction` (the number for
-regression, the class label for classification). Classification projects may add a `score`
-column holding the probability of the positive class, which `roc_auc` needs.
+regression, the class label for classification). Class labels can be numbers or text, and
+there can be any number of classes; `f1` is then averaged over the classes. `roc_auc` needs
+two classes and a `score` column holding the probability of the larger label.
 
 ## Metrics of your own
 
@@ -92,8 +93,9 @@ direction = "maximize"
 ```
 
 It is called as `python evaluate.py --outputs FILE --reference LABELS --split validation|final
---result FILE` and writes `{"metrics": {...}, "per_item": [...]}`. `mlguy score --outputs FILE`
-runs it on any file, to check that it can tell good outputs from bad before it is trusted.
+--result FILE` and writes `{"metrics": {...}}`, with either `per_item` scores (when the metric
+is a plain mean) or its own `interval`. `mlguy score --outputs FILE` runs the task's scoring on
+any file, to check that it can tell good outputs from bad before the task is frozen.
 
 **Generation is experimental.** A generative model has no answer key, so it always needs an
 evaluator, and the same `infer.py` is asked for `--n N --seed S` samples per condition. The
@@ -188,13 +190,14 @@ project/
 ├── src/             FREE: any code, any structure
 ├── model/           the model as it stands now
 ├── experiments/     written only by `mlguy submit`: log.jsonl + a snapshot per submission
-├── final/           the best submission, copied here by `mlguy finish`
+├── final/           the scored submission, its test outputs and the test labels (by `mlguy finish`)
 ├── REPORT.md        written by `mlguy finish`
 └── app.py           FREE: the page, built by the agent for this problem
 ```
 
-Test labels live in `~/.mlguy/projects/<name>/`, outside the project folder, along with the
-hash of `task/` taken when the brief was approved.
+Until `mlguy finish`, the test labels live in `~/.mlguy/projects/<name>/` (or under
+`MLGUY_HOME`), outside the project folder, along with a hash of every file in `task/` taken when
+the brief was approved. A project folder is a git repository; `submit` and `finish` commit to it.
 
 `infer.py` is the only agent-written code with a fixed shape, because both the rubric and the
 project's page call it.

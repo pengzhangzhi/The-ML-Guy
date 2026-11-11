@@ -6,7 +6,6 @@ name = "amylase-one-to-many"
 type = "regression"
 input = "a protein sequence"
 output = "stain_removal_activity"
-higher_is_better = true
 
 [input]
 alphabet = "ACDEFGHIKLMNPQRSTVWY"

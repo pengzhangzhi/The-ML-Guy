@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -77,21 +78,27 @@ def hidden_inputs_path(task: dict) -> Path:
     return state_dir(task) / ("test_inputs" + Path(task["data"]["test_inputs"]).suffix)
 
 
-def task_hash_path(task: dict) -> Path:
-    return state_dir(task) / "task_hash.txt"
+def task_changes(task: dict) -> list[str]:
+    """The files in task/ that differ from what was frozen at init, or [] if none do."""
+    from mlguy.records import task_manifest
+
+    recorded = state_dir(task) / "task_files.json"
+    if not recorded.exists():
+        raise TaskChanged("this project was never initialised on this machine; run `mlguy init` first")
+    before, now = json.loads(recorded.read_text()), task_manifest(task["_project_dir"])
+    changed = sorted(name for name in before.keys() & now.keys() if before[name] != now[name])
+    return ([f"{n} (changed)" for n in changed] + [f"{n} (removed)" for n in sorted(before.keys() - now.keys())]
+            + [f"{n} (added)" for n in sorted(now.keys() - before.keys())])
 
 
 def check_task_unchanged(task: dict) -> None:
     """Raise if task/ no longer matches what was approved at init."""
-    from mlguy.records import hash_task
-
-    recorded = task_hash_path(task)
-    if not recorded.exists():
-        raise TaskChanged(f"this project was never initialised on this machine; run `mlguy init` first")
-    if hash_task(task["_project_dir"]) != recorded.read_text().strip():
+    changes = task_changes(task)
+    if changes:
         raise TaskChanged(
-            "task/ has changed since the brief was approved. The metric, the data and the split are "
-            "fixed; restore them, or start a new project if the task itself should change."
+            "task/ has changed since the brief was approved: " + ", ".join(changes[:5])
+            + (f" and {len(changes) - 5} more" if len(changes) > 5 else "") + ". The metric, the data "
+            "and the split are fixed; restore them, or start a new project if the task itself should change."
         )
 
 
@@ -207,7 +214,8 @@ def _produce(task: dict, split: str, run_dir: Path, reference: Path | None, outp
 def _builtin_scores(task: dict, reference: Path, outputs: Path, keep: Path | None) -> tuple[dict, list | None, int]:
     labels = pd.read_csv(reference, dtype={id_column(task): str})
     y_true = labels[target_column(task)].to_numpy()
-    y_pred, y_score = judge.check_predictions(_read_outputs(outputs), labels[id_column(task)].tolist())
+    y_pred, y_score = judge.check_predictions(_read_outputs(outputs), labels[id_column(task)].tolist(),
+                                              numeric=task["task"]["type"] != "classification")
     primary = task["metric"]["primary"]
     names = [primary] + [m for m in task["metric"].get("secondary", []) if m != primary]
     metrics = judge.score(y_true, y_pred, names, y_score=y_score)
@@ -225,9 +233,14 @@ def _evaluator_scores(task: dict, split: str, reference: Path | None, outputs: P
 
         python <script> --outputs FILE --split validation|final --result FILE [--reference FILE]
 
-    It writes JSON: {"metrics": {name: number, ...}, "per_item": [number, ...]}. `per_item` is
-    optional: one number per scored item whose mean is the primary metric. With it the score
-    gets an interval and submissions can be compared; without it, neither.
+    It writes JSON: {"metrics": {name: number, ...}}, and optionally the noise on the primary
+    metric, in one of two ways:
+      "per_item": [number, ...]   when the metric is the plain mean of independent per-item
+                                  scores. The framework then computes the interval and compares
+                                  submissions item by item. Items must come in the same order
+                                  every time (sorted by id, say).
+      "interval": [low, high]     for anything else (a per-class average, a ratio, FID): the
+                                  evaluator's own 95% interval. Submissions are then not compared.
     """
     script, primary = evaluator_script(task), task["metric"]["primary"]
     result_file = outputs.parent / "result.json"
@@ -252,14 +265,23 @@ def _evaluator_scores(task: dict, split: str, reference: Path | None, outputs: P
         raise SubmissionError(f"the evaluator must report a finite '{primary}'; it reported {metrics}")
     metrics = {primary: metrics[primary], **{k: v for k, v in metrics.items() if k != primary}}
 
-    items = result.get("per_item")
-    if items is not None and keep is not None:
-        pd.DataFrame({"item": items}).to_csv(keep, index=False)
-    return metrics, judge.mean_interval(items) if items else None, int(len(_read_outputs(outputs)))
+    items, own = result.get("per_item"), result.get("interval")
+    if own is not None:
+        try:
+            low, high = (float(v) for v in own)
+        except Exception:
+            raise SubmissionError(f"the evaluator's 'interval' must be [low, high]; it reported {own!r}")
+        interval = [low, high]
+    else:
+        interval = judge.mean_interval(items) if items else None
+        if items and keep is not None:
+            pd.DataFrame({"item": items}).to_csv(keep, index=False)
+    return metrics, interval, int(len(_read_outputs(outputs)))
 
 
 def score_split(project_dir: str | Path, split: str, run_dir: str | Path | None = None,
-                keep_predictions: Path | None = None, outputs: str | Path | None = None) -> dict:
+                keep_predictions: Path | None = None, outputs: str | Path | None = None,
+                keep_outputs: Path | None = None) -> dict:
     """Produce outputs for one split and evaluate them.
 
     `run_dir` is where infer.py, src/ and model/ live; it defaults to the project itself,
@@ -281,6 +303,9 @@ def score_split(project_dir: str | Path, split: str, run_dir: str | Path | None 
                 raise SubmissionError(f"no file at {produced}")
         else:
             _produce(task, split, run_dir, reference, produced)
+        if keep_outputs is not None:
+            keep_outputs.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(produced, keep_outputs)
         if evaluator_script(task) is not None:
             scratch = Path(tmp) / "evaluation"
             scratch.mkdir()
@@ -302,11 +327,13 @@ def compare_with(project_dir: Path, new_file: Path, old_file: Path) -> float | N
     if len(new) != len(old):
         return None
     if evaluator_script(task) is not None:
+        if "item" not in new or "item" not in old:
+            return None
         return judge.mean_chance_better(new["item"].to_numpy(dtype=float), old["item"].to_numpy(dtype=float),
                                         direction(task))
-    y_true = pd.read_csv(_reference(task, "validation"))[target_column(task)].to_numpy(dtype=float)
+    y_true = pd.read_csv(_reference(task, "validation"))[target_column(task)].to_numpy()
     if len(new) != len(y_true):
         return None
-    pairs = [(f["prediction"].to_numpy(dtype=float), f["score"].to_numpy(dtype=float) if "score" in f else None)
+    pairs = [(f["prediction"].to_numpy(), f["score"].to_numpy(dtype=float) if "score" in f else None)
              for f in (new, old)]
     return judge.chance_better(y_true, pairs[0], pairs[1], task["metric"]["primary"])
