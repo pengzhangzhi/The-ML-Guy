@@ -4,7 +4,7 @@ name = "protein-solubility"
 
 [task]
 type = "classification"
-input = "protein_sequence"
+input = "a protein sequence"
 output = "soluble_when_expressed"
 higher_is_better = true              # label 1 = soluble, and that is the outcome we want
 
@@ -19,7 +19,7 @@ train = "data/train.csv"
 validation = "data/validation.csv"
 test = "data/test.csv"
 test_inputs = "data/test_inputs.csv"
-sequence_column = "sequence"
+input_columns = ["sequence"]
 target_column = "target"
 validation_matches_test = false
 validation_note = "The validation set is 58% insoluble, while the test set is a balanced 50/50. Plain accuracy is therefore not comparable between the two, and a model tuned to the validation base rate can look worse on test than it is. Balanced accuracy is the secondary metric for that reason."
@@ -34,4 +34,6 @@ max_submissions = 3
 [page]
 title = "Protein solubility predictor"
 description = "Predicts whether a protein will be soluble when expressed in *E. coli*, from its amino-acid sequence alone. Paste or upload sequences to get a soluble/insoluble call and the probability behind it."
+row_name = "protein"
+fasta_column = "sequence"
 tested = "Tested on 2,001 proteins held out by sequence similarity, so the test proteins are not close relatives of anything the model was trained on."

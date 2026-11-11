@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from mlguy import judge, seqio
+from mlguy import judge, sequence
 from mlguy.judge import SubmissionError
 
 
@@ -48,15 +48,15 @@ def test_is_better_respects_direction():
 
 
 def test_sequence_parsing_and_checks():
-    ids, seqs = seqio.parse_text(">a first\nACD\nEF\n>b\nacd\n")
+    ids, seqs = sequence.parse_text(">a first\nACD\nEF\n>b\nacd\n")
     assert (ids, seqs) == (["a", "b"], ["ACDEF", "ACD"])
-    assert seqio.parse_text("ACD\n\nefg\n")[1] == ["ACD", "EFG"]
+    assert sequence.parse_text("ACD\n\nefg\n")[1] == ["ACD", "EFG"]
     spec = {"alphabet": "ACDEFG", "length": 3}
-    assert seqio.check_sequence("ACD", spec) is None
-    assert "length" in seqio.check_sequence("ACDE", spec)
-    assert "X" in seqio.check_sequence("ACX", spec)
-    assert seqio.describe_mutations("AGD", "ACD") == "C2G"
-    assert seqio.describe_mutations("ACD", "ACD") == "reference"
+    assert sequence.check_sequence("ACD", spec) is None
+    assert "length" in sequence.check_sequence("ACDE", spec)
+    assert "X" in sequence.check_sequence("ACX", spec)
+    assert sequence.describe_mutations("AGD", "ACD") == "C2G"
+    assert sequence.describe_mutations("ACD", "ACD") == "reference"
 
 
 def test_classification_metrics_against_hand_counts():

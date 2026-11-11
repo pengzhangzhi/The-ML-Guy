@@ -28,7 +28,7 @@ from mlguy.project import (
 from mlguy.records import Experiments, git_commit, hash_task, now
 
 REQUIRED_KEYS = [("name",), ("task", "type"), ("task", "input"), ("task", "output"),
-                 ("data", "train"), ("data", "validation"), ("data", "sequence_column"),
+                 ("data", "train"), ("data", "validation"), ("data", "input_columns"),
                  ("data", "target_column"), ("metric", "primary")]
 
 
@@ -113,14 +113,14 @@ def cmd_init(args: argparse.Namespace) -> int:
     task = load_task(args.project)
     _check_keys(task)
     project_dir, data = task["_project_dir"], task["data"]
-    seq_col, tgt_col = data["sequence_column"], data["target_column"]
+    in_cols, tgt_col = list(data["input_columns"]), data["target_column"]
 
     for key in ("train", "validation"):
         path = project_dir / "task" / data[key]
         if not path.exists():
             raise CommandError(f"{key} data not found at {path}")
         columns = pd.read_csv(path, nrows=1).columns
-        for needed in (seq_col, tgt_col):
+        for needed in (*in_cols, tgt_col):
             if needed not in columns:
                 raise CommandError(f"{path.name} has no '{needed}' column; found {list(columns)}")
 
@@ -130,7 +130,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         df = pd.read_csv(labeled_test)
         if tgt_col not in df.columns:
             raise CommandError(f"{labeled_test.name} has no '{tgt_col}' column to hide")
-        df[[seq_col]].to_csv(inputs_path, index=False)
+        df[in_cols].to_csv(inputs_path, index=False)
         stored = store_test_labels(task, df[[tgt_col]])
         labeled_test.unlink()
         print(f"test labels moved out of the project: {stored}")

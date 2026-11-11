@@ -31,11 +31,13 @@ the top of it answer the question they actually asked, in the words of `task/bri
 
 ## The prediction page
 
-`mlguy serve` runs the generic page: upload a CSV or FASTA, get ranked predictions, a plot and
-a download. It reads its wording from `[page]` in `task.toml`, so adjust that rather than
+`mlguy serve` runs the generic page: upload a CSV of the task's input columns, get ranked
+predictions, a plot and a download. It reads its wording from `[page]` in `task.toml`, so adjust that rather than
 rewriting the page:
 
 - `title`: what it predicts, named as they would name it.
+- `row_name`: what one row is called, so the page says "42 variants" or "42 patients" rather
+  than "42 rows".
 - `description`: one or two sentences a colleague could read cold.
 - `tested`: how it was tested, so nobody applies it to the wrong thing.
 

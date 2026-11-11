@@ -1,4 +1,10 @@
-"""Reading sequences from CSV, FASTA or pasted text, and checking them against a task."""
+"""Optional helpers for projects whose input is a biological sequence.
+
+Nothing in the core imports this except the prediction page, and only when a task asks for
+it. A project in another domain never touches it. Project code is free to import it:
+
+    from mlguy.sequence import read_sequences, check_sequence
+"""
 
 from __future__ import annotations
 
@@ -51,16 +57,16 @@ def read_sequences(path: str | Path, sequence_column: str = "sequence") -> tuple
     return ids, seqs
 
 
-def check_sequence(seq: str, input_spec: dict) -> str | None:
-    """Return None if the sequence fits the task's input spec, else a plain-language reason."""
+def check_sequence(seq: str, spec: dict) -> str | None:
+    """Return None if the sequence fits the spec, else a plain-language reason."""
     if not seq:
         return "empty sequence"
-    alphabet = input_spec.get("alphabet")
+    alphabet = spec.get("alphabet")
     if alphabet:
         bad = sorted(set(seq) - set(alphabet))
         if bad:
             return f"contains characters the model was not trained on: {' '.join(bad)}"
-    length = input_spec.get("length")
+    length = spec.get("length")
     if length and len(seq) != length:
         return f"length is {len(seq)}, but this model only accepts length {length}"
     return None

@@ -5,15 +5,9 @@ name = "TODO-project-name"           # short, kebab-case; names the folder under
 
 [task]
 type = "regression"                  # regression | classification
-input = "protein_sequence"
-output = "TODO_what_is_predicted"    # e.g. stability, solubility, activity
-higher_is_better = true              # does a larger predicted value mean a better example?
-
-[input]
-alphabet = "ACDEFGHIKLMNPQRSTVWY"
-# length = 425                       # set only if every sequence must be the same length;
-                                     # leave unset for unrelated proteins of varying length
-# reference = "MKT..."               # wild type, if there is one: lets the app name mutations
+input = "TODO what one row is"       # e.g. "a protein sequence", "a cell and a drug dose"
+output = "TODO_what_is_predicted"    # e.g. stability, solubility, response, readmission
+higher_is_better = true              # does a larger predicted value mean a better outcome?
 
 [data]
 source = "TODO where the data came from"
@@ -22,7 +16,7 @@ train = "data/train.csv"
 validation = "data/validation.csv"
 test = "data/test.csv"               # labelled; `mlguy init` consumes this and hides the labels
 test_inputs = "data/test_inputs.csv" # what is left in the project after init
-sequence_column = "sequence"
+input_columns = ["TODO"]             # the columns handed to predict.py: text, numbers, categories
 target_column = "target"
 
 # Does the validation set ask the same question as the test set? If it does not, hill-climbing
@@ -34,8 +28,10 @@ validation_matches_test = true
 [metric]
 # regression:     spearman | pearson | ndcg | rmse | mae
 # classification: accuracy | balanced_accuracy | f1 | mcc | roc_auc
+# Check the metric against the split: one that moves with the class balance, such as plain
+# accuracy, will mislead the search when validation and test are balanced differently.
 primary = "spearman"
-secondary = ["ndcg"]
+secondary = []
 
 [budget]
 max_submissions = 10
@@ -46,3 +42,14 @@ max_submissions = 10
 title = "TODO Predictor"
 description = "TODO one or two sentences a scientist would recognise, in their language."
 tested = "TODO how the model was tested, in one sentence."
+# row_name = "variant"               # what one row is called on the page; default "row"
+
+# Optional, only when an input column is a biological sequence:
+# fasta_column = "sequence"          # also accept FASTA uploads and pasted sequences
+# mutations_from = "sequence"        # name mutations against [input].reference
+
+# Optional checks for a sequence column, used by the prediction page to reject bad input:
+# [input]
+# alphabet = "ACDEFGHIKLMNPQRSTVWY"
+# length = 425                       # only if every value has the same length
+# reference = "MKT..."               # wild type, for naming mutations

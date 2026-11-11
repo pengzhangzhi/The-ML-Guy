@@ -1,13 +1,9 @@
 """Baseline: a linear model on simple features, tuned on the validation set.
 
 It exists to prove the pipeline runs end to end and to give later work something to beat.
-Replace it with whatever you think will do better.
+Replace it with whatever you think will do better: this file and everything in src/ is yours.
 
     python src/train.py
-
-Which features: one-hot per position if every sequence has the same length (variants of one
-protein), otherwise residue composition (unrelated proteins of different lengths).
-Which model: ridge regression, or logistic regression if the task is classification.
 """
 
 from __future__ import annotations
@@ -17,7 +13,6 @@ import tomllib
 from pathlib import Path
 
 import joblib
-import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.preprocessing import StandardScaler
@@ -38,34 +33,27 @@ def main() -> None:
 
     with open(args.task / "task.toml", "rb") as f:
         task = tomllib.load(f)
-    seq, tgt = task["data"]["sequence_column"], task["data"]["target_column"]
-    alphabet = task["input"]["alphabet"]
-    length = task["input"].get("length")
+    columns, target = list(task["data"]["input_columns"]), task["data"]["target_column"]
     is_classification = task["task"]["type"] == "classification"
     primary = task["metric"]["primary"]
 
     train = pd.read_csv(args.task / task["data"]["train"])
     val = pd.read_csv(args.task / task["data"]["validation"])
-    y_train, y_val = train[tgt].to_numpy(), val[tgt].to_numpy()
+    y_train, y_val = train[target].to_numpy(), val[target].to_numpy()
 
-    bundle = {"alphabet": alphabet}
-    if length:
-        bundle.update(features="onehot", length=length)
-    else:
-        bundle["features"] = "composition"
-    x_train = features.build(train[seq].tolist(), bundle)
-    x_val = features.build(val[seq].tolist(), bundle)
-    print(f"{bundle['features']} features: {x_train.shape[1]} columns, {len(x_train)} training rows")
-
-    scaler = StandardScaler().fit(x_train) if bundle["features"] == "composition" else None
-    if scaler is not None:
-        x_train, x_val = scaler.transform(x_train), scaler.transform(x_val)
+    spec = features.describe(train, columns, task.get("input"))
+    print(f"encoding: {features.summarise(spec)}")
+    x_train, x_val = features.build(train, spec), features.build(val, spec)
+    scaler = StandardScaler().fit(x_train)
+    x_train, x_val = scaler.transform(x_train), scaler.transform(x_val)
+    print(f"{x_train.shape[1]} columns, {len(x_train)} training rows")
 
     best = None
     for strength in STRENGTHS:
         if is_classification:
             model = LogisticRegression(C=strength, max_iter=2000).fit(x_train, y_train)
-            y_score = model.predict_proba(x_val)[:, list(model.classes_).index(max(model.classes_))]
+            positive = max(model.classes_)
+            y_score = model.predict_proba(x_val)[:, list(model.classes_).index(positive)]
             value = score(y_val, model.predict(x_val), [primary], y_score=y_score)[primary]
         else:
             model = Ridge(alpha=strength).fit(x_train, y_train)
@@ -76,9 +64,9 @@ def main() -> None:
             best = (model, value, strength)
 
     model, value, strength = best
-    bundle.update(model=model, scaler=scaler, strength=strength, classification=is_classification)
     args.out.mkdir(parents=True, exist_ok=True)
-    joblib.dump(bundle, args.out / "bundle.joblib")
+    joblib.dump({"spec": spec, "scaler": scaler, "model": model,
+                 "classification": is_classification}, args.out / "bundle.joblib")
     print(f"saved {'logistic' if is_classification else 'ridge'} model "
           f"(strength={strength}, validation {primary}={value:.4f}) to {args.out}")
 

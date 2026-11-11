@@ -20,7 +20,7 @@ HERE = Path(__file__).parent
 
 def main() -> None:
     task = load_task(HERE)
-    seq, tgt = task["data"]["sequence_column"], task["data"]["target_column"]
+    seq, tgt = task["data"]["input_columns"][0], task["data"]["target_column"]
 
     raw = HERE / "raw" / "one_to_many.csv.gz"
     if not raw.exists():

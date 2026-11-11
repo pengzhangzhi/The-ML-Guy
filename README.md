@@ -3,7 +3,7 @@
 Describe a prediction problem to a coding agent (Claude Code or Codex) and get back a trained
 model, a report, and a web page for running predictions. No ML background needed.
 
-The design rule: **be exact about the problem and the scoring, and leave the modeling open.**
+The design rule: **be exact about the problem and the scoring, and leave the modelling open.**
 
 | Strict: fixed when you approve the brief | Free: the agent's call |
 | --- | --- |
@@ -11,7 +11,25 @@ The design rule: **be exact about the problem and the scoring, and leave the mod
 | Data: train, validation and test sets | Features and encodings |
 | Metric and its direction | Hyperparameters and training procedure |
 | Budget | Code structure, libraries, order of work |
-| Prediction interface: sequences in, predictions out | What to try next |
+| Prediction interface: a table in, a prediction per row out | What to try next |
+
+## Philosophy
+
+The-ML-Guy is a thin layer on top of a coding agent, not a framework that runs one.
+
+- **Minimal, but load-bearing.** It supplies only what an agent cannot be trusted or relied on
+  to do for itself: an honest score, a budget that actually stops, state that survives the
+  session, and a page other people can use. Everything else is left alone.
+- **Maximum room for the agent.** The task, the data, the metric and the budget are fixed. The
+  modelling is not: any architecture, any library, any code structure. Autoresearch is only as
+  good as the freedom it has, so the tool stays out of it.
+- **Domain-agnostic.** A project is a table of input columns and a target column. The core
+  knows nothing about proteins, cells, patients or images. Sequence conveniences exist, but a
+  project switches them on rather than inheriting them.
+- **Agent-agnostic.** The contract is a command line and files on disk, so Claude Code, Codex
+  or anything else can drive it, and a fresh session can pick up where the last one stopped.
+- **No safety theatre.** Coding agents already carry their own controls. The-ML-Guy adds no
+  sandbox and no permission layer; it protects scores from accidents, and says so plainly.
 
 ## Status
 
@@ -44,6 +62,10 @@ A predictions file has one row per input row, in the same order, with a `predict
 the number for regression, the class label for classification. Classification projects may add
 a `score` column holding the probability of the positive class, which `roc_auc` needs and the
 prediction page ranks by.
+
+Only supervised prediction is supported today. Generative tasks are scored a different way —
+by an external model or a problem-specific check rather than a held-out answer key — and need
+a contract of their own, which is not designed yet.
 
 ## Example: amylase
 
@@ -140,9 +162,28 @@ project/
 Test labels live in `~/.mlguy/projects/<name>/`, outside the project folder, along with the
 hash of `task/` taken when the brief was approved.
 
-`predict.py` reads a CSV with a `sequence` column (or a FASTA file) and writes a CSV with one
+`predict.py` reads a CSV holding the task's input columns and writes a CSV with one
 `prediction` per input row, in the same order. It is the only agent-written code with a fixed
 shape, because both the rubric and the prediction page call it.
+
+The input columns are whatever the problem needs: a protein sequence, a cell type and a dose,
+a set of clinical measurements, paths to image files. The core treats them as opaque and hands
+them to `predict.py` untouched.
+
+```toml
+[data]
+input_columns = ["cell_line", "dose"]
+target_column = "response"
+```
+
+A project whose input is a biological sequence can switch on two conveniences, which are off
+by default and live in an optional `mlguy.sequence` module:
+
+```toml
+[page]
+fasta_column = "sequence"      # also accept FASTA uploads and pasted sequences
+mutations_from = "sequence"    # name mutations (Q68S) against [input].reference
+```
 
 ## For agents
 

@@ -1,9 +1,9 @@
-"""The project's one fixed interface: sequences in, predictions out.
+"""The project's one fixed interface: a table in, a prediction per row out.
 
-    python predict.py --model model --input sequences.csv --output predictions.csv
+    python predict.py --model model --input rows.csv --output predictions.csv
 
-Input is a CSV with a sequence column, or a FASTA file. Output is a CSV with one row per
-input row, in the same order, holding:
+The input CSV holds this task's input columns. The output CSV has one row per input row, in
+the same order, with:
   prediction   the predicted value, or the class label if this is a classification task
   score        classification only: the probability of the positive class
 
@@ -23,8 +23,6 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 import features  # noqa: E402
 
-from mlguy.seqio import read_sequences  # noqa: E402
-
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -34,13 +32,13 @@ def main() -> None:
     args = parser.parse_args()
 
     bundle = joblib.load(args.model / "bundle.joblib")
-    _, seqs = read_sequences(args.input)
-    x = features.build(seqs, bundle)
+    rows = pd.read_csv(args.input)
+    x = features.build(rows, bundle["spec"])
     if bundle.get("scaler") is not None:
         x = bundle["scaler"].transform(x)
 
     model = bundle["model"]
-    out = {"sequence": seqs, "prediction": model.predict(x)}
+    out = {"prediction": model.predict(x)}
     if bundle.get("classification"):
         positive = max(model.classes_)
         out["score"] = model.predict_proba(x)[:, list(model.classes_).index(positive)]

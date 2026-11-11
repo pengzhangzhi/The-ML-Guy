@@ -1,8 +1,8 @@
-"""The project's one fixed interface: sequences in, predictions out.
+"""The project's one fixed interface: a table in, a prediction per row out.
 
     python predict.py --model model --input variants.csv --output predictions.csv
 
-Input is a CSV with a 'sequence' column, or a FASTA file. Output is a CSV with one
+Input is a CSV with a 'sequence' column. Output is a CSV with one
 'prediction' per input row, in the same order.
 """
 
@@ -19,7 +19,6 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 import features  # noqa: E402
 
-from mlguy.seqio import read_sequences  # noqa: E402
 
 
 def predict(bundle: dict, seqs: list[str]) -> np.ndarray:
@@ -40,7 +39,7 @@ def main() -> None:
     args = parser.parse_args()
 
     bundle = joblib.load(args.model / "bundle.joblib")
-    _, seqs = read_sequences(args.input)
+    seqs = pd.read_csv(args.input)["sequence"].astype(str).tolist()
     pd.DataFrame({"sequence": seqs, "prediction": predict(bundle, seqs)}).to_csv(args.output, index=False)
 
 

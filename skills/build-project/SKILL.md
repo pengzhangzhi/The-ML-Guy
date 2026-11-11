@@ -22,8 +22,9 @@ yourself.
 ## 1. Look at the data first
 
 Before asking anything, open the data and find out what you can: columns, number of rows,
-value ranges, duplicates, missing values, what the sequences look like, whether lengths vary,
-whether there is an obvious reference or wild type. Questions you could have answered yourself
+value ranges, duplicates, missing values, which columns are inputs and which is the target,
+and anything domain-specific worth noticing (whether sequences vary in length, whether rows
+repeat a subject, whether measurements come from different batches). Questions you could have answered yourself
 waste their attention, and a question phrased around what you saw ("your file has 488 single
 mutants and 3,218 with 2 to 8 mutations — will the variants you want to predict be
 combinations?") is far easier to answer than one asked in the abstract.
@@ -50,7 +51,8 @@ answers, and ask at most five, each with the answer you would guess.
 ## 3. Choose the split with care
 
 Build the split so that scoring on it resembles the use they described in question 4. For example, a random
-split is almost always wrong for biological sequence data: near-duplicates land on both sides
+split is almost always wrong when rows are related to each other — similar sequences, repeat
+measurements on the same subject, cells from one donor: near-duplicates land on both sides
 and every number comes out flattering. 
 
 Make the validation set resemble the test set. Hill-climbing happens on validation, so if

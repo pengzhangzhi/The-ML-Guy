@@ -1,4 +1,4 @@
-"""The project's one fixed interface: sequences in, predictions out.
+"""The project's one fixed interface: a table in, a prediction per row out.
 
     python predict.py --model model --input sequences.csv --output predictions.csv
 
@@ -23,7 +23,6 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 import features  # noqa: E402
 
-from mlguy.seqio import read_sequences  # noqa: E402
 
 
 def main() -> None:
@@ -34,7 +33,7 @@ def main() -> None:
     args = parser.parse_args()
 
     bundle = joblib.load(args.model / "bundle.joblib")
-    _, seqs = read_sequences(args.input)
+    seqs = pd.read_csv(args.input)["sequence"].astype(str).tolist()
     x = features.build(seqs, bundle)
     if bundle.get("scaler") is not None:
         x = bundle["scaler"].transform(x)

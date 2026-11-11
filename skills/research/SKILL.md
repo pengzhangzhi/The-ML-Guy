@@ -15,11 +15,11 @@ the budget are settled and must not be edited — `mlguy` checks `task/` on ever
 refuses if it changed. One more thing is fixed:
 
 ```
-python predict.py --model model --input sequences.csv --output predictions.csv
+python predict.py --model model --input rows.csv --output predictions.csv
 ```
 
-It reads a CSV with a sequence column (or a FASTA file) and writes a CSV with one `prediction`
-per input row, in the same order. The rubric and the prediction page both call it, so it must
+It reads a CSV holding the task's input columns and writes a CSV with one `prediction` per
+input row, in the same order (plus a `score` column for classification). The rubric and the prediction page both call it, so it must
 keep working.
 
 ## What is yours

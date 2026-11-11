@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def load_data(task_dir: Path, task: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
-    data, seq, tgt = task["data"], task["data"]["sequence_column"], task["data"]["target_column"]
+    data, seq, tgt = task["data"], task["data"]["input_columns"][0], task["data"]["target_column"]
     return (pd.read_csv(task_dir / data["train"])[[seq, tgt]],
             pd.read_csv(task_dir / data["validation"])[[seq, tgt]])
 
@@ -55,7 +55,7 @@ def main() -> None:
 
     with open(args.task / "task.toml", "rb") as f:
         task = tomllib.load(f)
-    seq, tgt = task["data"]["sequence_column"], task["data"]["target_column"]
+    seq, tgt = task["data"]["input_columns"][0], task["data"]["target_column"]
     alphabet, length = task["input"]["alphabet"], task["input"]["length"]
     reference = task["input"]["reference"]
 

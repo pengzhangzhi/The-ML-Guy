@@ -44,7 +44,7 @@ def main() -> None:
 
     with open(args.task / "task.toml", "rb") as f:
         task = tomllib.load(f)
-    seq, tgt = task["data"]["sequence_column"], task["data"]["target_column"]
+    seq, tgt = task["data"]["input_columns"][0], task["data"]["target_column"]
     alphabet = task["input"]["alphabet"]
     primary = task["metric"]["primary"]
     report = [primary] + [m for m in task["metric"]["secondary"] if m != primary]

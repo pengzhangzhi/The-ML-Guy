@@ -32,7 +32,7 @@ train = "data/train.csv"
 validation = "data/validation.csv"
 test = "data/test.csv"
 test_inputs = "data/test_inputs.csv"
-sequence_column = "sequence"
+input_columns = ["sequence"]
 target_column = "target"
 
 [metric]
@@ -218,3 +218,129 @@ def test_validation_test_mismatch_is_carried_into_init_and_report(project, capsy
     report = (project / "REPORT.md").read_text()
     assert "does not ask the same question" in report
     assert "Validation is drawn like training" in report
+
+
+TABULAR_TOML = """\
+schema_version = "0.1"
+name = "tabular-test-project"
+
+[task]
+type = "regression"
+input = "a cell line and a drug dose"
+output = "response"
+higher_is_better = true
+
+[data]
+train = "data/train.csv"
+validation = "data/validation.csv"
+test = "data/test.csv"
+test_inputs = "data/test_inputs.csv"
+input_columns = ["cell_line", "dose", "replicate"]
+target_column = "target"
+
+[metric]
+primary = "pearson"
+
+[budget]
+max_submissions = 1
+"""
+
+TABULAR_PREDICT = '''\
+import argparse, json
+from pathlib import Path
+import pandas as pd
+
+p = argparse.ArgumentParser()
+p.add_argument("--model", type=Path, required=True)
+p.add_argument("--input", type=Path, required=True)
+p.add_argument("--output", type=Path, required=True)
+a = p.parse_args()
+
+w = json.loads((a.model / "weights.json").read_text())
+rows = pd.read_csv(a.input)
+assert list(rows.columns) == ["cell_line", "dose", "replicate"], rows.columns
+pred = rows["dose"] * w["slope"] + rows["cell_line"].map({"A": 1.0, "B": 2.0}).fillna(0)
+pd.DataFrame({"prediction": pred}).to_csv(a.output, index=False)
+'''
+
+
+def test_a_project_with_no_sequences_at_all(tmp_path, monkeypatch):
+    """Several input columns, none of them a sequence: the core must not care."""
+    monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
+    project = tmp_path / "tabular"
+    (project / "task" / "data").mkdir(parents=True)
+    (project / "task" / "task.toml").write_text(TABULAR_TOML)
+
+    rng = random.Random(1)
+    rows = [{"cell_line": rng.choice("AB"), "dose": rng.random() * 10,
+             "replicate": rng.randint(1, 3)} for _ in range(90)]
+    for row in rows:
+        row["target"] = row["dose"] * 1.5 + (1.0 if row["cell_line"] == "A" else 2.0) + rng.random()
+    frame = pd.DataFrame(rows)
+    for name, part in [("train", frame[:50]), ("validation", frame[50:70]), ("test", frame[70:])]:
+        part.to_csv(project / "task" / "data" / f"{name}.csv", index=False)
+
+    (project / "predict.py").write_text(TABULAR_PREDICT)
+    (project / "model").mkdir()
+    (project / "model" / "weights.json").write_text(json.dumps({"slope": 1.5}))
+
+    assert run(project, "init") == 0
+    hidden = pd.read_csv(project / "task" / "data" / "test_inputs.csv")
+    assert list(hidden.columns) == ["cell_line", "dose", "replicate"], "init must keep every input column"
+    assert run(project, "validate") == 0
+    assert Experiments(project).best("pearson")["metrics"]["pearson"] > 0.9
+    assert run(project, "finish") == 0
+    assert "response" in (project / "REPORT.md").read_text()
+
+
+def _tabular_project(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
+    project = tmp_path / "tabular"
+    (project / "task" / "data").mkdir(parents=True)
+    (project / "task" / "task.toml").write_text(TABULAR_TOML)
+    rng = random.Random(2)
+    rows = [{"cell_line": rng.choice("AB"), "dose": rng.random() * 10,
+             "replicate": rng.randint(1, 3)} for _ in range(60)]
+    for row in rows:
+        row["target"] = row["dose"] * 1.5 + rng.random()
+    frame = pd.DataFrame(rows)
+    for name, part in [("train", frame[:30]), ("validation", frame[30:45]), ("test", frame[45:])]:
+        part.to_csv(project / "task" / "data" / f"{name}.csv", index=False)
+    (project / "predict.py").write_text(TABULAR_PREDICT)
+    (project / "model").mkdir()
+    (project / "model" / "weights.json").write_text(json.dumps({"slope": 1.5}))
+    run(project, "init")
+    return project
+
+
+def test_the_page_handles_a_project_with_no_sequences(tmp_path, monkeypatch):
+    from mlguy.app import parse_pasted, predict_table, read_table
+    from mlguy.project import load_task
+
+    project = _tabular_project(tmp_path, monkeypatch)
+    task = load_task(project)
+
+    upload = tmp_path / "new.csv"
+    pd.DataFrame({"cell_line": ["A", "B"], "dose": [1.0, 2.0], "replicate": [1, 1],
+                  "note": ["ignored", "ignored"]}).to_csv(upload, index=False)
+    result, rejected = predict_table(project, read_table(upload, task))
+    assert list(result.columns) == ["rank", "id", "prediction", "cell_line", "dose", "replicate"]
+    assert len(result) == 2 and len(rejected) == 0
+
+    missing = tmp_path / "missing.csv"
+    pd.DataFrame({"cell_line": ["A"]}).to_csv(missing, index=False)
+    with pytest.raises(ValueError, match="dose"):
+        read_table(missing, task)
+
+    with pytest.raises(ValueError, match="upload a CSV"):
+        parse_pasted("A,1.0,1", task)
+
+
+def test_the_page_rejects_rows_with_missing_values(tmp_path, monkeypatch):
+    from mlguy.app import predict_table
+
+    project = _tabular_project(tmp_path, monkeypatch)
+    table = pd.DataFrame({"cell_line": ["A", None], "dose": [1.0, 2.0], "replicate": [1, 1]})
+    result, rejected = predict_table(project, table)
+    assert len(result) == 1 and len(rejected) == 1
+    assert "missing" in rejected.iloc[0]["reason"]

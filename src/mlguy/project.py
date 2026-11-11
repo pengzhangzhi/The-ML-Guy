@@ -79,6 +79,11 @@ def check_task_unchanged(task: dict) -> None:
         )
 
 
+def input_columns(task: dict) -> list[str]:
+    """The columns handed to predict.py. Anything: text, numbers, categories, file paths."""
+    return list(task["data"]["input_columns"])
+
+
 def run_predict(run_dir: Path, input_csv: Path, output_csv: Path, timeout: int = PREDICT_TIMEOUT_S) -> None:
     """Call the one fixed interface: predict.py --model DIR --input FILE --output FILE."""
     if not (run_dir / "predict.py").exists():
@@ -105,16 +110,17 @@ def score_split(project_dir: str | Path, split: str, run_dir: str | Path | None 
     task = load_task(project_dir)
     project_dir = task["_project_dir"]
     run_dir = Path(run_dir) if run_dir else project_dir
-    data, seq_col, tgt_col = task["data"], task["data"]["sequence_column"], task["data"]["target_column"]
+    data, tgt_col = task["data"], task["data"]["target_column"]
+    columns = input_columns(task)
 
     if split == "validation":
         df = pd.read_csv(project_dir / "task" / data["validation"])
-        inputs, y_true = df[[seq_col]], df[tgt_col].to_numpy()
+        inputs, y_true = df[columns], df[tgt_col].to_numpy()
     elif split == "test":
         labels_file = test_labels_path(task)
         if not labels_file.exists():
             raise FileNotFoundError(f"no test labels at {labels_file}; run `mlguy init` on this machine")
-        inputs = pd.read_csv(project_dir / "task" / data["test_inputs"])[[seq_col]]
+        inputs = pd.read_csv(project_dir / "task" / data["test_inputs"])[columns]
         y_true = pd.read_csv(labels_file)[tgt_col].to_numpy()
         if len(inputs) != len(y_true):
             raise SubmissionError(f"{len(inputs)} test inputs but {len(y_true)} stored labels")
