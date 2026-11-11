@@ -49,9 +49,9 @@ answers, and ask at most five, each with the answer you would guess.
 
 ## 3. Choose the split with care
 
-Build the split so that scoring on it resembles the use they described in question 4. A random
+Build the split so that scoring on it resembles the use they described in question 4. For example, a random
 split is almost always wrong for biological sequence data: near-duplicates land on both sides
-and every number comes out flattering.
+and every number comes out flattering. 
 
 Make the validation set resemble the test set. Hill-climbing happens on validation, so if
 validation asks an easier or simply different question, the search will optimise for the wrong
