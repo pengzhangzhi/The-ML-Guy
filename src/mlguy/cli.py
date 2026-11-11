@@ -19,6 +19,11 @@ from mlguy.project import (
     TaskChanged,
     check_task_unchanged,
     compare_with,
+    direction,
+    entry_point,
+    evaluator_script,
+    is_generation,
+    sampling,
     load_task,
     score_split,
     state_dir,
@@ -28,9 +33,11 @@ from mlguy.project import (
 )
 from mlguy.records import Experiments, git_commit, hash_task, now
 
-REQUIRED_KEYS = [("name",), ("task", "type"), ("task", "input"), ("task", "output"),
-                 ("data", "train"), ("data", "validation"), ("data", "input_columns"),
-                 ("data", "target_column"), ("metric", "primary")]
+REQUIRED_KEYS = [("name",), ("task", "type"), ("task", "output"), ("data", "train"), ("metric", "primary")]
+# a built-in metric scores one prediction per row against a label column
+BUILTIN_KEYS = [("data", "validation"), ("data", "input_columns"), ("data", "target_column")]
+# the task's own evaluator names its metric, so the task must say which way is better
+EVALUATOR_KEYS = [("metric", "direction")]
 
 
 class CommandError(Exception):
@@ -39,7 +46,10 @@ class CommandError(Exception):
 
 def _check_keys(task: dict) -> None:
     missing = []
-    for path in REQUIRED_KEYS:
+    custom = "script" in task.get("evaluator", {})
+    if task.get("task", {}).get("type") == "generation" and not custom:
+        raise CommandError("a generation task needs its own evaluator: set [evaluator] script in task.toml")
+    for path in REQUIRED_KEYS + (EVALUATOR_KEYS if custom else BUILTIN_KEYS):
         node = task
         for key in path:
             if not isinstance(node, dict) or key not in node:
@@ -48,6 +58,19 @@ def _check_keys(task: dict) -> None:
             node = node[key]
     if missing:
         raise CommandError(f"task.toml is missing: {', '.join(missing)}")
+    primary = task["metric"]["primary"]
+    if custom:
+        if task["metric"]["direction"] not in ("maximize", "minimize"):
+            raise CommandError("metric.direction must be 'maximize' or 'minimize'")
+        if not evaluator_script(task).exists():
+            raise CommandError(f"the evaluator {evaluator_script(task)} does not exist")
+        if task["data"].get("input_columns") and "validation" not in task["data"]:
+            raise CommandError("task.toml is missing: data.validation (the rows to produce outputs for)")
+    elif primary not in judge.METRICS:
+        raise CommandError(f"unknown metric '{primary}'; built in: {', '.join(sorted(judge.METRICS))}. "
+                           "For anything else, give the task its own evaluator.")
+    elif judge.METRICS[primary][2] != task["task"]["type"]:
+        raise CommandError(f"'{primary}' is a {judge.METRICS[primary][2]} metric, but the task is {task['task']['type']}")
 
 
 def _freeze_task(task: dict) -> str:
@@ -97,7 +120,7 @@ def _print_scored(record: dict, task: dict, experiments: Experiments) -> None:
         versus = record["vs_best"]
         print(f"  against experiment {versus['number']}, the best before this: better on "
               f"{versus['chance_better']:.0%} of resamples: {judge.verdict(versus['chance_better'])}")
-    best = experiments.best(primary)
+    best = experiments.best(primary, direction(task))
     if best and best["number"] != record["number"]:
         print(f"best so far: experiment {best['number']} with {primary}={best['metrics'][primary]:.4f}")
     else:
@@ -131,7 +154,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     task = load_task(args.project)
     _check_keys(task)
     project_dir, data = task["_project_dir"], task["data"]
-    in_cols, tgt_col = list(data["input_columns"]), data["target_column"]
+    in_cols, tgt_col = list(data.get("input_columns", [])), data.get("target_column")
 
     frozen = state_dir(task) / "task_hash.txt"
     if frozen.exists() and Experiments(project_dir).all() and frozen.read_text().strip() != hash_task(project_dir):
@@ -141,43 +164,61 @@ def cmd_init(args: argparse.Namespace) -> int:
             "or start a new project for the new task."
         )
 
+    builtin, generation = evaluator_script(task) is None, is_generation(task)
+    needed = [*in_cols, tgt_col] if builtin else in_cols
     for key in ("train", "validation"):
+        if key not in data:
+            continue
         path = project_dir / "task" / data[key]
         if not path.exists():
             raise CommandError(f"{key} data not found at {path}")
         columns = pd.read_csv(path, nrows=1).columns
-        for needed in (*in_cols, tgt_col):
-            if needed not in columns:
-                raise CommandError(f"{path.name} has no '{needed}' column; found {list(columns)}")
+        for column in needed:
+            if column not in columns:
+                raise CommandError(f"{path.name} has no '{column}' column; found {list(columns)}")
 
+    # Hold back the test rows. Prediction keeps the inputs in the project and hides the rest;
+    # generation hides the rows entirely, so the final conditions are unseen until `finish`.
     labeled_test = project_dir / "task" / data["test"] if "test" in data else None
     inputs_path = project_dir / "task" / data.get("test_inputs", "data/test_inputs.csv")
+    test_frame = None
     if labeled_test and labeled_test.exists():
-        df = pd.read_csv(labeled_test)
-        if tgt_col not in df.columns:
-            raise CommandError(f"{labeled_test.name} has no '{tgt_col}' column to hide")
-        df[in_cols].to_csv(inputs_path, index=False)
-        test_frame = df
-        stored = store_test_labels(task, df[[tgt_col]])
+        test_frame = pd.read_csv(labeled_test)
+        for column in needed:
+            if column not in test_frame.columns:
+                raise CommandError(f"{labeled_test.name} has no '{column}' column")
+        if not generation:
+            test_frame[in_cols].to_csv(inputs_path, index=False)
+        stored = store_test_labels(task, test_frame)
         labeled_test.unlink()
-        print(f"test labels moved out of the project: {stored}")
-    elif not inputs_path.exists():
-        raise CommandError(f"no test data: expected {labeled_test or inputs_path}")
-    elif not test_labels_path(task).exists():
-        raise CommandError(f"test inputs exist but no labels are stored at {test_labels_path(task)}")
-    else:
-        test_frame = pd.concat([pd.read_csv(inputs_path), pd.read_csv(test_labels_path(task))], axis=1)
+        print(f"test {'rows' if generation else 'labels'} moved out of the project: {stored}")
+    elif test_labels_path(task).exists():
+        test_frame = pd.read_csv(test_labels_path(task))
+        if not generation and not inputs_path.exists():
+            raise CommandError(f"test labels are stored but the test inputs are missing at {inputs_path}")
+        if not generation and not set(in_cols) <= set(test_frame.columns):   # stored by an older version
+            test_frame = pd.concat([pd.read_csv(inputs_path), test_frame], axis=1)
+    elif not generation:
+        raise CommandError(f"no test data: expected {labeled_test or 'data.test in task.toml'}")
 
     train_frame = pd.read_csv(project_dir / "task" / data["train"])
-    validation_frame = pd.read_csv(project_dir / "task" / data["validation"])
-    found = checks.split_checks(task, train_frame, validation_frame, test_frame)
+    validation_frame = pd.read_csv(project_dir / "task" / data["validation"]) if "validation" in data else None
+    found = checks.split_checks(task, train_frame, validation_frame, test_frame, compare_targets=builtin)
+    (state_dir(task)).mkdir(parents=True, exist_ok=True)
     (state_dir(task) / "split_checks.json").write_text(json.dumps(found, indent=2))
 
     Experiments(project_dir).create()
     digest = _freeze_task(task)
     print(f"project '{task['name']}' ready")
-    print(f"  train {len(train_frame)}  validation {len(validation_frame)}  test {len(test_frame)}")
-    print(f"  metric {task['metric']['primary']}  |  {budget.describe(task, [])}")
+    sizes = [("train", train_frame), ("validation", validation_frame), ("test", test_frame)]
+    print("  " + "  ".join(f"{name} {len(frame)}" for name, frame in sizes if frame is not None))
+    if generation:
+        (n, seed), (final_n, final_seed) = sampling(task, "validation"), sampling(task, "test")
+        per = " per condition" if in_cols else ""
+        print(f"  sampling: {n}{per} on every submission (seed {seed}); {final_n}{per} for the final "
+              f"check (seed {final_seed}" + (", held-out conditions)" if test_frame is not None else ")"))
+    scored_by = "built in" if builtin else f"task/{task['evaluator']['script']}"
+    print(f"  metric {task['metric']['primary']} ({direction(task)}, {scored_by})  |  {budget.describe(task, [])}")
     print(f"  task frozen (hash {digest[:12]})")
     caveat = validation_caveat(task)
     if caveat:
@@ -186,7 +227,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         print(f"  check: {item}")
     if found:
         print("  fix each check above, or explain it in task/brief.md; they are repeated in the final report")
-    print("next: train a model into model/, then run `mlguy validate`")
+    print(f"next: train a model into model/, make {entry_point(task)} work, then run `mlguy validate`")
     return 0
 
 
@@ -209,7 +250,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     number = 0
     experiments.snapshot(task["_project_dir"], number)
     record = _record_score(experiments, task, number, args.note, False, result, None)
-    print("prediction and scoring work end to end.")
+    print(f"{entry_point(task)} and scoring work end to end.")
     _print_scored(record, task, experiments)
     print("the loop is open: change the modelling however you like, then `mlguy submit --note \"...\"`")
     return 0
@@ -229,7 +270,7 @@ def cmd_submit(args: argparse.Namespace) -> int:
         return 2
 
     number = experiments.next_number()
-    previous_best = experiments.best(task["metric"]["primary"])
+    previous_best = experiments.best(task["metric"]["primary"], direction(task))
     try:
         result, error = score_split(args.project, "validation",
                                     keep_predictions=experiments.predictions(number)), None
@@ -259,7 +300,7 @@ def cmd_finish(args: argparse.Namespace) -> int:
     experiments = Experiments(project_dir)
     records = experiments.all()
     primary = task["metric"]["primary"]
-    best = experiments.best(primary)
+    best = experiments.best(primary, direction(task))
     if best is None:
         raise CommandError("nothing has scored yet, so there is no model to report")
 
@@ -267,8 +308,8 @@ def cmd_finish(args: argparse.Namespace) -> int:
     if final_path.exists() and not args.again:
         previous = json.loads(final_path.read_text())
         raise CommandError(
-            f"the test set was already scored (experiment {previous['number']}, "
-            f"{primary}={previous['metrics'][primary]:.4f}). Scoring it again would let the search fit to it; "
+            f"the final score was already taken (experiment {previous['number']}, "
+            f"{primary}={previous['metrics'][primary]:.4f}). Taking it again would let the search fit to it; "
             "use --again only if you know why that is safe."
         )
 
@@ -278,16 +319,17 @@ def cmd_finish(args: argparse.Namespace) -> int:
     try:
         test_result = score_split(project_dir, "test", run_dir=snapshot)
     except SubmissionError as e:
-        raise CommandError(f"the best submission failed on the test set:\n{e}")
+        raise CommandError(f"the best submission failed the final check:\n{e}")
 
     final_path.parent.mkdir(parents=True, exist_ok=True)
     final_path.write_text(json.dumps({"number": best["number"], "time": now(), **test_result}, indent=2))
     path = report.write(project_dir, task, records, best, test_result)
     git_commit(project_dir, f"finish: test {primary}={test_result['metrics'][primary]:.4f}")
-    print(f"test {primary} = {test_result['metrics'][primary]:.4f}  (n={test_result['n']}, scored once)")
+    label = "final" if is_generation(task) else "test"
+    print(f"{label} {primary} = {test_result['metrics'][primary]:.4f}  (n={test_result['n']}, scored once)")
     if test_result.get("interval"):
         print(f"  it would fall between {test_result['interval'][0]:.4f} and {test_result['interval'][1]:.4f} "
-              "on another draw of the test rows")
+              "on another draw")
     print(f"report written to {path}")
     return 0
 
@@ -297,7 +339,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     experiments = Experiments(task["_project_dir"])
     records = experiments.all()
     primary = task["metric"]["primary"]
-    best = experiments.best(primary)
+    best = experiments.best(primary, direction(task))
 
     if args.json:
         final = state_dir(task) / "test_score.json"
@@ -311,7 +353,8 @@ def cmd_status(args: argparse.Namespace) -> int:
         }, indent=2))
         return 0
 
-    print(f"project: {task['name']}  |  predicting {task['task']['output']}  |  metric {primary}")
+    verb = "generating" if is_generation(task) else "predicting"
+    print(f"project: {task['name']}  |  {verb} {task['task']['output']}  |  metric {primary}")
     if not records:
         print("nothing recorded yet; train a model into model/ and run `mlguy validate`")
         return 0
@@ -330,7 +373,7 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 def cmd_score(args: argparse.Namespace) -> int:
     try:
-        result = score_split(args.project, "validation")
+        result = score_split(args.project, "validation", outputs=args.outputs)
     except SubmissionError as e:
         print(json.dumps({"status": "error", "split": "validation", "error": str(e)}, indent=2))
         return 1
@@ -393,8 +436,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--json", action="store_true")
     p.add_argument("--last", type=int, default=20, help="how many experiments to list")
 
-    add("score", "score the current model on validation without recording it (the test set is only "
-                 "ever scored by `finish`)", cmd_score)
+    p = add("score", "score the current model on validation without recording it (the final check is "
+                     "only ever run by `finish`)", cmd_score)
+    p.add_argument("--outputs", default=None,
+                   help="evaluate this file of outputs instead of running the model (to try out an evaluator)")
 
     p = add("dashboard", "watch the experiments in a browser", cmd_dashboard)
     p.add_argument("--port", type=int, default=8501)

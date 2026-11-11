@@ -13,7 +13,7 @@ import pandas as pd
 import streamlit as st
 
 from mlguy import budget
-from mlguy.judge import METRICS
+from mlguy.project import direction
 from mlguy.project import load_task, state_dir
 from mlguy.records import Experiments
 
@@ -33,8 +33,8 @@ def main() -> None:
     experiments = Experiments(project_dir)
     records = experiments.all()
     primary = task["metric"]["primary"]
-    maximise = METRICS[primary][1] == "maximize"
-    best = experiments.best(primary)
+    maximise = direction(task) == "maximize"
+    best = experiments.best(primary, direction(task))
 
     st.title(task["name"])
     st.caption(

@@ -1,7 +1,7 @@
 """Experiment records: the append-only history of submissions.
 
 Only `mlguy validate` and `mlguy submit` write here. Each submission keeps a self-contained snapshot of
-everything needed to reproduce its score (predict.py, src/, model/), so a later
+everything needed to reproduce its score (the entry point, src/, model/), so a later
 experiment cannot change what an earlier one scored.
 """
 
@@ -16,7 +16,7 @@ from pathlib import Path
 
 from mlguy import judge
 
-SNAPSHOT_PATHS = ("predict.py", "src", "model")
+SNAPSHOT_PATHS = ("predict.py", "generate.py", "src", "model")
 SNAPSHOT_WARN_MB = 200
 
 
@@ -58,10 +58,11 @@ class Experiments:
         records = self.all()
         return max((r["number"] for r in records), default=-1) + 1
 
-    def best(self, primary: str) -> dict | None:
+    def best(self, primary: str, direction: str | None = None) -> dict | None:
         best = None
         for record in self.submissions():
-            if best is None or judge.is_better(record["metrics"][primary], best["metrics"][primary], primary):
+            if best is None or judge.is_better(record["metrics"][primary], best["metrics"][primary],
+                                               primary, direction):
                 best = record
         return best
 

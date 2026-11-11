@@ -173,10 +173,30 @@ def score(y_true, y_pred, metrics: list[str], y_score=None) -> dict[str, float]:
     return results
 
 
-def is_better(new: float, old: float | None, metric: str) -> bool:
+def is_better(new: float, old: float | None, metric: str, direction: str | None = None) -> bool:
+    """`direction` is needed only for a metric that comes from a task's own evaluator."""
     if old is None:
         return True
-    return new > old if METRICS[metric][1] == "maximize" else new < old
+    return new > old if (direction or METRICS[metric][1]) == "maximize" else new < old
+
+
+def check_generated(outputs: pd.DataFrame, n: int, n_conditions: int | None) -> None:
+    """Generated samples: n rows, or n per condition with a `condition` column holding the
+    0-based row number of the condition each sample was drawn for. Other columns are free."""
+    if n_conditions is None:
+        if len(outputs) != n:
+            raise SubmissionError(f"expected {n} generated samples, got {len(outputs)}")
+        return
+    if "condition" not in outputs.columns:
+        raise SubmissionError("generated samples need a 'condition' column: the 0-based row number of "
+                              f"the condition each one was drawn for; found {list(outputs.columns)}")
+    counts = outputs["condition"].value_counts()
+    wrong = [c for c in range(n_conditions) if counts.get(c, 0) != n]
+    extra = sorted(set(counts.index) - set(range(n_conditions)))
+    if wrong or extra:
+        raise SubmissionError(f"expected {n} samples for each of {n_conditions} conditions; "
+                              f"{len(wrong)} conditions have a different number"
+                              + (f", and 'condition' holds unknown values {extra[:5]}" if extra else ""))
 
 
 # --------------------------------------------------------------------- noise
@@ -241,3 +261,23 @@ def verdict(chance: float) -> str:
     if chance > 0.05:
         return "probably worse"
     return "really worse"
+
+
+def mean_interval(items) -> list[float] | None:
+    """The 95% interval of a score that is the mean of per-item scores."""
+    items = np.asarray(items, dtype=float)
+    if len(items) < 2 or not np.all(np.isfinite(items)):
+        return None
+    low, high = np.percentile(items[_resamples(len(items))].mean(axis=1), [2.5, 97.5])
+    return [float(low), float(high)]
+
+
+def mean_chance_better(new, old, direction: str) -> float | None:
+    """chance_better for per-item scores, paired item by item."""
+    new, old = np.asarray(new, dtype=float), np.asarray(old, dtype=float)
+    if len(new) != len(old) or len(new) < 2:
+        return None
+    diff = (new - old)[_resamples(len(new))].mean(axis=1)
+    if direction == "minimize":
+        diff = -diff
+    return float((diff > 0).mean() + 0.5 * (diff == 0).mean())

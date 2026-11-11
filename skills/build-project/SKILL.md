@@ -1,6 +1,6 @@
 ---
 name: build-project
-description: Turn a scientist's description of a prediction problem into a The-ML-Guy project: an approved brief, prepared data, and a baseline that scores. Use when someone wants a model built for their data and no project exists yet.
+description: Turn a scientist's description of a modelling problem (predicting something, or generating something) into a The-ML-Guy project: an approved brief, prepared data, and a baseline that scores. Use when someone wants a model built for their data and no project exists yet.
 ---
 
 # Building a project
@@ -74,7 +74,45 @@ the wrong one. When the balance differs, prefer `balanced_accuracy` or `mcc` ove
 If you keep a base-rate-dependent metric anyway — to stay comparable with published numbers,
 say — record that reason in the brief, because the search will be ranked by it.
 
-## 5. Write the brief and get it approved
+## 5. When there is no answer key, write the evaluator
+
+The built-in metrics cover one prediction per row scored against a label. Anything else needs
+the task to carry its own evaluator: a generative model, where there is no right answer to
+compare with, or a prediction task whose real measure of success is not on the list.
+
+**How good outputs are recognised is the user's knowledge, not yours.** Ask how they would
+judge a batch of outputs by hand, and what they already trust to do it: a folding model, a
+classifier, a simulation, a comparison with real data. Turn that into `task/evaluate.py`,
+describe in the brief what it rewards in plain words, and have them approve it. It is frozen
+with the task.
+
+```
+python evaluate.py --outputs FILE --split validation|final --result FILE [--reference FILE]
+```
+
+It reads the model's outputs (and the held-back rows of that split, when there are any) and
+writes `{"metrics": {"name": number, ...}, "per_item": [number, ...]}`. Set `[evaluator]
+script`, and `[metric] primary` and `direction`, in `task.toml`.
+
+The search will optimise exactly what this script rewards, so:
+
+- **It must not be winnable by degenerate outputs.** A score for quality alone is maximised by
+  one good sample repeated. Fold validity, diversity and novelty against the training data
+  into the primary number, or refuse outputs that fail them.
+- **Prove it can tell good from bad before freezing it.** Run `mlguy score --outputs FILE` on
+  real held-out data and on something broken (shuffled, random, copied from training). If the
+  scores do not separate, it cannot guide a search.
+- **Return `per_item`** — one number per scored item, whose mean is the primary metric — so
+  that noise can be measured. Without it no submission can be shown to beat another.
+- **Make the final check ask more.** `--split final` runs once, at the end. Give it conditions
+  the search never saw (`data.test`), more samples (`[sampling] final_n`), and where you can a
+  second scorer the search never optimised against.
+- **It runs on every submission,** so its cost is part of the budget.
+
+For generation, `[sampling] n` and `seed` fix how many samples are drawn each time, so that two
+submissions are comparable. How the model samples is the research step's business.
+
+## 6. Write the brief and get it approved
 
 Fill in `task/brief.md`: goal, input, output, data, how it is tested, how it is scored, the
 starting model, the budget, and the assumptions you made rather than were told. Every line in
@@ -83,14 +121,14 @@ their language. Then show it and ask them to approve or correct it.
 **Do not build anything before they approve.** This is the one point where a wrong metric or a
 wrong split is cheap to fix.
 
-## 6. Build it
+## 7. Build it
 
 ```bash
 mlguy new <folder> --name <project-name>
 # write task/task.toml from the approved brief; prepare task/data/{train,validation,test}.csv
 mlguy init          # checks the task, hides the test labels, freezes task/
 python src/train.py # the baseline
-mlguy validate      # proves prediction and scoring work; records experiment 0
+mlguy validate      # proves predict.py (or generate.py) and scoring work; records experiment 0
 ```
 
 `mlguy init` checks the split before freezing it: rows shared between splits, a validation or
@@ -105,7 +143,7 @@ research step's job, and `validate` does not count against the budget.
 
 If `mlguy validate` fails, the project is not finished. Fix it before handing over.
 
-## 7. Hand over
+## 8. Hand over
 
 Tell them, in their language: what the model will predict, how it will be judged, what the
 baseline already scores, and what the budget allows. Then start the research loop, or tell

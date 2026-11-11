@@ -21,25 +21,30 @@ def _overlap(a: pd.DataFrame, b: pd.DataFrame, columns: list[str]) -> int:
     return int(len(left.merge(b[columns].astype(str).drop_duplicates(), on=columns)))
 
 
-def split_checks(task: dict, train: pd.DataFrame, validation: pd.DataFrame, test: pd.DataFrame) -> list[str]:
-    columns, target = list(task["data"]["input_columns"]), task["data"]["target_column"]
+def split_checks(task: dict, train: pd.DataFrame, validation: pd.DataFrame | None,
+                 test: pd.DataFrame | None, compare_targets: bool = True) -> list[str]:
+    """`validation` and `test` may be absent (a generative task need not have them), and targets
+    are compared only when a built-in metric scores against a label column."""
+    columns, target = list(task["data"].get("input_columns", [])), task["data"].get("target_column")
     declared_mismatch = not task["data"].get("validation_matches_test", True)
     found = []
+    if task["task"]["type"] == "generation":
+        return found  # conditions legitimately repeat across splits, and the sample size is set by the task
+    parts = [(n, f) for n, f in (("train", train), ("validation", validation), ("test", test)) if f is not None]
 
-    for (name_a, a), (name_b, b) in [(("train", train), ("validation", validation)),
-                                     (("train", train), ("test", test)),
-                                     (("validation", validation), ("test", test))]:
-        shared = _overlap(a, b, columns)
-        if shared:
-            found.append(f"{shared} input rows appear in both {name_a} and {name_b}, so the "
-                         f"{name_b} score partly measures memorisation.")
+    for i, (name_a, a) in enumerate(parts):
+        for name_b, b in parts[i + 1:]:
+            shared = _overlap(a, b, columns)
+            if shared:
+                found.append(f"{shared} input rows appear in both {name_a} and {name_b}, so the "
+                             f"{name_b} score partly measures memorisation.")
 
-    for name, part in [("validation", validation), ("test", test)]:
+    for name, part in parts[1:]:
         if len(part) < SMALL_N:
             found.append(f"{name} has only {len(part)} rows, so its score will be noisy; "
                          "small differences between submissions will not mean much.")
 
-    if declared_mismatch:
+    if declared_mismatch or not compare_targets or validation is None or test is None:
         return found  # the difference between validation and test is already on record
 
     if task["task"]["type"] == "classification":

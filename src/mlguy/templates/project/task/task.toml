@@ -4,7 +4,7 @@ schema_version = "0.1"
 name = "TODO-project-name"           # short, kebab-case; names the folder under ~/.mlguy/projects/
 
 [task]
-type = "regression"                  # regression | classification
+type = "regression"                  # regression | classification | generation
 input = "TODO what one row is"       # e.g. "a protein sequence", "a cell and a drug dose"
 output = "TODO_what_is_predicted"    # e.g. stability, solubility, response, readmission
 higher_is_better = true              # does a larger predicted value mean a better outcome?
@@ -32,6 +32,23 @@ validation_matches_test = true
 # accuracy, will mislead the search when validation and test are balanced differently.
 primary = "spearman"
 secondary = []
+
+# When no built-in metric fits (always, for generation) the task carries its own evaluator,
+# frozen with everything else in task/. Then `primary` is whatever name it reports.
+# [evaluator]
+# script = "evaluate.py"             # python evaluate.py --outputs F --split S --result F [--reference F]
+# timeout_minutes = 60
+# [metric]
+# primary = "TODO"
+# direction = "maximize"             # or "minimize"
+
+# Generation only: how many samples are drawn each time, so submissions are comparable.
+# `input_columns` are then the conditions (leave it empty for unconditional generation), and
+# `data.test`, if given, holds conditions kept unseen until the final check.
+# [sampling]
+# n = 100                            # per condition, on every submission
+# seed = 0
+# final_n = 1000                     # for the one final check
 
 [budget]
 max_submissions = 10

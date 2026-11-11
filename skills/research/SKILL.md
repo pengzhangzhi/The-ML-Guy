@@ -5,22 +5,27 @@ description: Improve a model's score on a The-ML-Guy project, within its budget.
 
 # Improving the model
 
-Your job is to raise the score on the project's validation set, within its budget. How you do
+Your job is to improve the project's score, within its budget. How you do
 that is entirely your call.
 
 ## What is fixed
 
 Read `task/brief.md` and `task/task.toml` first. The task, the data, the split, the metric and
 the budget are settled and must not be edited — `mlguy` checks `task/` on every submission and
-refuses if it changed. One more thing is fixed:
+refuses if it changed. That includes `task/evaluate.py`, when the task has its own evaluator.
+
+One more thing is fixed, the command that runs your model:
 
 ```
-python predict.py --model model --input rows.csv --output predictions.csv
+python predict.py  --model model --input rows.csv --output predictions.csv
+python generate.py --model model [--conditions rows.csv] --n N --seed S --output samples.csv
 ```
 
-It reads a CSV holding the task's input columns and writes a CSV with one `prediction` per
-input row, in the same order (plus a `score` column for classification). The rubric and the project's page both call it, so it must
-keep working.
+A prediction task uses the first: one `prediction` per input row, in the same order (plus a
+`score` column for classification). A generation task uses the second: `N` samples for each
+condition, with a `condition` column holding the 0-based row number each was drawn for, or `N`
+samples in all when there are no conditions. The other columns are whatever the evaluator
+reads. How you sample is yours; how many samples are drawn, and the seed, are the task's.
 
 ## What is yours
 
@@ -38,7 +43,7 @@ mlguy submit --note "one line on what you changed and why"
 mlguy finish                       # when the budget is spent
 ```
 
-`mlguy submit` scores `model/` on validation, records the experiment with a snapshot of the
+`mlguy submit` runs your model, scores what it produces, records the experiment with a snapshot of the
 code and model, and tells you the score and the remaining budget. It refuses once the budget is
 spent. A crash or a malformed predictions file is recorded as an error, not as a score of zero,
 but it still uses up a submission, so test your prediction command before you submit.
@@ -48,8 +53,10 @@ rows, and how often it beats the best so far when both are scored on the same re
 A gain the data cannot tell from noise is not a gain. Do not build on it as if it were, and
 between two models that cannot be told apart, prefer the simpler.
 
-Never score the test set. Only `mlguy finish` can, once, at the end, on whichever submission
-scored best on validation. Looking at it earlier would make the final number meaningless.
+The final check belongs to `mlguy finish`: once, at the end, on whichever submission scored
+best. It is the held-out test set, or for generation fresh samples on conditions you have not
+seen. Do not go looking for it, and do not tune a model to an evaluator's blind spots: a score
+won that way will not survive the final check or the user.
 
 ## Working well
 

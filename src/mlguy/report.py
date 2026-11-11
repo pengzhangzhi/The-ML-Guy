@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from mlguy import budget, judge
-from mlguy.project import compare_with, state_dir, validation_caveat
+from mlguy.project import compare_with, is_generation, sampling, state_dir, validation_caveat
 from mlguy.records import Experiments
 
 
@@ -45,32 +45,43 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
     primary = task["metric"]["primary"]
     names = list(best["metrics"].keys())
     baseline = next((r for r in records if r["number"] == 0 and r["status"] == "ok"), None)
-    direction = "Higher is better" if task["task"].get("higher_is_better", True) else "Lower is better"
     output = task["task"]["output"].replace("_", " ")
+    given = task["task"].get("input", "").replace("_", " ")
+    final_n, final_seed = sampling(task, "test")
+    if is_generation(task):
+        headline = f"Generates **{output}**" + (f" for {given}." if given else ".")
+        measured = [f"Measured on {test_result['n']} samples drawn fresh for the final check (seed {final_seed}),",
+                    "scored once after the budget was spent."]
+        columns = "| Metric | Final check | During the search (best submission) |"
+    else:
+        direction = "Higher is better" if task["task"].get("higher_is_better", True) else "Lower is better"
+        headline = f"Predicts **{output}** from {given}. {direction}."
+        measured = [f"Measured on {test_result['n']} held-out examples the model never saw during the search,",
+                    "scored once after the budget was spent."]
+        columns = "| Metric | Test | Validation (best submission) |"
 
     lines = [
         f"# {task['name']}: result",
         "",
-        f"Predicts **{output}** from {task['task']['input'].replace('_', ' ')}. {direction}.",
+        headline,
         "",
         "## Score",
         "",
-        f"Measured on {test_result['n']} held-out examples the model never saw during the search,",
-        f"scored once after the budget was spent.",
+        *measured,
         "",
-        "| Metric | Test | Validation (best submission) |",
+        columns,
         "| --- | --- | --- |",
     ]
     for name in names:
         test_value = test_result["metrics"].get(name)
         lines.append(
-            f"| {name} | {test_value:.4f} |" if test_value is None else
+            f"| {name} | n/a | {best['metrics'][name]:.4f} |" if test_value is None else
             f"| {name} | {test_value:.4f} | {best['metrics'][name]:.4f} |"
         )
     lines += ["", f"The score that counts is **{primary} = {test_result['metrics'][primary]:.4f}**.", ""]
     if test_result.get("interval"):
         low, high = test_result["interval"]
-        lines += [f"On a different draw of {test_result['n']} test examples it would be expected to fall "
+        lines += [f"On a different draw of {test_result['n']} it would be expected to fall "
                   f"between {low:.4f} and {high:.4f} (95% interval).", ""]
 
     caveat = validation_caveat(task)
@@ -86,7 +97,7 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
         ]
         chance = _chance_over_baseline(project_dir, best)
         if chance is not None:
-            lines += [f"Scored on the same resampled validation rows, the best submission beats the starting "
+            lines += [f"Scored on the same resampled items, the best submission beats the starting "
                       f"model {chance:.0%} of the time: **{judge.verdict(chance)}**.", ""]
     elif baseline:
         lines += ["No submission beat the starting model, so the starting model is the result.", ""]
@@ -104,6 +115,9 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
         "| --- | --- | " + " | ".join("---" for _ in names) + " |",
     ]
     lines += [_row(r, primary) for r in records]
+    model = f"experiments/{best['number']:04d}/submission/model"
+    usage = ([f"python generate.py --model {model} --n 100 --seed 0 --output samples.csv"] if is_generation(task)
+             else [f"python predict.py --model {model} \\", "    --input my_data.csv --output predictions.csv"])
     lines += [
         "",
         f"Experiment {best['number']} is the result. Its exact code and model are kept in "
@@ -117,8 +131,7 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
         "",
         "```bash",
         "mlguy serve                 # this project's page, once app.py has been built",
-        f"python predict.py --model experiments/{best['number']:04d}/submission/model \\",
-        "    --input my_data.csv --output predictions.csv",
+        *usage,
         "```",
         "",
     ]

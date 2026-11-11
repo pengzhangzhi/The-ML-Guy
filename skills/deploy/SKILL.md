@@ -9,7 +9,7 @@ The work is only useful if the scientist can run it and knows what to trust. Two
 between the experiments and that: a report they can read, and a page they can use.
 
 ```bash
-mlguy finish    # scores the best submission on the test set once, writes REPORT.md
+mlguy finish    # runs the final check on the best submission, once, and writes REPORT.md
 mlguy serve     # runs the page you build: app.py
 ```
 
@@ -38,7 +38,7 @@ layout, the inputs it accepts, the plots and the library are all your call.
 
 Three things are not:
 
-- **It runs the scored model.** Get outputs by calling `predict.py`, the code path the report's
+- **It runs the scored model.** Get outputs by calling `predict.py` or `generate.py`, the code path the report's
   numbers were measured on, not a reimplementation.
 - **It says what the model was tested on and what it was not,** in their words, where someone
   using it cold will see it.
