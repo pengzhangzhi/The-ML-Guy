@@ -271,3 +271,98 @@ def test_an_evaluator_can_report_its_own_interval(tmp_path, monkeypatch):
     run(project, "init")
     run(project, "validate")
     assert Experiments(project).all()[0]["interval"] == [0.0, 9.0]
+
+
+MACRO_EVALUATE = '''\
+import argparse, json
+import pandas as pd
+
+p = argparse.ArgumentParser()
+p.add_argument("--outputs"); p.add_argument("--reference"); p.add_argument("--split"); p.add_argument("--result")
+a = p.parse_args()
+both = pd.read_csv(a.outputs).merge(pd.read_csv(a.reference), on="id")
+both["right"] = both["prediction"] == both["y"]
+json.dump({"metrics": {"macro_recall": float(both.groupby("y")["right"].mean().mean())}}, open(a.result, "w"))
+'''
+
+LABEL_INFER = '''\
+import argparse, json
+from pathlib import Path
+import pandas as pd
+
+p = argparse.ArgumentParser()
+p.add_argument("--model", type=Path); p.add_argument("--input"); p.add_argument("--output")
+a = p.parse_args()
+cut = json.loads((a.model / "w.json").read_text())["cut"]
+rows = pd.read_csv(a.input)
+rows.assign(prediction=(rows["x"] > cut).map({True: "high", False: "low"}))[["id", "prediction"]].to_csv(a.output, index=False)
+'''
+
+
+def test_a_cheap_evaluator_can_be_resampled_for_noise_and_comparison(tmp_path, monkeypatch, capsys):
+    """A per-class average is not a plain mean, so the framework re-runs the evaluator on resamples."""
+    monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
+    project = tmp_path / "macro"
+    (project / "task" / "data").mkdir(parents=True)
+    toml = PRED_TOML.replace('script = "evaluate.py"', 'script = "evaluate.py"\nresample = 40') \
+                    .replace('primary = "worst_error"\ndirection = "minimize"', 'primary = "macro_recall"\ndirection = "maximize"')
+    (project / "task" / "task.toml").write_text(toml.replace('type = "regression"', 'type = "classification"'))
+    (project / "task" / "evaluate.py").write_text(MACRO_EVALUATE)
+    frame = pd.DataFrame({"x": [float(i % 100) for i in range(300)]})
+    frame["y"] = (frame["x"] > 70).map({True: "high", False: "low"})
+    write_splits(project / "task" / "data", frame[:100], frame[100:200], frame[200:], target="y")
+    (project / "infer.py").write_text(LABEL_INFER)
+    (project / "model").mkdir()
+    (project / "model" / "w.json").write_text(json.dumps({"cut": 50}))
+
+    assert run(project, "init") == 0
+    assert "not compared" not in capsys.readouterr().out, "labels are compared even with an evaluator"
+    assert run(project, "validate") == 0
+    low, high = Experiments(project).all()[0]["interval"]
+    assert 0 < low < high <= 1.0
+    (project / "model" / "w.json").write_text(json.dumps({"cut": 70}))
+    assert run(project, "submit", "--note", "the right cut") == 0
+    assert Experiments(project).all()[-1]["vs_best"]["chance_better"] > 0.95
+    assert (project / "experiments" / "0001" / "validation_outputs.csv").exists()
+
+
+def test_finish_can_take_a_simpler_submission_with_a_reason(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
+    project = tmp_path / "custom"
+    (project / "task" / "data").mkdir(parents=True)
+    (project / "task" / "task.toml").write_text(PRED_TOML)
+    (project / "task" / "evaluate.py").write_text(PRED_EVALUATE)
+    frame = pd.DataFrame({"x": [float(i) for i in range(300)]})
+    frame["y"] = frame["x"] * 2
+    write_splits(project / "task" / "data", frame[:100], frame[100:200], frame[200:], target="y")
+    (project / "infer.py").write_text(PRED_PREDICT)
+    (project / "model").mkdir()
+    (project / "model" / "w.json").write_text(json.dumps({"slope": 1.9}))
+    run(project, "init")
+    run(project, "validate")
+    (project / "model" / "w.json").write_text(json.dumps({"slope": 2.0}))
+    run(project, "submit", "--note", "exact")
+    capsys.readouterr()
+
+    assert run(project, "finish", "--experiment", "0") == 2, "a reason is required"
+    assert "--reason" in capsys.readouterr().err
+    assert run(project, "finish", "--experiment", "0", "--reason", "simpler and within noise") == 0
+    assert json.loads((project / "final" / "model" / "w.json").read_text()) == {"slope": 1.9}
+    assert "Why: simpler and within noise" in (project / "REPORT.md").read_text()
+
+
+def test_the_state_location_is_remembered(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "elsewhere"))
+    project = tmp_path / "custom"
+    (project / "task" / "data").mkdir(parents=True)
+    (project / "task" / "task.toml").write_text(PRED_TOML)
+    (project / "task" / "evaluate.py").write_text(PRED_EVALUATE)
+    frame = pd.DataFrame({"x": [float(i) for i in range(300)]})
+    frame["y"] = frame["x"] * 2
+    write_splits(project / "task" / "data", frame[:100], frame[100:200], frame[200:], target="y")
+    (project / "infer.py").write_text(PRED_PREDICT)
+    (project / "model").mkdir()
+    (project / "model" / "w.json").write_text(json.dumps({"slope": 2.0}))
+    assert run(project, "init") == 0
+    monkeypatch.delenv("MLGUY_HOME")
+    assert run(project, "validate") == 0 and run(project, "finish") == 0, "found without MLGUY_HOME"

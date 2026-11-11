@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import math
 import os
+from concurrent.futures import ThreadPoolExecutor
 import shutil
 import subprocess
 import sys
@@ -26,6 +27,7 @@ import tempfile
 import tomllib
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from mlguy import judge
@@ -62,10 +64,23 @@ def validation_caveat(task: dict) -> str | None:
     )
 
 
+STATE_POINTER = ".mlguy-home"
+
+
+def mlguy_home(project_dir: Path) -> Path:
+    """MLGUY_HOME if set; otherwise wherever this project was initialised; otherwise ~/.mlguy.
+    `mlguy init` records the location in the project, so it need not be set on every command."""
+    if os.environ.get("MLGUY_HOME"):
+        return Path(os.environ["MLGUY_HOME"]).resolve()
+    pointer = Path(project_dir) / STATE_POINTER
+    if pointer.exists():
+        return Path(pointer.read_text().strip())
+    return Path.home() / ".mlguy"
+
+
 def state_dir(task: dict) -> Path:
     """Where things the project's code must not see are kept: outside the project folder."""
-    home = Path(os.environ.get("MLGUY_HOME", Path.home() / ".mlguy"))
-    return home / "projects" / task["name"]
+    return mlguy_home(task["_project_dir"]) / "projects" / task["name"]
 
 
 def test_labels_path(task: dict) -> Path:
@@ -227,23 +242,10 @@ def _builtin_scores(task: dict, reference: Path, outputs: Path, keep: Path | Non
     return metrics, judge.interval(y_true, y_pred, primary, y_score=y_score), int(len(y_true))
 
 
-def _evaluator_scores(task: dict, split: str, reference: Path | None, outputs: Path,
-                      keep: Path | None) -> tuple[dict, list | None, int]:
-    """Run the task's evaluator:
-
-        python <script> --outputs FILE --split validation|final --result FILE [--reference FILE]
-
-    It writes JSON: {"metrics": {name: number, ...}}, and optionally the noise on the primary
-    metric, in one of two ways:
-      "per_item": [number, ...]   when the metric is the plain mean of independent per-item
-                                  scores. The framework then computes the interval and compares
-                                  submissions item by item. Items must come in the same order
-                                  every time (sorted by id, say).
-      "interval": [low, high]     for anything else (a per-class average, a ratio, FID): the
-                                  evaluator's own 95% interval. Submissions are then not compared.
-    """
+def _run_evaluator(task: dict, split: str, reference: Path | None, outputs: Path) -> tuple[dict, dict]:
+    """One call of the task's evaluator. Returns (metrics, the whole result), primary first."""
     script, primary = evaluator_script(task), task["metric"]["primary"]
-    result_file = outputs.parent / "result.json"
+    result_file = outputs.parent / f"{outputs.stem}.result.json"
     cmd = [sys.executable, str(script), "--outputs", str(outputs),
            "--split", "final" if split == "test" else "validation", "--result", str(result_file)]
     if reference is not None:
@@ -263,10 +265,80 @@ def _evaluator_scores(task: dict, split: str, reference: Path | None, outputs: P
         raise SubmissionError(f"the evaluator did not write a usable result file: {e}")
     if primary not in metrics or not all(math.isfinite(v) for v in metrics.values()):
         raise SubmissionError(f"the evaluator must report a finite '{primary}'; it reported {metrics}")
-    metrics = {primary: metrics[primary], **{k: v for k, v in metrics.items() if k != primary}}
+    return {primary: metrics[primary], **{k: v for k, v in metrics.items() if k != primary}}, result
 
+
+def resample_count(task: dict) -> int:
+    """`[evaluator] resample = N`: re-run a cheap evaluator on N resamples of the examples."""
+    return int(task.get("evaluator", {}).get("resample", 0))
+
+
+def _resampled_scores(task: dict, reference: Path, outputs: Path, work: Path) -> list[float | None]:
+    """The primary metric on resampled examples, drawn with replacement.
+
+    The draws depend only on the number of examples, so every submission is scored on the same
+    resamples and two submissions can be compared draw by draw. An example drawn twice appears
+    under two ids (`id~0`, `id~1`), so the evaluator never sees a repeated id.
+    """
+    id_col, primary = id_column(task), task["metric"]["primary"]
+    labels = pd.read_csv(reference, dtype={id_col: str})
+    produced = pd.read_csv(outputs, dtype={"id": str})
+    by_id = {k: g for k, g in produced.groupby("id", sort=False)}
+    ids = labels[id_col].tolist()
+    draws = np.random.default_rng(0).integers(0, len(ids), size=(resample_count(task), len(ids)))
+
+    def one(k: int) -> float | None:
+        seen: dict[str, int] = {}
+        new_ids = []
+        for i in draws[k]:
+            j = seen.get(ids[i], 0)
+            seen[ids[i]] = j + 1
+            new_ids.append(f"{ids[i]}~{j}")
+        ref = labels.iloc[draws[k]].assign(**{id_col: new_ids})
+        out = pd.concat([by_id[ids[i]].assign(id=new) for i, new in zip(draws[k], new_ids) if ids[i] in by_id])
+        folder = work / f"resample{k}"
+        folder.mkdir()
+        ref.to_csv(folder / "reference.csv", index=False)
+        out.to_csv(folder / "outputs.csv", index=False)
+        try:
+            return _run_evaluator(task, "validation", folder / "reference.csv", folder / "outputs.csv")[0][primary]
+        except SubmissionError:
+            return None
+
+    with ThreadPoolExecutor(max_workers=os.cpu_count() or 1) as pool:
+        return list(pool.map(one, range(len(draws))))
+
+
+def _evaluator_scores(task: dict, split: str, reference: Path | None, outputs: Path,
+                      keep: Path | None) -> tuple[dict, list | None, int]:
+    """Run the task's evaluator:
+
+        python <script> --outputs FILE --reference LABELS --split validation|final --result FILE
+
+    It writes JSON: {"metrics": {name: number, ...}}, primary metric included. The noise on the
+    primary metric comes from one of three places, first that applies:
+
+      [evaluator] resample = N   the framework re-runs the evaluator on N resamples of the
+                                 examples: an interval, and paired comparison between
+                                 submissions. For evaluators cheap enough to run N times.
+      "per_item": [number, ...]  in the result, when the metric is the plain mean of independent
+                                 per-example scores, in the same order every time (sorted by id).
+                                 Also gives both an interval and comparison.
+      "interval": [low, high]    in the result: the evaluator's own 95% interval. Submissions are
+                                 then not compared.
+    """
+    metrics, result = _run_evaluator(task, split, reference, outputs)
     items, own = result.get("per_item"), result.get("interval")
-    if own is not None:
+
+    if split == "validation" and reference is not None and resample_count(task):
+        scores = _resampled_scores(task, reference, outputs, outputs.parent)
+        usable = [v for v in scores if v is not None]
+        interval = None
+        if len(usable) >= len(scores) // 2:
+            interval = [float(v) for v in np.percentile(usable, [2.5, 97.5])]
+        if keep is not None:
+            pd.DataFrame({"resample": scores}).to_csv(keep, index=False)
+    elif own is not None:
         try:
             low, high = (float(v) for v in own)
         except Exception:
@@ -327,6 +399,9 @@ def compare_with(project_dir: Path, new_file: Path, old_file: Path) -> float | N
     if len(new) != len(old):
         return None
     if evaluator_script(task) is not None:
+        if "resample" in new and "resample" in old:
+            return judge.paired_chance_better(new["resample"].to_numpy(dtype=float),
+                                              old["resample"].to_numpy(dtype=float), direction(task))
         if "item" not in new or "item" not in old:
             return None
         return judge.mean_chance_better(new["item"].to_numpy(dtype=float), old["item"].to_numpy(dtype=float),

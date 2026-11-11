@@ -96,6 +96,10 @@ class Experiments:
     def predictions(self, number: int) -> Path:
         return self.dir / f"{number:04d}" / "validation_predictions.csv"
 
+    def outputs(self, number: int) -> Path:
+        """What the submission produced for the validation examples, exactly as written."""
+        return self.dir / f"{number:04d}" / "validation_outputs.csv"
+
     def snapshot(self, project_dir: Path, number: int) -> tuple[Path, float]:
         """Copy the prediction side of the project into experiments/NNNN/submission/."""
         target = self.dir / f"{number:04d}" / "submission"

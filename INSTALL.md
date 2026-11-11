@@ -21,8 +21,9 @@ uv venv --python 3.11 && source .venv/bin/activate
 uv pip install -e ".[dashboard]"
 ```
 
-The `dashboard` extra is optional. There is no page to install: the agent builds one per
-project with whatever library suits it. Everything a generated project needs to train is in the core install.
+The `dashboard` extra is optional. The core install is only what scoring needs. Each project's
+page, and the libraries its model uses (gradio, scanpy, lightgbm, torch...), are installed by
+the agent when that project needs them.
 
 ## 2. Install the skills
 

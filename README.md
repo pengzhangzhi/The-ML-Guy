@@ -49,7 +49,7 @@ deliberately goes looking for them.
 
 ```bash
 uv venv --python 3.11 && source .venv/bin/activate
-uv pip install -e ".[dashboard,examples,dev]"
+uv pip install -e ".[dashboard]"           # add examples,dev to run the examples and tests
 ```
 
 ## What keeps the score honest
@@ -93,8 +93,9 @@ direction = "maximize"
 ```
 
 It is called as `python evaluate.py --outputs FILE --reference LABELS --split validation|final
---result FILE` and writes `{"metrics": {...}}`, with either `per_item` scores (when the metric
-is a plain mean) or its own `interval`. `mlguy score --outputs FILE` runs the task's scoring on
+--result FILE` and writes `{"metrics": {...}}`. Its noise is measured by re-running it on
+resamples (`resample = 200`, for cheap evaluators), from `per_item` scores (when the metric is a
+plain mean), or from an `interval` it reports itself. `mlguy score --outputs FILE` runs the task's scoring on
 any file, to check that it can tell good outputs from bad before the task is frozen.
 
 **Generation is experimental.** A generative model has no answer key, so it always needs an

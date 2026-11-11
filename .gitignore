@@ -11,3 +11,4 @@ examples/*/model/
 examples/*/experiments/
 examples/*/REPORT.md
 examples/*/final/
+.mlguy-home

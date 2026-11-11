@@ -32,7 +32,8 @@ combinations?") is far easier to answer than one asked in the abstract.
 ## 2. Ask only what is missing
 
 These are the things only they can tell you. Skip any the data or their first message already
-answers, and ask at most five, each with the answer you would guess.
+answers. Ask at most five questions in all, merging where you can, each with the answer you
+would guess.
 
 1. What do you want to predict, and from what?
 2. Where is the data?
@@ -110,11 +111,14 @@ The search will optimise exactly what this script rewards, so:
 - **Prove it can tell good from bad before freezing it.** Run `mlguy score --outputs FILE` on
   real held-out data and on something broken (shuffled, random, copied from training). If the
   scores do not separate, it cannot guide a search.
-- **Report its noise.** If the primary metric is the plain mean of independent per-example
-  scores, return them as `per_item`, in the same order every time (sorted by id); the
-  framework then computes the interval and compares submissions. For anything else (a
-  per-class average, a share of a top fraction, a distribution distance) return your own 95%
-  `interval: [low, high]`, for instance from a bootstrap that resamples within each class.
+- **Make its noise measurable,** or no submission can be shown to beat another:
+  - If it runs in seconds, set `[evaluator] resample = 200`. The framework re-runs it on the
+    same 200 resamples of the examples for every submission, which gives each score an
+    interval and compares submissions draw by draw. This works for any metric.
+  - If the metric is the plain mean of independent per-example scores, return them as
+    `per_item`, in the same order every time (sorted by id). Same result, one run.
+  - Otherwise return your own 95% `interval: [low, high]`. Submissions are then not compared,
+    so say in the brief that the search will judge improvements by eye.
 - **It runs on every submission,** so its cost is part of the budget.
 
 ## 6. Write the brief and get it approved
@@ -140,7 +144,8 @@ the one point where a wrong metric or a wrong split is cheap to fix.
 
 ```bash
 mlguy new <folder> --name <project-name>
-# write task/task.toml from the approved brief, and prepare task/data
+# write task/task.toml from the approved brief; prepare task/data with a script kept in
+# task/ (task/prepare.py, say), so how the data and split were made is frozen with them
 # write the simplest model that runs: train it into model/, and make infer.py work
 mlguy init          # checks the task and the split, moves the test labels out, freezes task/
 mlguy validate      # proves infer.py and scoring work; records experiment 0
@@ -155,6 +160,9 @@ for each of those two splits with `id` and `target`. Training data is yours to l
 where `PATH` is a split's inputs exactly as `task.toml` names them, and the output is a CSV
 with `id` and `prediction` (plus `score`, the positive-class probability, for two-class tasks).
 `infer.py` only ever sees inputs, so the inputs must carry the `id`; the model should ignore it.
+It also sees a whole split at once. Leave out of the validation and test inputs anything that
+links rows to each other, such as a patient or donor number, unless the model will have it in
+use too: rows from the same patient later in the file can give the outcome away.
 
 `mlguy init` moves the test labels to `~/.mlguy/projects/<name>/`, outside the project, along
 with the record of the frozen task. Set `MLGUY_HOME` first to keep them somewhere else. The
@@ -176,5 +184,5 @@ If `mlguy validate` fails, the project is not finished. Fix it before handing ov
 ## 8. Hand over
 
 Tell them, in their language: what the model will predict, how it will be judged, what the
-baseline already scores, and what the budget allows. Then start the research loop, or tell
-them to.
+baseline already scores, and what the budget allows. Then go on to the research step unless
+they ask you to stop; the brief they approved already covers it.

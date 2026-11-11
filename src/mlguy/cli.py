@@ -30,6 +30,8 @@ from mlguy.project import (
     evaluator_script,
     is_generation,
     sampling,
+    STATE_POINTER,
+    mlguy_home,
     load_task,
     score_split,
     state_dir,
@@ -84,6 +86,8 @@ def _check_keys(task: dict) -> None:
 def _freeze_task(task: dict) -> str:
     state_dir(task).mkdir(parents=True, exist_ok=True)
     (state_dir(task) / "project_path.txt").write_text(str(task["_project_dir"]))
+    # remember where the state is, so MLGUY_HOME need not be set on every later command
+    (task["_project_dir"] / STATE_POINTER).write_text(str(mlguy_home(task["_project_dir"])) + "\n")
     manifest = task_manifest(task["_project_dir"])
     (state_dir(task) / "task_files.json").write_text(json.dumps(manifest, indent=1, sort_keys=True))
     return hash_task(task["_project_dir"])
@@ -146,13 +150,14 @@ def cmd_new(args: argparse.Namespace) -> int:
     toml_path.write_text(toml_path.read_text().replace("TODO-project-name", args.name))
     brief = target / "task" / "brief.md"
     brief.write_text(brief.read_text().replace("TODO name", args.name))
-    (target / ".gitignore").write_text("model/\nwork/\n__pycache__/\n.gradio/\n")
+    # data is frozen by its hash, not by git, so large inputs do not end up in every clone
+    (target / ".gitignore").write_text("model/\nwork/\n__pycache__/\ntask/data/\n")
     subprocess.run(["git", "init", "-q"], cwd=target, capture_output=True)
 
     print(f"created {target}")
     print("  task/task.toml   the task: fill in every TODO, then agree it with the user")
     print("  task/brief.md    the one page the user approves")
-    print("  this folder is a git repository: `mlguy submit` and `finish` commit to it")
+    print("  this folder is a git repository: `validate`, `submit` and `finish` commit to it (not task/data)")
     print("  infer.py         the one fixed interface, as a stub; src/ is yours")
     print("next: prepare task/data, write the simplest model that runs, then `mlguy init`")
     return 0
@@ -219,7 +224,9 @@ def cmd_init(args: argparse.Namespace) -> int:
     state_dir(task).mkdir(parents=True, exist_ok=True)
     stored = {"train": data_path(task, "train"), "validation": data_path(task, "validation_inputs"),
               "test": None if generation else test_inputs}
-    found = checks.split_checks(task, validation_frame, test_frame, stored, id_col, tgt_col, compare_targets=builtin)
+    both_labelled = all(f is not None and tgt_col in f.columns for f in (validation_frame, test_frame))
+    found = checks.split_checks(task, validation_frame, test_frame, stored, id_col, tgt_col,
+                                compare_targets=both_labelled)
     (state_dir(task) / "split_checks.json").write_text(json.dumps(found, indent=2))
 
     Experiments(project_dir).create()
@@ -243,9 +250,9 @@ def cmd_init(args: argparse.Namespace) -> int:
     if found:
         print("  fix each check above, or explain it in task/brief.md; they are repeated in the final report")
     skipped = []
-    if not builtin:
-        skipped.append("the label distributions of validation and test were not compared, because the task "
-                       "scores with its own evaluator")
+    if not both_labelled and not generation:
+        skipped.append(f"the label distributions of validation and test were not compared, because the "
+                       f"labels files have no '{tgt_col}' column (set data.target_column if it has another name)")
     elif caveat:
         skipped.append("the label distributions of validation and test were not compared, because the "
                        "difference is already on record (validation_matches_test = false)")
@@ -268,7 +275,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
                            "submission the budget does not count. Use `mlguy submit`.")
 
     try:
-        result = score_split(args.project, "validation", keep_predictions=experiments.predictions(0))
+        result = score_split(args.project, "validation", keep_predictions=experiments.predictions(0),
+                             keep_outputs=experiments.outputs(0))
     except SubmissionError as e:
         print(f"the pipeline does not work yet:\n{e}", file=sys.stderr)
         return 1
@@ -276,6 +284,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     number = 0
     experiments.snapshot(task["_project_dir"], number)
     record = _record_score(experiments, task, number, args.note, False, result, None)
+    git_commit(task["_project_dir"], f"experiment 0 (starting model): {args.note}")
     print(f"{ENTRY_POINT} and scoring work end to end.")
     _print_scored(record, task, experiments)
     print("the loop is open: change the modelling however you like, then `mlguy submit --note \"...\"`")
@@ -299,7 +308,8 @@ def cmd_submit(args: argparse.Namespace) -> int:
     previous_best = experiments.best(task["metric"]["primary"], direction(task))
     try:
         result, error = score_split(args.project, "validation",
-                                    keep_predictions=experiments.predictions(number)), None
+                                    keep_predictions=experiments.predictions(number),
+                                    keep_outputs=experiments.outputs(number)), None
     except SubmissionError as e:
         result, error = None, str(e)
 
@@ -329,6 +339,15 @@ def cmd_finish(args: argparse.Namespace) -> int:
     best = experiments.best(primary, direction(task))
     if best is None:
         raise CommandError("nothing has scored yet, so there is no model to report")
+    chosen, reason = best, None
+    if args.experiment is not None and args.experiment != best["number"]:
+        chosen = next((r for r in experiments.submissions() if r["number"] == args.experiment), None)
+        if chosen is None:
+            raise CommandError(f"experiment {args.experiment} has no score, so it cannot be the result")
+        if not args.reason:
+            raise CommandError(f"experiment {best['number']} scored best on validation; say why "
+                               f"experiment {args.experiment} should be the result instead, with --reason")
+        reason = args.reason
 
     final_path = state_dir(task) / "test_score.json"
     if final_path.exists() and not args.again:
@@ -339,9 +358,9 @@ def cmd_finish(args: argparse.Namespace) -> int:
             "use --again only if you know why that is safe."
         )
 
-    snapshot = experiments.dir / f"{best['number']:04d}" / "submission"
+    snapshot = experiments.dir / f"{chosen['number']:04d}" / "submission"
     if not snapshot.exists():
-        raise CommandError(f"no saved submission for experiment {best['number']} at {snapshot}")
+        raise CommandError(f"no saved submission for experiment {chosen['number']} at {snapshot}")
     try:
         with tempfile.TemporaryDirectory() as tmp:
             outputs = Path(tmp) / "test_outputs.csv"
@@ -361,8 +380,9 @@ def cmd_finish(args: argparse.Namespace) -> int:
         shutil.copy2(test_labels_path(task), final_dir / "test_labels.csv")
 
     final_path.parent.mkdir(parents=True, exist_ok=True)
-    final_path.write_text(json.dumps({"number": best["number"], "time": now(), **test_result}, indent=2))
-    path = report.write(project_dir, task, records, best, test_result)
+    final_path.write_text(json.dumps({"number": chosen["number"], "best_on_validation": best["number"],
+                                      "reason": reason, "time": now(), **test_result}, indent=2))
+    path = report.write(project_dir, task, records, chosen, test_result, best_on_validation=best, reason=reason)
     git_commit(project_dir, f"finish: test {primary}={test_result['metrics'][primary]:.4f}")
     label = "final" if is_generation(task) else "test"
     print(f"{label} {primary} = {test_result['metrics'][primary]:.4f}  (n={test_result['n']}, scored once)")
@@ -469,8 +489,12 @@ def main(argv: list[str] | None = None) -> int:
     p = add("submit", "score the current model on validation, record it, enforce the budget", cmd_submit)
     p.add_argument("--note", required=True, help="one line on what you changed and why")
 
-    p = add("finish", "score the best submission on the test set once and write the report", cmd_finish)
+    p = add("finish", "score the result on the test set once and write the report", cmd_finish)
     p.add_argument("--again", action="store_true", help="score the test set again (it fits the search to it)")
+    p.add_argument("--experiment", type=int, default=None,
+                   help="the submission to take as the result, when it is not the best on validation "
+                        "(say, a simpler one that cannot be told apart from the best)")
+    p.add_argument("--reason", default=None, help="why, when --experiment is not the best on validation")
 
     p = add("status", "what has been tried, what is best, what budget is left", cmd_status)
     p.add_argument("--json", action="store_true")

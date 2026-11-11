@@ -38,8 +38,8 @@ again.
 There is no built-in page. You build `app.py` for this user and this problem, because only
 you know what they will actually do with the model: rank candidates, check one case at a
 time, compare two conditions, draw samples. Re-read `task/brief.md` and design for that. The
-layout, the inputs it accepts, the plots and the library are all your call; install whatever
-it needs.
+layout, the inputs it accepts, the plots and the library are all your call. Nothing for it is
+installed with the tool: install whatever it needs.
 
 Three things are not:
 

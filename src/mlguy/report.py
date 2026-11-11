@@ -46,7 +46,9 @@ def _split_checks(task: dict) -> list[str]:
     return json.loads(path.read_text()) if path.exists() else []
 
 
-def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_result: dict) -> Path:
+def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_result: dict,
+          best_on_validation: dict | None = None, reason: str | None = None) -> Path:
+    """`best` is the submission taken as the result; normally also the best on validation."""
     primary = task["metric"]["primary"]
     declared = [primary] + [m for m in task["metric"].get("secondary", []) if m != primary]
     names = [n for n in declared if n in best["metrics"]] or list(best["metrics"].keys())
@@ -94,6 +96,12 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
         low, high = test_result["interval"]
         lines += [f"On a different draw of {test_result['n']} it would be expected to fall "
                   f"between {low:.4f} and {high:.4f} (95% interval).", ""]
+
+    if best_on_validation and best_on_validation["number"] != best["number"]:
+        top = best_on_validation["metrics"][primary]
+        lines += [f"The result is experiment {best['number']} ({primary} {best['metrics'][primary]:.4f} on "
+                  f"validation), chosen over experiment {best_on_validation['number']}, which scored best "
+                  f"on validation ({top:.4f}). Why: {reason}", ""]
 
     caveat = validation_caveat(task)
     if caveat:

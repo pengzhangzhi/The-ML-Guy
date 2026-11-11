@@ -39,7 +39,7 @@ not a template.
 mlguy status                       # what has been tried, what is best, what budget is left
 # ... change whatever you want, retrain into model/ ...
 mlguy submit --note "one line on what you changed and why"
-mlguy finish                       # when you judge the work is done
+mlguy finish                       # when you judge the work is done (--experiment N to pick)
 ```
 
 `mlguy submit` runs your model, scores what it produces, records the experiment with a snapshot of the
@@ -50,7 +50,9 @@ but it still uses up a submission, so test your prediction command before you su
 Every score comes with its noise: the range it would fall in on another draw of the validation
 rows, and how often it beats the best so far when both are scored on the same resampled rows.
 A gain the data cannot tell from noise is not a gain. Do not build on it as if it were, and
-between two models that cannot be told apart, prefer the simpler.
+between two models that cannot be told apart, prefer the simpler: by default `mlguy finish`
+takes the best validation score, so when a simpler submission is within noise of it, finish
+with `mlguy finish --experiment N --reason "..."`. The reason goes in the report.
 
 Validation is the shared yardstick, and its labels are in the project only so that it can be
 scored. Make your own choices — hyperparameters, which idea to submit — on the training data,

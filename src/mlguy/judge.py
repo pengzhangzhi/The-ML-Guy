@@ -325,3 +325,13 @@ def mean_chance_better(new, old, direction: str) -> float | None:
     if direction == "minimize":
         diff = -diff
     return float((diff > 0).mean() + 0.5 * (diff == 0).mean())
+
+
+def paired_chance_better(new, old, direction: str) -> float | None:
+    """From scores on the same resamples: how often `new` beats `old`, ties counting half."""
+    new, old = np.asarray(new, dtype=float), np.asarray(old, dtype=float)
+    both = np.isfinite(new) & np.isfinite(old)
+    if both.sum() < max(2, len(new) // 2):
+        return None
+    diff = (new - old)[both] * (1 if direction == "maximize" else -1)
+    return float((diff > 0).mean() + 0.5 * (diff == 0).mean())
