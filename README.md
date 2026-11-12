@@ -34,11 +34,11 @@ The-ML-Guy is a thin layer on top of a coding agent, not a framework that runs o
 
 ## Status
 
-Early but complete end to end. All four milestones are in place: the project contract, the
-scoring rubric, the hill-climbing loop with its budget and experiment records, the four
-skills, and two worked examples from different problem shapes
-(a variant landscape with a continuous target, and binary classification over unrelated
-proteins of varying length).
+Early but complete end to end: the project contract, the scoring rubric, the hill-climbing
+loop with its budget and experiment records, and the four skills. It has been run end to end
+by both Claude Code and Codex on five problems of different shapes — a clinical table,
+single-cell annotation, pathology tiles, protein variant ranking, and a generative design
+task. What was asked and what came back is in [gallery/](gallery/).
 
 See [INSTALL.md](INSTALL.md) to set it up for Claude Code or Codex.
 
@@ -50,7 +50,7 @@ deliberately goes looking for them.
 
 ```bash
 uv venv --python 3.11 && source .venv/bin/activate
-uv pip install -e .                        # add ".[examples,dev]" for the examples and tests
+uv pip install -e .                        # add ".[dev]" to run the tests
 ```
 
 ## What keeps the score honest
@@ -101,85 +101,18 @@ evaluator, and the same `infer.py` is asked for `--n N --seed S` samples per con
 mechanics are in place and tested on a toy problem; they have not yet been proven on a real
 one. Prediction is what the framework is being hardened for first.
 
-## Example: amylase
+## Gallery: what to say, and what came back
 
-One-hot ridge regression on the [FLIP2](https://flip.protein.properties/) alpha-amylase
-one-to-many split.
+[`gallery/`](gallery/) holds five problems that have been built end to end — a clinical table,
+single-cell annotation, pathology tiles, protein variant ranking, and a generative protein design
+task — kept as **the request and the conversation**, not as code. Each one has the scientist's own
+words, the questions the agent asked before it would freeze anything, and what came out with what
+not to believe about it.
 
-```bash
-cd examples/amylase
-python make_task.py                 # download the split, write task/data
-mlguy init                          # check the task, hide the test labels, freeze task/
-python src/train.py                 # this example's own baseline, into model/
-mlguy validate                      # check prediction and scoring work; records experiment 0
-
-# the loop: change the modelling however you like, then
-python src/train.py --approach mutation-ridge
-mlguy submit --note "ridge on substitution indicators instead of full-sequence one-hot"
-mlguy status                        # what has been tried, what is best, what budget is left
-
-mlguy finish                        # scores the best submission on test once, writes REPORT.md
-python app.py                       # this project's own page
-```
-
-`mlguy submit` takes a snapshot of the code and the model and scores *that*, so what earned the
-score cannot drift away from it afterwards — and so a model that only works in the working
-folder is caught now rather than at the final check. It refuses once the submissions are spent.
-The test set is scored exactly once,
-by `mlguy finish`, on whichever submission scored best on validation.
-
-The split as published trains on the wild type and variants with 2 to 8 mutations, and tests
-on the 488 single mutants. A run with a budget of three submissions:
-
-| # | What was tried | Validation Spearman |
-| --- | --- | --- |
-| 0 | one-hot ridge over all 425 positions (baseline) | 0.6777 |
-| 1 | ridge on substitution indicators plus mutation count | **0.6935** |
-| 2 | gradient-boosted trees on the same features | 0.2702 |
-| 3 | rank-average of the two ridge models | 0.6933 |
-
-Experiment 1 won on validation and scored **0.6310** on the test set.
-
-**Validation gains did not transfer.** A separately measured one-hot ridge scored 0.6964 on the
-test set, better than the model that won on validation. This is what the split predicts:
-validation is multi-mutants, like training, while the test set is single mutants. Climbing
-validation here partly optimises the wrong question. Any project where validation and test ask
-different questions has this problem, and the brief should say so.
-
-NDCG here is over the full ranking with linear gain and targets shifted to start at zero. It
-has not been checked against FLIP2's own definition.
-
-## Example: solubility
-
-Binary classification over 71,000 unrelated proteins of varying length
-([DeepSol](https://huggingface.co/datasets/proteinea/solubility), MIT), a deliberately
-different shape from amylase: no fixed length, no reference sequence, no position that means
-the same thing twice.
-
-```bash
-cd examples/solubility
-python make_task.py && mlguy init && python src/train.py && mlguy validate
-```
-
-Three submissions, CPU only, about four minutes of training in total:
-
-| # | What was tried | Validation accuracy |
-| --- | --- | --- |
-| 0 | Logistic regression on residue composition (baseline) | 0.6263 |
-| 1 | Add adjacent-pair (dipeptide) composition, 421 features | 0.6878 |
-| 2 | Gradient-boosted trees on the same features | 0.6949 |
-| 3 | Larger, slower-learning trees | **0.6995** |
-
-Test: accuracy 0.6627, balanced accuracy 0.6626, MCC 0.338, ROC AUC 0.766. For context, the
-PEER benchmark reports roughly 0.64 for a CNN and 0.70 for ESM-1b on this split, so simple
-counting features on a CPU land within a few points of a pretrained protein language model.
-Those comparison numbers are quoted from a secondary summary and have not been checked against
-the paper.
-
-This project declares `validation_matches_test = false`: training and validation are 42%
-soluble while the test set is balanced 50/50, so plain accuracy is not comparable between
-them. `PROJECT_MEMORY.md` records why the rubric cannot select the class-balanced model that
-would probably score better on test, and what to set differently next time.
+It is there because the modelling is the agent's job and your half of the contract is describing
+the problem well enough to build a rubric from. That is the part with no reference material
+anywhere else. `gallery/*/QUESTIONS.md` is the most useful file in each folder: the gap between
+the request and what still had to be asked is the measure of how complete the request was.
 
 ## Project layout
 
@@ -222,19 +155,6 @@ test_labels       = "data/test_labels.csv"       # moved out of the project by `
 There is no built-in page and no domain code in the core. The agent writes `app.py` for the
 problem in front of it: the amylase example accepts FASTA and names each variant by its
 mutations; a clinical model would look nothing like it.
-
-## Gallery: what to say, and what came back
-
-[`gallery/`](gallery/) holds five problems that have been built end to end — a clinical table,
-single-cell annotation, pathology tiles, protein variant ranking, and a generative protein design
-task — kept as **the request and the conversation**, not as code. Each one has the scientist's own
-words, the questions the agent asked before it would freeze anything, and what came out with what
-not to believe about it.
-
-It is there because the modelling is the agent's job and your half of the contract is describing
-the problem well enough to build a rubric from. That is the part with no reference material
-anywhere else. `gallery/*/QUESTIONS.md` is the most useful file in each folder: the gap between
-the request and what still had to be asked is the measure of how complete the request was.
 
 ## For agents
 

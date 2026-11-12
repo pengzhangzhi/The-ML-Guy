@@ -56,11 +56,12 @@ Both have been run end to end on real projects.
 ## 3. Check it works
 
 ```bash
-cd examples/amylase
-python make_task.py && mlguy init && python src/train.py && mlguy validate
+mlguy new smoke-test --name smoke-test && cd smoke-test && mlguy status
 ```
 
-The last command should print a validation score of about 0.68 and say the loop is open.
+It should list what was scaffolded, then report the project with its metric still `TODO` and
+nothing recorded yet. Delete the folder afterwards; a real project starts from a conversation,
+not from a template you fill in alone.
 
 ## Where things are kept
 

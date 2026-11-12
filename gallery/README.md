@@ -55,7 +55,8 @@ samples.
 **The data is not here.** Each `PROMPT.md` says where its data came from. Nothing in this folder
 is redistributed.
 
-## Not in this folder
+## Starting your own
 
-`examples/amylase` and `examples/solubility` are runnable code examples with a `make_task.py` you
-can execute. They were built directly rather than from a prompt, so they have no entry here.
+There is no example project to copy. `mlguy new my-project` scaffolds the skeleton, and the
+agent fills it in with you — that conversation is what this folder is a record of. Two worked
+evaluators sit in `skills/build-project/reference/` for the one part with a fixed shape.
