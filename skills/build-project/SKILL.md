@@ -12,11 +12,11 @@ agree to it, and leave behind a project whose pipeline provably runs.
 Everything you settle here is then frozen. The research that follows can change the modelling
 freely but cannot change the task, so a mistake made here is a mistake that survives.
 
-`gallery/` in the tool's repository holds five problems already built this way, each with the
-scientist's request, the questions that had to be asked before anything could be frozen, and what
-came out. If one of them is shaped like the problem in front of you, read its `QUESTIONS.md`
-before you write your own questions — it will tell you which ones mattered and which answers
-decided the split and the metric.
+`gallery/` in the tool's repository holds five problems already built this way, one page each:
+the scientist's request, the questions that had to be asked before anything could be frozen, and
+what came out. If one of them is shaped like the problem in front of you, read its questions
+before you write your own — they will tell you which ones mattered, and which answers decided
+the split and the metric.
 
 ## The rule about language
 
