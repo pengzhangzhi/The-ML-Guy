@@ -59,7 +59,8 @@ but it still uses up a submission, so test your prediction command before you su
 
 `mlguy submit` runs `infer.py` on the machine you run it on. If the model needs a GPU or a
 scheduler job to predict, run `mlguy submit` inside such a job (with Slurm, `srun ... mlguy
-submit --note "..."`); `PROJECT_MEMORY.md` says what this machine offers.
+submit --note "..."`); the "Environment" section of `PROJECT_MEMORY.md` says what this machine
+offers, and the `environment` skill covers finding out if it is missing.
 
 Each submission gets one score, on the same validation set every time; that score is the
 result of the run. A small gain on a finite validation set may be luck, so judge it as you
