@@ -15,7 +15,7 @@ from sklearn.metrics import accuracy_score, balanced_accuracy_score, matthews_co
 p = argparse.ArgumentParser()
 p.add_argument("--outputs", required=True)
 p.add_argument("--reference", required=True)
-p.add_argument("--split")
+p.add_argument("--inputs"); p.add_argument("--split")
 p.add_argument("--result", required=True)
 a = p.parse_args()
 

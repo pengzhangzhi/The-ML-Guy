@@ -81,9 +81,10 @@ primary = "recall_at_top20pct"     # a name evaluate.py reports
 direction = "maximize"
 ```
 
-It is called as `python task/evaluate.py --outputs FILE --reference LABELS --split
-validation|final --result FILE` and writes `{"metrics": {...}}`. The framework decides which
-labels it is given and when: validation labels on every submission, test labels once, at the
+It is called as `python task/evaluate.py --outputs FILE --reference LABELS --inputs PATH
+--split validation|final --result FILE` and writes `{"metrics": {...}}`. `--inputs` is what the
+model was given for that split, so the score can depend on the example itself. The framework
+decides which labels it is given and when: validation labels on every submission, test labels once, at the
 end. `mlguy score --outputs FILE` runs it on any file, to check that it tells good outputs from
 bad before the task is frozen.
 

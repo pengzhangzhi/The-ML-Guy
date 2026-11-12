@@ -35,7 +35,8 @@ import pandas as pd
 from scipy import stats
 
 p = argparse.ArgumentParser()
-p.add_argument("--outputs"); p.add_argument("--reference"); p.add_argument("--split"); p.add_argument("--result")
+p.add_argument("--outputs"); p.add_argument("--reference"); p.add_argument("--inputs")
+p.add_argument("--split"); p.add_argument("--result")
 a = p.parse_args()
 out = pd.read_csv(a.outputs, dtype={"id": str})
 ref = pd.read_csv(a.reference, dtype={"id": str})

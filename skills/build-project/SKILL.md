@@ -91,12 +91,16 @@ no built-in metrics: what counts as good is specific to the problem, and you are
 than any fixed list to write it.
 
 ```
-python evaluate.py --outputs FILE --reference LABELS --split validation|final --result FILE
+python evaluate.py --outputs FILE --reference LABELS --inputs PATH \
+                   --split validation|final --result FILE
 ```
 
 It reads the model's outputs and the labels file of that split, matched by `id`, and writes
-`{"metrics": {"name": number, ...}}`. The primary metric must be a number; others may be `NaN`
-when undefined. Set `[metric] primary` and `direction` in `task.toml`. Training code may import
+`{"metrics": {"name": number, ...}}`. `--inputs` is the same thing the model was given, so a
+score may depend on what each example is: the backbone a design should match, a field to group
+by. For the final check it points at the held-back inputs wherever they are kept, so use it
+rather than a path of your own. Accept all five arguments even if you ignore one. The primary
+metric must be a number; others may be `NaN` when undefined. Set `[metric] primary` and `direction` in `task.toml`. Training code may import
 from it to tune against the same measure. Refuse outputs that cannot be scored (missing or
 repeated ids, wrong columns) by exiting with an error; never score them as zero.
 

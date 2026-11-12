@@ -45,7 +45,7 @@ import argparse, json
 import pandas as pd
 
 p = argparse.ArgumentParser()
-p.add_argument("--outputs"); p.add_argument("--reference"); p.add_argument("--split"); p.add_argument("--result")
+p.add_argument("--outputs"); p.add_argument("--reference"); p.add_argument("--inputs"); p.add_argument("--split"); p.add_argument("--result")
 a = p.parse_args()
 
 samples, truth = pd.read_csv(a.outputs), pd.read_csv(a.reference)
@@ -195,7 +195,7 @@ import argparse, json
 import pandas as pd
 
 p = argparse.ArgumentParser()
-p.add_argument("--outputs"); p.add_argument("--reference"); p.add_argument("--split"); p.add_argument("--result")
+p.add_argument("--outputs"); p.add_argument("--reference"); p.add_argument("--inputs"); p.add_argument("--split"); p.add_argument("--result")
 a = p.parse_args()
 both = pd.read_csv(a.outputs).merge(pd.read_csv(a.reference), on="id")
 error = (both["prediction"] - both["y"]).abs()
@@ -267,7 +267,7 @@ import argparse, json
 import pandas as pd
 
 p = argparse.ArgumentParser()
-p.add_argument("--outputs"); p.add_argument("--reference"); p.add_argument("--split"); p.add_argument("--result")
+p.add_argument("--outputs"); p.add_argument("--reference"); p.add_argument("--inputs"); p.add_argument("--split"); p.add_argument("--result")
 a = p.parse_args()
 both = pd.read_csv(a.outputs).merge(pd.read_csv(a.reference), on="id")
 both["right"] = both["prediction"] == both["y"]

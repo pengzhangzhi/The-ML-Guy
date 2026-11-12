@@ -224,7 +224,13 @@ def _produce(task: dict, split: str, run_dir: Path, reference: Path | None, outp
 def _evaluator_scores(task: dict, split: str, reference: Path | None, outputs: Path) -> tuple[dict, int]:
     """One call of the task's evaluator:
 
-        python <script> --outputs FILE --reference LABELS --split validation|final --result FILE
+        python <script> --outputs FILE --reference LABELS --inputs PATH
+                        --split validation|final --result FILE
+
+    `--inputs` is the same thing the model was given for this split, so a score may depend on
+    what each example is (a backbone to compare a design against, a field the metric groups by).
+    The model sees it too, so it is not secret; the labels are. For the final check it points at
+    the held-back inputs wherever they are kept.
 
     It writes JSON {"metrics": {name: number, ...}} with the primary metric included and finite.
     Returns the metrics, primary first.
@@ -235,6 +241,9 @@ def _evaluator_scores(task: dict, split: str, reference: Path | None, outputs: P
            "--split", "final" if split == "test" else "validation", "--result", str(result_file)]
     if reference is not None:
         cmd += ["--reference", str(reference)]
+    inputs = _inputs(task, split)
+    if inputs is not None:
+        cmd += ["--inputs", str(inputs)]
     timeout = 60 * int(task.get("evaluator", {}).get("timeout_minutes", EVALUATOR_TIMEOUT_MIN))
     try:
         proc = subprocess.run(cmd, cwd=script.parent, capture_output=True, text=True, timeout=timeout)
