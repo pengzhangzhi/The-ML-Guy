@@ -60,3 +60,9 @@ def test_every_skill_that_writes_for_the_user_points_at_the_writing_skill():
     assert (skills / "writing" / "SKILL.md").exists()
     for name in ("build-project", "audit", "research", "deploy"):
         assert "`writing` skill" in " ".join((skills / name / "SKILL.md").read_text().split()), name
+
+
+def test_the_build_skill_hands_the_machine_to_the_environment_skill():
+    skills = REFERENCE.parents[1]
+    assert (skills / "environment" / "SKILL.md").exists()
+    assert "`environment` skill" in " ".join((skills / "build-project" / "SKILL.md").read_text().split())

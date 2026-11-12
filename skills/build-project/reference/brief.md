@@ -1,6 +1,6 @@
 # Project brief: TODO the project's name
 
-Written in the user's language, not in ML terms. The user approves this before anything is
+Written in the terms the user uses themselves. The user approves this before anything is
 built, so every line has to be something they can check.
 
 | | |
@@ -10,7 +10,7 @@ built, so every line has to be something they can check.
 | Output | TODO what is predicted, and which direction is better. |
 | Data | TODO how much, where from, anything odd about it. |
 | How we test it | TODO which examples are held back, and why that matches how the model will be used. |
-| How we score it | TODO the metric, said in plain words before it is named. |
+| How we score it | TODO the metric, and what a given value of it would let them do. |
 | Starting model | TODO the baseline and roughly what it costs to run. |
 | Budget | TODO. |
 

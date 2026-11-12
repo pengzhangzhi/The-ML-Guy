@@ -5,8 +5,8 @@ description: Turn a scientist's description of a modelling problem (predicting s
 
 # Building a project
 
-You are talking to a scientist who knows their problem and may know nothing about machine
-learning. Your job is to turn what they want into a task that is exactly defined, get them to
+You are talking to someone who knows their problem. How much machine learning they know varies
+from none to more than you, so do not assume: take it from how they write. Your job is to turn what they want into a task that is exactly defined, get them to
 agree to it, and leave behind a project whose pipeline provably runs.
 
 Everything you settle here is then frozen. The research that follows can change the modelling
@@ -18,12 +18,14 @@ what came out. If one of them is shaped like the problem in front of you, read i
 before you write your own — they will tell you which ones mattered, and which answers decided
 the split and the metric.
 
-## The rule about language
+## Who decides what
 
-They speak about their science. You translate to machine learning. They approve the
-translation. Never ask them to choose a metric, a split, a model or a loss by name. Ask what
-they will do with the predictions and what the new inputs will look like, and derive the rest
-yourself.
+They decide what good means. You work out how to measure it. They approve the result.
+
+If they name a metric, a split or a model, that is a requirement: use it, and check it against
+what they say they will do with the predictions, because the two do not always agree. If they
+do not, do not make them pick one by name. Ask what they will do with the predictions and what
+the new inputs will look like, and derive the rest yourself.
 
 Everything you write for them — the questions, the brief, the hand-over — follows the `writing`
 skill.
@@ -40,24 +42,10 @@ combinations?") is far easier to answer than one asked in the abstract.
 
 ## 2. Find out what the machine offers
 
-Before planning any modelling, learn the compute you are working with, because it decides what
-is worth trying. This is yours to discover, not the user's to explain: CPUs and memory, GPUs and
-their type, whether there is a job scheduler (Slurm: `sinfo`, `sacctmgr show assoc user=$USER`,
-`squeue`), which partitions and accounts you may use and their limits, and where large files and
-environments should live. Check your own memory and the machine's notes (`CLAUDE.md`,
-`AGENTS.md`) first; someone may have written it down already. Ask the user only what cannot be
-discovered: which account to charge, what they are willing to spend.
-
-**What a queue can run is not what it will run now.** The partition with the right GPUs may be
-full, and a submission budget spent waiting is worse than a smaller GPU that starts immediately.
-Look at what is idle (`sinfo` by state, `squeue -p <partition>`) before choosing, and look again
-when a job sits pending: a scheduler's own start estimate is usually pessimistic and is no
-substitute for seeing which nodes are free.
-
-Write what you found in `PROJECT_MEMORY.md` under "Compute", and into your own memory if you
-keep one, so the next session does not have to rediscover it. The framework does not manage
-compute: `mlguy submit` runs `infer.py` wherever you run it, so when the model needs a GPU,
-run `mlguy submit` inside a job that has one.
+Follow the `environment` skill: it finds out the compute, the scheduler, the storage and the
+software, and writes them into `PROJECT_MEMORY.md`. What is worth trying depends on it, and
+`mlguy submit` runs `infer.py` wherever you run it, so when the model needs a GPU, run
+`mlguy submit` inside a job that has one.
 
 ## 3. Ask only what is missing
 
@@ -239,20 +227,20 @@ audit is the only check it gets.
 learn what the scoring is meant to do, and cannot tell a metric that misses its description from
 one that matches it otherwise. Audit the draft, then correct it and send it to be approved.
 
-The auditor starts from the project folder, but it has none of what you have learned about this
-machine, so tell it the rest: which interpreter or virtual environment to use, that `mlguy score`
-runs from inside the project, where to put scratch files, and what compute it has. Give it no
+The auditor starts from the project folder with none of what you have learned about this
+machine. Point it at the "Environment" section of `PROJECT_MEMORY.md`, and tell it that
+`mlguy score` runs from inside the project. Give it no
 hypothesis of your own — a finding it had to reach by itself is worth more than one it agreed to.
 
 ## 8. Write the brief and get it approved
 
 Copy `reference/brief.md` (beside this skill) to `task/brief.md` and fill it in: goal, input, output, data, how it is tested, how it is scored, the
 starting model, the budget, what the audit found, and the assumptions you made rather than were
-told. Every line in their language.
+told. Every line in the terms they use themselves.
 
-**Show them examples, not descriptions; this is required, not optional.** They cannot judge
-"held out by similarity" or "Spearman correlation", but they can judge what those mean on their
-own data:
+**Show them examples, not descriptions; this is required, not optional.** A description
+of a split or a metric is easy to agree to and hard to check, whoever is reading. What it does
+to their own data is easy to check:
 
 - For the split, show a handful of real test examples, and where it makes sense the training
   examples most like them, and ask: are these the kind of new cases you will have? Where single
@@ -287,6 +275,6 @@ If `mlguy validate` fails, the project is not finished. Fix it before handing ov
 
 ## 10. Hand over
 
-Tell them, in their language: what the model will predict, how it will be judged, what the
+Tell them, in their terms: what the model will predict, how it will be judged, what the
 baseline already scores, and what the budget allows. Then go on to the research step unless
 they ask you to stop; the brief they approved already covers it.
