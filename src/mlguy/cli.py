@@ -140,7 +140,7 @@ def cmd_new(args: argparse.Namespace) -> int:
     brief = target / "task" / "brief.md"
     brief.write_text(brief.read_text().replace("TODO name", args.name))
     # data is frozen by its hash, not by git, so large inputs do not end up in every clone
-    (target / ".gitignore").write_text("model/\nwork/\n__pycache__/\ntask/data/\n")
+    (target / ".gitignore").write_text("model/\n!final/model/\nwork/\n__pycache__/\ntask/data/\n")
     subprocess.run(["git", "init", "-q"], cwd=target, capture_output=True)
 
     print(f"created {target}")
@@ -247,7 +247,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     if not both_labelled and not generation:
         skipped.append(f"the label distributions of validation and test were not compared, because the "
                        f"labels files have no '{tgt_col}' column (set data.target_column if it has another name)")
-    elif caveat:
+    elif not task["data"].get("validation_matches_test", True):
         skipped.append("the label distributions of validation and test were not compared, because the "
                        "difference is already on record (validation_matches_test = false)")
     for item in skipped:
