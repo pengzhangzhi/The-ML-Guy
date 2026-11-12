@@ -598,3 +598,24 @@ def test_a_large_task_is_fingerprinted_without_reading_all_of_it(project, capsys
     (crowd / "0.txt").write_text("changed, and a different length")
     assert run(project, "submit", "--note", "after editing one of many files") == 2
     assert "task/ has changed" in capsys.readouterr().err
+
+
+def test_only_the_submission_count_is_enforced(project, capsys):
+    """Every look at validation fits the search to it, so the count is part of the rubric. Time and
+    money are the user's limits and the agent's to keep: the framework never sees the compute, so
+    it reports what was agreed and stops nothing on their account."""
+    toml = project / "task" / "task.toml"
+    toml.write_text(toml.read_text() + 'max_gpu_hours = 40\ndeadline = 2020-01-01\n')
+    run(project, "init")
+    run(project, "validate")
+    capsys.readouterr()
+    _write_model(project, 2.0)
+    assert run(project, "submit", "--note", "long after the deadline") == 0
+    out = capsys.readouterr().out
+    assert "1 of 2 submissions left" in out
+    assert "max_gpu_hours = 40" in out and "keep them yourself" in out
+    assert run(project, "status", "--json") == 0
+    limits = json.loads(capsys.readouterr().out)["budget"]["limits"]
+    assert limits["deadline"] == {"limit": "2020-01-01", "enforced": False}
+    run(project, "finish")
+    assert "the agent's to keep: max_gpu_hours = 40" in (project / "REPORT.md").read_text()

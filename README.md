@@ -79,6 +79,9 @@ about.
   validation set. When scores are about the same, the simpler model is preferred, and choosing
   it over the top score is recorded with a reason.
 - **A failure is an error, never a zero,** and still uses up budget.
+- **The budget that is enforced is the number of submissions,** because every look at validation
+  fits the search to it a little more. Time, GPU-hours and money are written in the task and
+  kept by the agent: the framework never sees the compute.
 
 ## Scoring
 

@@ -51,8 +51,10 @@ mlguy finish                       # when you judge the work is done (--experime
 ```
 
 `mlguy submit` runs your model, scores what it produces, records the experiment with a snapshot of the
-code and model, and tells you the score and the remaining budget. It refuses once the budget is
-spent. A crash or a malformed predictions file is recorded as an error, not as a score of zero,
+code and model, and tells you the score and the remaining budget. It refuses once the
+submissions are spent. Any other limit in `[budget]` — hours, a deadline, GPU-hours, money — is
+the user's and is yours to keep: `mlguy` shows it to you and prints it in the report, and
+stops nothing. A crash or a malformed predictions file is recorded as an error, not as a score of zero,
 but it still uses up a submission, so test your prediction command before you submit.
 
 `mlguy submit` runs `infer.py` on the machine you run it on. If the model needs a GPU or a
