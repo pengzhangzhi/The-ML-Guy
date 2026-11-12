@@ -93,8 +93,27 @@ def _freeze_task(task: dict) -> str:
     return hash_task(task["_project_dir"])
 
 
+def _cost(result: dict | None, snapshot: Path | None) -> dict:
+    """What this submission costs to run, as far as the framework can see it.
+
+    Only two things, and both are observed rather than asked for: how long `infer.py` took on the
+    validation split, and how big `model/` is. They are here because a score alone cannot answer
+    "is this worth shipping" — a model that is 0.002 better, forty times larger and ten times
+    slower is usually the wrong choice, and after the run nobody can recover the timing. The
+    framework records them and says nothing about what they mean; weighing them is the agent's job.
+    """
+    cost = {}
+    if result and result.get("predict_seconds") is not None:
+        cost["predict_seconds"] = round(result["predict_seconds"], 1)
+    model_mb = Experiments.megabytes(snapshot / "model") if snapshot else None
+    if model_mb is not None:
+        cost["model_mb"] = round(model_mb, 1)
+    return cost
+
+
 def _record_score(experiments: Experiments, task: dict, number: int, note: str,
-                  counts: bool, result: dict | None, error: str | None) -> dict:
+                  counts: bool, result: dict | None, error: str | None,
+                  snapshot: Path | None = None) -> dict:
     record = {
         "number": number,
         "time": now(),
@@ -107,6 +126,9 @@ def _record_score(experiments: Experiments, task: dict, number: int, note: str,
     if result:
         record["metrics"] = result["metrics"]
         record["n_validation"] = result["n"]
+        cost = _cost(result, snapshot)
+        if cost:
+            record["cost"] = cost
     else:
         record["error"] = error
     if any(r["number"] == number for r in experiments.all()):
@@ -359,7 +381,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
         print(f"the pipeline does not work yet:\n{e}{_reads_task(str(e))}", file=sys.stderr)
         return 1
 
-    record = _record_score(experiments, task, number, args.note, False, result, None)
+    record = _record_score(experiments, task, number, args.note, False, result, None, snapshot)
     git_commit(task["_project_dir"], f"experiment 0 (starting model): {args.note}")
     print(f"{ENTRY_POINT} and scoring work end to end.")
     _print_scored(record, task, experiments)
@@ -382,6 +404,7 @@ def cmd_submit(args: argparse.Namespace) -> int:
 
     number = experiments.next_number()
     previous_best = experiments.best(task["metric"]["primary"], direction(task))
+    target = None   # an error before the snapshot exists still gets recorded, without a cost
     try:
         _ready_to_score(task["_project_dir"])
         target, size_mb = experiments.snapshot(task["_project_dir"], number)
@@ -391,7 +414,7 @@ def cmd_submit(args: argparse.Namespace) -> int:
                                     keep_outputs=experiments.outputs(number)), None
     except SubmissionError as e:
         result, error = None, str(e) + _reads_task(str(e))
-    record = _record_score(experiments, task, number, args.note, True, result, error)
+    record = _record_score(experiments, task, number, args.note, True, result, error, target)
     commit = git_commit(task["_project_dir"], f"experiment {number}: {args.note}")
     if commit:
         record["commit"] = commit
@@ -498,7 +521,15 @@ def cmd_status(args: argparse.Namespace) -> int:
         else:
             metrics = f"error: {record['error'].splitlines()[0][:60]}"
         mark = "*" if best and record["number"] == best["number"] else " "
-        print(f" {mark}{record['number']:>4}  {metrics:<34}  {record.get('note', '')[:50]}")
+        cost = record.get("cost") or {}
+        bits = [f"{cost['predict_seconds']:.0f}s" if "predict_seconds" in cost else "",
+                f"{cost['model_mb']:.0f}MB" if "model_mb" in cost else ""]
+        print(f" {mark}{record['number']:>4}  {metrics:<34}  {' '.join(b for b in bits if b):<12}"
+              f"  {record.get('note', '')[:50]}")
+    if any(r.get("cost") for r in records[-args.last:]):
+        # Say what the two numbers are rather than heading the column, because the metrics
+        # column has no fixed width. What they are worth against a score is the agent's call.
+        print("       (cost: seconds to run the model over validation, and the size of model/)")
     if best:
         print(f"best: experiment {best['number']} with {primary}={best['metrics'][primary]:.4f}  (* above)")
     final_path = state_dir(task) / "test_score.json"

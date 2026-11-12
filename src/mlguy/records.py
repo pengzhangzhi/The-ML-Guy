@@ -169,6 +169,16 @@ class Experiments:
         """What the submission produced for the validation examples, exactly as written."""
         return self.dir / f"{number:04d}" / "validation_outputs.csv"
 
+    @staticmethod
+    def megabytes(path: Path) -> float | None:
+        """Size of a file or folder on disk, or None if it is not there."""
+        path = Path(path)
+        if not path.exists():
+            return None
+        if path.is_file():
+            return path.stat().st_size / 1e6
+        return sum(p.stat().st_size for p in path.rglob("*") if p.is_file()) / 1e6
+
     def snapshot(self, project_dir: Path, number: int) -> tuple[Path, float]:
         """Copy the prediction side of the project into experiments/NNNN/submission/."""
         target = self.dir / f"{number:04d}" / "submission"
@@ -183,8 +193,7 @@ class Experiments:
                 shutil.copytree(source, target / name, ignore=shutil.ignore_patterns("__pycache__"))
             else:
                 shutil.copy2(source, target / name)
-        size_mb = sum(p.stat().st_size for p in target.rglob("*") if p.is_file()) / 1e6
-        return target, size_mb
+        return target, self.megabytes(target) or 0.0
 
     def write_detail(self, number: int, name: str, text: str) -> None:
         path = self.dir / f"{number:04d}" / name

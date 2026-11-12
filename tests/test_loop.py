@@ -392,6 +392,44 @@ def test_each_submission_is_one_score_set_against_the_best(project, capsys):
     assert "best so far: experiment 0" in out
 
 
+def test_what_a_submission_costs_to_run_is_recorded_and_shown(project, capsys):
+    """Selection is the agent's judgement, but it cannot weigh cost against score unless the cost
+    is there to read — and the timing cannot be recovered once the run is over."""
+    run(project, "init")
+    run(project, "validate")
+    _write_model(project, -1.0)
+    run(project, "submit", "--note", "flip the sign")
+    capsys.readouterr()
+
+    for record in Experiments(project).submissions():
+        cost = record["cost"]
+        assert cost["predict_seconds"] >= 0, "how long infer.py took over validation"
+        assert cost["model_mb"] >= 0, "and how big model/ is"
+
+    assert run(project, "status") == 0
+    out = capsys.readouterr().out
+    assert "cost: seconds to run the model over validation" in out
+    assert "MB" in out
+
+    capsys.readouterr()
+    assert run(project, "finish") == 0
+    report = (project / "REPORT.md").read_text()
+    assert "on disk" in report and "validation examples on the machine" in report
+
+
+def test_an_error_before_the_snapshot_exists_is_still_recorded(project, capsys):
+    """Recording the cost must not make a failed submission crash instead of being recorded."""
+    run(project, "init")
+    run(project, "validate")
+    (project / "infer.py").unlink()
+    capsys.readouterr()
+
+    assert run(project, "submit", "--note", "no infer.py at all") == 1
+    record = Experiments(project).all()[-1]
+    assert record["status"] == "error" and "cost" not in record
+    assert record["counts_against_budget"], "a failure still uses up a submission"
+
+
 def test_the_score_table_keeps_every_metric_the_evaluator_reports():
     """The experiment table truncates to stay readable; the score table must not, or a metric that
     disagrees with the headline can go unseen. One trial's evaluator reported nine and four showed."""

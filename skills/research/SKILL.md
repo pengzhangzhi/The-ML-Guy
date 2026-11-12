@@ -61,10 +61,28 @@ submit --note "..."`); `PROJECT_MEMORY.md` says what this machine offers.
 
 Each submission gets one score, on the same validation set every time; that score is the
 result of the run. A small gain on a finite validation set may be luck, so judge it as you
-would any measurement. When two submissions score about the same, prefer the simpler, or the
-one that better serves what the brief asks for: by default `mlguy finish` takes the best
-validation score, so to take another, finish with `mlguy finish --experiment N --reason "..."`.
-The reason goes in the report.
+would any measurement.
+
+**Choosing which submission to ship is yours, and the best score is only the default.** By
+default `mlguy finish` takes the highest validation score; `mlguy finish --experiment N --reason
+"..."` takes another, and the reason goes in the report. Take the default when it is right, but
+look at the whole table before you do, and weigh whatever the brief makes relevant:
+
+- **Does the gap mean anything?** On this many examples, two scores a hair apart are one
+  measurement, not two. Prefer the simpler model when they are level.
+- **What does it cost to run?** `mlguy status` reports, per submission, how long `infer.py` took
+  over the validation split and how big `model/` is. A model that scores 0.002 better, is forty
+  times larger and needs a GPU at prediction time is usually the wrong answer for someone who
+  will run it on a laptop. Read the brief for which of those they actually care about.
+- **Is the better score real, or is it the metric's blind spot?** A frozen metric cannot see
+  everything that matters. If the top model wins by doing something the brief would call wrong,
+  say so and take the other one — this is what `--reason` is for, and it is the most valuable
+  thing you can put in a report.
+- **What will the user have to maintain?** Fewer dependencies, no bespoke inference environment,
+  and code someone else can read are worth a little score.
+
+There are no fixed penalties for complexity and no thresholds to clear. Make the judgement, and
+write down why in `--reason` so the user can disagree with it.
 
 Validation is the shared yardstick, and its labels are in the project only so that it can be
 scored. Read whatever `submit` reports, including any breakdown the evaluator gives. Make your

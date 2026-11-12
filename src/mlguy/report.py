@@ -170,6 +170,19 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
         "```",
         "",
     ]
+    cost = best.get("cost") or {}
+    if cost:
+        # What it costs to run, for whoever has to deploy it. Measured on this machine, so it is
+        # an order of magnitude rather than a specification.
+        measured = []
+        if "model_mb" in cost:
+            size = "under 1 MB" if cost["model_mb"] < 1 else f"{cost['model_mb']:.1f} MB"
+            measured.append(f"The model is {size} on disk")
+        if "predict_seconds" in cost and best.get("n_validation"):
+            measured.append(f"it took {cost['predict_seconds']:.1f} s to run over the "
+                            f"{best['n_validation']} validation examples on the machine it was "
+                            f"scored on")
+        lines += [" and ".join(measured) + ".", ""]
     path = Path(project_dir) / "REPORT.md"
     path.write_text("\n".join(lines))
     return path

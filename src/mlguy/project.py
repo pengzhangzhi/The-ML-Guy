@@ -23,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
 from pathlib import Path
 
@@ -322,12 +323,18 @@ def score_split(project_dir: str | Path, split: str, run_dir: str | Path | None 
 
     with tempfile.TemporaryDirectory() as tmp:
         produced = Path(tmp) / "outputs.csv"
+        predict_seconds = None
         if outputs is not None:
             produced = Path(outputs).resolve()
             if not produced.exists():
                 raise SubmissionError(f"no file at {produced}")
         else:
+            # How long the model takes to run is a fact about the submission that cannot be
+            # recovered afterwards, and it is one of the things that decides whether a model is
+            # worth its score. Measured here because this is the one place that runs infer.py.
+            started = time.perf_counter()
             _produce(task, split, run_dir, reference, produced)
+            predict_seconds = time.perf_counter() - started
         if keep_outputs is not None:
             keep_outputs.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(produced, keep_outputs)
@@ -337,4 +344,5 @@ def score_split(project_dir: str | Path, split: str, run_dir: str | Path | None 
         staged.symlink_to(produced)
         metrics, n = _evaluator_scores(task, split, reference, staged)
 
-    return {"split": split, "n": n, "primary": task["metric"]["primary"], "metrics": metrics}
+    return {"split": split, "n": n, "primary": task["metric"]["primary"], "metrics": metrics,
+            "predict_seconds": predict_seconds}
