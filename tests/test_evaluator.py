@@ -52,8 +52,11 @@ samples, truth = pd.read_csv(a.outputs), pd.read_csv(a.reference)
 if "value" not in samples:
     raise SystemExit("samples need a 'value' column")
 distance = (samples["value"] - samples["id"].map(truth.set_index("id")["mean"])).abs()
+# the conditions themselves, which for the final check are held back outside the project
+conditions = pd.read_csv(a.inputs)
 json.dump({"metrics": {"distance": float(distance.mean()), "spread": float(samples["value"].std()),
-                       "final": float(a.split == "final")}}, open(a.result, "w"))
+                       "final": float(a.split == "final"),
+                       "conditions_seen": float(len(conditions))}}, open(a.result, "w"))
 '''
 
 GENERATE_PY = '''\
@@ -114,7 +117,8 @@ def test_generation_loop(generation, capsys):
     baseline = experiments.all()[0]
     assert baseline["metrics"]["distance"] == pytest.approx(2.0, abs=0.1)
     assert baseline["n_validation"] == 60
-    assert list(baseline["metrics"]) == ["distance", "spread", "final"], "primary first, then whatever else it reports"
+    assert list(baseline["metrics"]) == ["distance", "spread", "final", "conditions_seen"], \
+        "primary first, then whatever else it reports"
     assert baseline["metrics"]["final"] == 0.0
 
     _model(project, error=0.5)
@@ -126,6 +130,8 @@ def test_generation_loop(generation, capsys):
     final = json.loads((project.parent / "state/projects/toy-generation/test_score.json").read_text())
     assert final["number"] == 1 and final["n"] == 150, "50 fresh samples for each held-out condition"
     assert final["metrics"]["final"] == 1.0, "the evaluator is told this is the final check"
+    assert final["metrics"]["conditions_seen"] == 3.0, \
+        "the evaluator reaches the held-back conditions through --inputs"
     report = (project / "REPORT.md").read_text()
     assert "Generates **measurements**" in report and "--n 100" in report
     assert run(project, "finish") == 2
