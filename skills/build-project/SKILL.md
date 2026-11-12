@@ -133,6 +133,14 @@ The search will optimise exactly what this script rewards, so:
 - **Prove it can tell good from bad.** Run `mlguy score --outputs FILE` on something good (the
   validation labels themselves, where that makes sense) and on something broken (shuffled,
   constant, random). If the scores do not separate, it cannot guide a search.
+- **Prove it can resolve a real difference, and not merely a broken one.** Good against broken is
+  a floor check; the search needs the metric to separate two plausible models. If anything is
+  already known to help on this problem — a published model, a standard baseline — score it
+  against the obvious default and ask whether the gap is larger than the spread this many
+  examples would give you anyway. A metric that cannot see the intervention the field already
+  trusts will not see yours. How many examples each split holds is part of the same question: a
+  headline that moves in steps of 1/32 cannot show a 2% improvement. Both are free to change now
+  and impossible to change later.
 - **It runs on every submission,** so its cost is part of the budget.
 
 ## 6. Draft the project

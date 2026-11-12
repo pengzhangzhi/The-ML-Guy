@@ -29,6 +29,14 @@ score:
 - **Malformed:** a missing id, a repeated id, an id that is not in the split, a missing column,
   a NaN. Each should be refused with an error, not scored, and certainly not scored as zero.
 - **Reordered:** the same outputs in another row order must score the same.
+- **Can it resolve a real difference?** Good against degenerate only shows the metric is not
+  broken. What the search needs is for it to separate two *plausible* models. Where something is
+  already known to work on this problem — a published model, an established baseline, a trick the
+  field uses — score that against the obvious default, and compare the gap with the spread you
+  would expect from this many examples alone. A gap smaller than that spread means the metric
+  cannot see the one intervention known to work, so it will not see the agent's either, and every
+  submission after the freeze will be climbing noise. Say it plainly: the fix is a different
+  metric, more examples, or both, and it is only available before the freeze.
 
 Then read the code: is the primary metric the one the brief describes, computed the way the
 brief says, in the stated direction? Ties, rounding, cut-offs and averaging over classes or
