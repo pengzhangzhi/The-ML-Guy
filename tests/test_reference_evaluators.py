@@ -52,3 +52,11 @@ def test_the_reference_brief_ends_with_the_line_init_looks_for():
     from mlguy.cli import APPROVAL
     brief = (REFERENCE / "brief.md").read_text()
     assert any(line.startswith(APPROVAL) for line in brief.splitlines())
+
+
+def test_every_skill_that_writes_for_the_user_points_at_the_writing_skill():
+    """A skill nothing points to does not get loaded, so the pointers are what make it apply."""
+    skills = REFERENCE.parents[1]
+    assert (skills / "writing" / "SKILL.md").exists()
+    for name in ("build-project", "audit", "research", "deploy"):
+        assert "`writing` skill" in " ".join((skills / name / "SKILL.md").read_text().split()), name

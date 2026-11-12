@@ -86,7 +86,7 @@ Write `task/audit.md`:
    example rows) and what would fix it.
 3. **The evaluator table:** every output you tried, and its score or error.
 4. **For the user,** a short paragraph in plain language: what was checked, and what they
-   should know before approving.
+   should know before approving. Write it following the `writing` skill.
 
 Then end with a short message that says where the audit is and what its verdict is. Be
 specific and be fair: a finding without evidence is noise, and a clean audit should say so
