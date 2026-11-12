@@ -2,16 +2,17 @@
 
 Scoring is always the same two steps, whatever the problem:
 
-  1. produce   run the project's one entry point to turn inputs into outputs
-                   infer.py --model DIR --input PATH --output FILE
-               (generation, experimental, adds --n N --seed S)
-  2. evaluate  turn those outputs into numbers with the task's own evaluator, task/evaluate.py,
-               written for the problem, approved by the user and frozen with the task
-                   evaluate.py --outputs FILE --reference LABELS --split validation|final --result FILE
+  1. produce   run the project's one entry point to turn a split's inputs into outputs
+                   infer.py --model DIR [--input PATH] --output PATH [any [infer] args]
+  2. evaluate  turn those outputs into numbers with the task's own evaluator, task/evaluate.py
+                   evaluate.py --outputs PATH [--reference PATH] [--inputs PATH]
+                               --split validation|final --result FILE
 
-The framework knows no metrics and no input formats. Inputs can be a table, a matrix, a folder
-of images or structures: only the project's own code reads them. What the framework owns is
-which labels the evaluator is given, when, and that the scoring cannot change.
+The framework knows no metrics, no formats and no kinds of task. A split is up to two things:
+inputs, which the model is given, and a reference, which only the evaluator sees. Either may be
+a table, a folder, anything, or absent. What the framework owns is which of them each step is
+given and when, that the test split stays out of the project until the final check, and that
+the scoring cannot change.
 """
 
 from __future__ import annotations
@@ -27,10 +28,6 @@ import time
 import tomllib
 from pathlib import Path
 
-import pandas as pd
-
-from mlguy import judge
-from mlguy.judge import SubmissionError
 
 INFER_TIMEOUT_S = 3600
 EVALUATOR_TIMEOUT_MIN = 60
@@ -40,6 +37,15 @@ class TaskChanged(Exception):
     """task/ differs from what was approved, so scores would not be comparable."""
 
 
+class SubmissionError(Exception):
+    """The submission could not be scored (crash, bad output, no usable score). Never a zero."""
+
+
+# Keys of the first contract, which knew two kinds of task. Ignoring them would be worse than
+# refusing: a test_labels file nobody moves out of the project is a test set the model can read.
+_OLD_KEYS = ("validation_labels", "test_labels", "id_column", "target_column", "validation_matches_test")
+
+
 def load_task(project_dir: str | Path) -> dict:
     project_dir = Path(project_dir).resolve()
     path = project_dir / "task" / "task.toml"
@@ -47,6 +53,13 @@ def load_task(project_dir: str | Path) -> dict:
         raise FileNotFoundError(f"no task at {path}; is {project_dir} a mlguy project?")
     with open(path, "rb") as f:
         task = tomllib.load(f)
+    old = [k for k in _OLD_KEYS if k in task.get("data", {})] + (["sampling"] if "sampling" in task else [])
+    if old:
+        raise FileNotFoundError(
+            f"{path} uses keys from an older mlguy: {', '.join(old)}. Rename validation_labels and "
+            "test_labels to validation_reference and test_reference, move [sampling] n and seed to "
+            "[infer] args = {n = .., seed = ..} and final_n and final_seed to [infer] final_args, "
+            "and drop id_column, target_column and validation_matches_test.")
     task["_project_dir"] = project_dir
     return task
 
@@ -75,14 +88,18 @@ def state_dir(task: dict) -> Path:
     return mlguy_home(task["_project_dir"]) / "projects" / task["name"]
 
 
-def test_labels_path(task: dict) -> Path:
-    """The held-back half of the test set: an id per example, and whatever it is scored against."""
-    return state_dir(task) / "test_labels.csv"
+TEST_KEYS = ("test_inputs", "test_reference")
 
 
-def hidden_inputs_path(task: dict) -> Path:
-    """Generation only: test conditions are kept out of the project until the final check."""
-    return state_dir(task) / ("test_inputs" + Path(task["data"]["test_inputs"]).suffix)
+def held_back_path(task: dict, key: str) -> Path:
+    """Where `init` keeps a declared part of the test split, outside the project."""
+    return state_dir(task) / (key + Path(task["data"][key]).suffix)
+
+
+def has_test_split(task: dict) -> bool:
+    """Whether the task holds anything back. If not, the final check runs the model again on
+    validation, with the final arguments: fresh samples of the same conditions, say."""
+    return any(key in task.get("data", {}) for key in TEST_KEYS)
 
 
 def task_changes(task: dict) -> list[str]:
@@ -112,21 +129,9 @@ def check_task_unchanged(task: dict) -> None:
 ENTRY_POINT = "infer.py"
 
 
-def id_column(task: dict) -> str:
-    return task["data"].get("id_column", "id")
-
-
-def target_column(task: dict) -> str:
-    return task["data"].get("target_column", "target")
-
-
 def data_path(task: dict, key: str) -> Path | None:
-    name = task["data"].get(key)
+    name = task.get("data", {}).get(key)
     return task["_project_dir"] / "task" / name if name else None
-
-
-def is_generation(task: dict) -> bool:
-    return task["task"]["type"] == "generation"
 
 
 def evaluator_script(task: dict) -> Path:
@@ -139,19 +144,18 @@ def direction(task: dict) -> str:
     return task["metric"]["direction"]
 
 
-def sampling(task: dict, split: str) -> tuple[int, int]:
-    """Generation: (samples per condition, seed). Fixed by the task so two submissions are
-    comparable; the final check draws fresh samples, and more of them if the task says so."""
-    spec = task.get("sampling", {})
-    n, seed = int(spec.get("n", 100)), int(spec.get("seed", 0))
-    if split == "test":
-        return int(spec.get("final_n", n)), int(spec.get("final_seed", seed + 1))
-    return n, seed
+def infer_args(task: dict, split: str) -> list[str]:
+    """Extra arguments for infer.py, fixed by the task so that submissions are comparable:
+    `[infer] args = {n = 20, seed = 0}` becomes `--n 20 --seed 0`. The final check uses
+    `final_args` when the task gives them (more samples, a fresh seed), and `args` otherwise."""
+    spec = task.get("infer", {})
+    chosen = spec.get("final_args", spec.get("args", {})) if split == "test" else spec.get("args", {})
+    return [part for key, value in chosen.items() for part in (f"--{key}", str(value))]
 
 
-def run_infer(run_dir: Path, inputs: Path | None, output: Path, n: int | None = None, seed: int | None = None,
+def run_infer(run_dir: Path, inputs: Path | None, output: Path, extra: list[str],
               timeout: int = INFER_TIMEOUT_S) -> None:
-    """The one fixed interface: infer.py --model DIR --input PATH --output FILE."""
+    """The one fixed interface: infer.py --model DIR [--input PATH] --output PATH [extra]."""
     if not (run_dir / ENTRY_POINT).exists():
         raise SubmissionError(f"no {ENTRY_POINT} in {run_dir}")
     if not (run_dir / "model").exists():
@@ -159,9 +163,7 @@ def run_infer(run_dir: Path, inputs: Path | None, output: Path, n: int | None = 
     cmd = [sys.executable, ENTRY_POINT, "--model", "model"]
     if inputs is not None:
         cmd += ["--input", str(inputs)]
-    if n is not None:
-        cmd += ["--n", str(n), "--seed", str(seed)]
-    cmd += ["--output", str(output)]
+    cmd += ["--output", str(output), *extra]
     try:
         proc = subprocess.run(cmd, cwd=run_dir, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -169,19 +171,13 @@ def run_infer(run_dir: Path, inputs: Path | None, output: Path, n: int | None = 
     if proc.returncode != 0:
         raise SubmissionError(f"{ENTRY_POINT} failed (exit {proc.returncode}):\n{proc.stderr.strip()[-2000:]}")
     if not output.exists():
-        raise SubmissionError(f"{ENTRY_POINT} exited cleanly but wrote no output file")
+        raise SubmissionError(f"{ENTRY_POINT} exited cleanly but wrote nothing to {output.name}")
 
 
-def _held_back_gone(task: dict, what: str, path: Path) -> FileNotFoundError:
-    """A task that holds part of its test set outside the project cannot be scored without it.
-
-    A generation task need not hold anything back: the final check may simply draw fresh samples
-    for the same conditions, and then there is nothing to find. But if the task declared a test
-    split, falling back to that would measure validation and report it as the final score, which
-    is worse than refusing. So the two cases are told apart by what task.toml declares.
-    """
+def _held_back_gone(task: dict, key: str, path: Path) -> FileNotFoundError:
+    """Scoring validation instead would report a validation number as the final one."""
     return FileNotFoundError(
-        f"task.toml declares data.{what}, so it was moved out of the project at `mlguy init` and "
+        f"task.toml declares data.{key}, so it was moved out of the project at `mlguy init` and "
         f"kept at {path}. It is not there now. The final check cannot be scored against a test set "
         f"that is missing, and scoring it against validation instead would report a validation "
         f"number as the final one. Restore {path.parent}, or point MLGUY_HOME at wherever this "
@@ -189,76 +185,39 @@ def _held_back_gone(task: dict, what: str, path: Path) -> FileNotFoundError:
     )
 
 
-def _reference(task: dict, split: str) -> Path | None:
-    """The half of a split that the evaluator sees and the model does not: ids, and labels."""
-    if split == "validation":
-        return data_path(task, "validation_labels")
-    if split == "test":
-        path = test_labels_path(task)
-        if path.exists():
-            return path
-        if is_generation(task) and "test_labels" not in task["data"]:
-            return _reference(task, "validation")  # no held-out conditions: fresh samples of the same ones
-        if is_generation(task):
-            raise _held_back_gone(task, "test_labels", path)
-        raise FileNotFoundError(f"no test labels at {path}; run `mlguy init` on this machine")
-    raise ValueError("split must be 'validation' or 'test'")
+def split_part(task: dict, split: str, part: str) -> Path | None:
+    """A split's `inputs` or `reference`, wherever it is kept now; None when the task has none."""
+    if split not in ("validation", "test"):
+        raise ValueError("split must be 'validation' or 'test'")
+    if split == "validation" or not has_test_split(task):
+        return data_path(task, f"validation_{part}")
+    key = f"test_{part}"
+    if key not in task["data"]:
+        return None
+    if not held_back_path(task, key).exists():
+        raise _held_back_gone(task, key, held_back_path(task, key))
+    return held_back_path(task, key)
 
 
-def _inputs(task: dict, split: str) -> Path | None:
-    """The half of a split handed to the model, exactly as the task stores it."""
-    if split == "test" and not is_generation(task):
-        return data_path(task, "test_inputs")
-    if split == "test" and "test_inputs" in task["data"]:
-        if hidden_inputs_path(task).exists():
-            return hidden_inputs_path(task)
-        raise _held_back_gone(task, "test_inputs", hidden_inputs_path(task))
-    return data_path(task, "validation_inputs")
+def _keep(source: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if source.is_dir():
+        shutil.copytree(source, target, dirs_exist_ok=True)
+    else:
+        shutil.copy2(source, target)
 
 
-def read_ids(task: dict, reference: Path) -> list[str]:
-    return pd.read_csv(reference, dtype={id_column(task): str})[id_column(task)].tolist()
-
-
-def _read_outputs(path: Path) -> pd.DataFrame:
-    try:
-        return pd.read_csv(path)
-    except Exception as e:
-        raise SubmissionError(f"could not read the output file: {e}")
-
-
-def _produce(task: dict, split: str, run_dir: Path, reference: Path | None, output: Path) -> None:
-    if not is_generation(task):
-        run_infer(run_dir, _inputs(task, split), output)
-        return
-    n, seed = sampling(task, split)
-    run_infer(run_dir, _inputs(task, split), output, n=n, seed=seed)
-    judge.check_generated(_read_outputs(output), n, read_ids(task, reference) if reference else None)
-
-
-def _evaluator_scores(task: dict, split: str, reference: Path | None, outputs: Path) -> tuple[dict, int]:
-    """One call of the task's evaluator:
-
-        python <script> --outputs FILE --reference LABELS --inputs PATH
-                        --split validation|final --result FILE
-
-    `--inputs` is the same thing the model was given for this split, so a score may depend on
-    what each example is (a backbone to compare a design against, a field the metric groups by).
-    The model sees it too, so it is not secret; the labels are. For the final check it points at
-    the held-back inputs wherever they are kept.
-
-    It writes JSON {"metrics": {name: number, ...}} with the primary metric included and finite.
-    Returns the metrics, primary first.
-    """
+def _evaluator_scores(task: dict, split: str, outputs: Path) -> dict:
+    """One call of the task's evaluator. It writes {"metrics": {name: number, ...}} with the
+    primary metric included and finite. Returns the metrics, primary first."""
     script, primary = evaluator_script(task), task["metric"]["primary"]
     result_file = outputs.parent / "result.json"
     cmd = [sys.executable, str(script), "--outputs", str(outputs),
            "--split", "final" if split == "test" else "validation", "--result", str(result_file)]
-    if reference is not None:
-        cmd += ["--reference", str(reference)]
-    inputs = _inputs(task, split)
-    if inputs is not None:
-        cmd += ["--inputs", str(inputs)]
+    for part in ("reference", "inputs"):
+        path = split_part(task, split, part)
+        if path is not None:
+            cmd += [f"--{part}", str(path)]
     timeout = 60 * int(task.get("evaluator", {}).get("timeout_minutes", EVALUATOR_TIMEOUT_MIN))
     try:
         proc = subprocess.run(cmd, cwd=script.parent, capture_output=True, text=True, timeout=timeout)
@@ -275,31 +234,7 @@ def _evaluator_scores(task: dict, split: str, reference: Path | None, outputs: P
         raise SubmissionError(f"the evaluator must report '{primary}'; it reported {sorted(metrics)}")
     if not math.isfinite(metrics[primary]):
         raise SubmissionError(f"the evaluator reported {primary} = {metrics[primary]}; it must be a finite number")
-    return {primary: metrics[primary], **{k: v for k, v in metrics.items() if k != primary}}, \
-        int(len(_read_outputs(outputs)))
-
-
-def submission_shape(project_dir: str | Path, split: str, outputs: str | Path) -> str | None:
-    """Whether a file of outputs is shaped the way a submission must be. Returns the complaint, or None.
-
-    `mlguy score` scores whatever file it is given, because its job before the freeze is to find out
-    what the evaluator does with outputs of every kind, including the kinds a submission is refused
-    for. But a file holding one sample per condition where the task fixes twenty is a different
-    measurement from the one every submission will get — the best of twenty scores better than
-    twenty do — and a score read off it will flatter the evaluator. So the check still runs, and
-    what it says is reported beside the number rather than in place of it.
-    """
-    task = load_task(project_dir)
-    if not is_generation(task):
-        return None
-    n, _ = sampling(task, split)
-    reference = _reference(task, split)
-    try:
-        judge.check_generated(_read_outputs(Path(outputs)), n,
-                              read_ids(task, reference) if reference else None)
-    except SubmissionError as e:
-        return str(e)
-    return None
+    return {primary: metrics[primary], **{k: v for k, v in metrics.items() if k != primary}}
 
 
 def score_split(project_dir: str | Path, split: str, run_dir: str | Path | None = None,
@@ -308,34 +243,32 @@ def score_split(project_dir: str | Path, split: str, run_dir: str | Path | None 
 
     `run_dir` is where infer.py, src/ and model/ live; it defaults to the project itself,
     and is an experiment snapshot when scoring a past submission. `outputs` skips the first
-    step and evaluates a file that already exists. `keep_outputs` saves what the model produced.
+    step and evaluates outputs that already exist. `keep_outputs` saves what the model produced.
     """
     task = load_task(project_dir)
     run_dir = Path(run_dir) if run_dir else task["_project_dir"]
-    reference = _reference(task, split)
 
     with tempfile.TemporaryDirectory() as tmp:
-        produced = Path(tmp) / "outputs.csv"
+        produced = Path(tmp) / "outputs"
         predict_seconds = None
         if outputs is not None:
             produced = Path(outputs).resolve()
             if not produced.exists():
-                raise SubmissionError(f"no file at {produced}")
+                raise SubmissionError(f"nothing at {produced}")
         else:
             # How long the model takes to run is a fact about the submission that cannot be
             # recovered afterwards, and it is one of the things that decides whether a model is
             # worth its score. Measured here because this is the one place that runs infer.py.
             started = time.perf_counter()
-            _produce(task, split, run_dir, reference, produced)
+            run_infer(run_dir, split_part(task, split, "inputs"), produced, infer_args(task, split))
             predict_seconds = time.perf_counter() - started
         if keep_outputs is not None:
-            keep_outputs.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(produced, keep_outputs)
+            _keep(produced, keep_outputs)
         scratch = Path(tmp) / "evaluation"
         scratch.mkdir()
-        staged = scratch / "outputs.csv"
+        staged = scratch / "outputs"
         staged.symlink_to(produced)
-        metrics, n = _evaluator_scores(task, split, reference, staged)
+        metrics = _evaluator_scores(task, split, staged)
 
-    return {"split": split, "n": n, "primary": task["metric"]["primary"], "metrics": metrics,
+    return {"split": split, "primary": task["metric"]["primary"], "metrics": metrics,
             "predict_seconds": predict_seconds}

@@ -1,4 +1,4 @@
-"""A task's own evaluator, and generation: the same loop with a different way of producing and scoring."""
+"""A task's own evaluator, and a task that samples: the same contract, with extra arguments to infer.py."""
 
 from __future__ import annotations
 
@@ -19,16 +19,14 @@ GEN_TOML = """\
 name = "toy-generation"
 
 [task]
-type = "generation"
 input = "a group"
 output = "measurements"
 
 [data]
 """ + DATA_TOML + """
-[sampling]
-n = 20
-seed = 0
-final_n = 50
+[infer]
+args = { n = 20, seed = 0 }
+final_args = { n = 50, seed = 1 }
 
 [evaluator]
 script = "evaluate.py"
@@ -108,16 +106,15 @@ def test_generation_loop(generation, capsys):
     project = generation
     assert run(project, "init") == 0
     out = capsys.readouterr().out
-    assert "20 per condition on every submission" in out and "50 per condition for the final" in out
+    assert "--n 20 --seed 0 on every submission" in out and "--n 50 --seed 1 for the final check" in out
     data = project / "task" / "data"
-    assert not (data / "test_labels.csv").exists() and not (data / "test_inputs.csv").exists(), \
+    assert not (data / "test_reference.csv").exists() and not (data / "test_inputs.csv").exists(), \
         "the final conditions stay unseen until finish"
 
     assert run(project, "validate") == 0
     experiments = Experiments(project)
     baseline = experiments.all()[0]
     assert baseline["metrics"]["distance"] == pytest.approx(2.0, abs=0.1)
-    assert baseline["n_validation"] == 60
     assert list(baseline["metrics"]) == ["distance", "spread", "final", "conditions_seen"], \
         "primary first, then whatever else it reports"
     assert baseline["metrics"]["final"] == 0.0
@@ -129,24 +126,22 @@ def test_generation_loop(generation, capsys):
 
     assert run(project, "finish") == 0
     final = json.loads((project.parent / "state/projects/toy-generation/test_score.json").read_text())
-    assert final["number"] == 1 and final["n"] == 150, "50 fresh samples for each held-out condition"
+    assert final["number"] == 1
     assert final["metrics"]["final"] == 1.0, "the evaluator is told this is the final check"
     assert final["metrics"]["conditions_seen"] == 3.0, \
         "the evaluator reaches the held-back conditions through --inputs"
     report = (project / "REPORT.md").read_text()
-    assert "Generates **measurements**" in report and "--n 20 --seed 0" in report, \
-        "the usage example quotes the task's own sampling, not a number copied into the template"
+    assert "returns **measurements**" in report and "--n 20 --seed 0" in report, \
+        "the usage example quotes the task's own arguments, not a number copied into the template"
     assert run(project, "finish") == 2
 
 
-def test_malformed_samples_are_an_error_not_a_score(generation):
+def test_outputs_the_evaluator_refuses_are_an_error_not_a_score(generation):
+    """What counts as well-formed output is the evaluator's to say, whatever the task is: the
+    framework checks no shapes or counts of its own, and passes the evaluator's refusal on."""
     project = generation
     run(project, "init")
     run(project, "validate")
-    (project / "infer.py").write_text(GENERATE_PY % ".iloc[:-3]")     # three samples short
-    assert run(project, "submit", "--note", "drop some") == 1
-    assert "20 samples for each of 3 conditions" in Experiments(project).all()[-1]["error"]
-
     (project / "infer.py").write_text(GENERATE_PY % '.rename(columns={"value": "v"})')
     assert run(project, "submit", "--note", "wrong column") == 1
     assert "samples need a 'value' column" in Experiments(project).all()[-1]["error"], \
@@ -166,30 +161,24 @@ def test_an_evaluator_can_be_tried_on_a_file(generation, capsys, tmp_path):
         assert run(project, "score", "--outputs", str(tmp_path / f"{name}.csv")) == 0
         payload = json.loads(capsys.readouterr().out)
         scores[name] = payload["metrics"]["distance"]
-        # One sample per condition, where the task fixes twenty. It is still scored — that is what
-        # this command is for — but the best of twenty scores better than twenty do, so the number
-        # cannot be read as a submission's.
-        assert "20 samples for each of 3 conditions" in payload["not_shaped_like_a_submission"]
-        assert "not comparable" in payload["warning"]
     assert scores["good"] == 0.0 and scores["bad"] == 4.0
     assert Experiments(project).all() == [], "nothing is recorded"
 
 
 def test_a_lost_test_set_is_refused_rather_than_measured_on_validation(generation, capsys):
-    """A generation task may hold nothing back, and then the final check draws fresh samples for
-    the validation conditions. This one does hold conditions back, and they live outside the
-    project. If they go missing, falling back to validation would report a validation number as
+    """A task may hold nothing back, and then the final check runs validation again. This one does
+    hold a test split back, and it lives outside the project. If they go missing, falling back to validation would report a validation number as
     the final score, with nothing saying so. Both ways in have to refuse instead."""
     project = generation
     assert run(project, "init") == 0
     assert run(project, "validate") == 0
     state = project.parent / "state" / "projects" / "toy-generation"
-    (state / "test_labels.csv").unlink()
+    (state / "test_reference.csv").unlink()
     capsys.readouterr()
 
     assert run(project, "finish") == 2
     message = capsys.readouterr().err
-    assert "test_labels" in message and "validation number as the final one" in message
+    assert "test_reference" in message and "validation number as the final one" in message
     assert not (state / "test_score.json").exists(), "and no final score is recorded"
 
     # Losing the state folder and running `init` again is how the test set goes missing in the
@@ -213,12 +202,11 @@ PRED_TOML = """\
 name = "toy-custom-metric"
 
 [task]
-type = "regression"
 input = "a number"
 output = "another_number"
 
 [data]
-""" + DATA_TOML + """target_column = "y"
+""" + DATA_TOML + """
 
 [evaluator]
 script = "evaluate.py"
@@ -267,8 +255,8 @@ def test_a_prediction_task_can_bring_its_own_metric(tmp_path, monkeypatch, capsy
     (project / "model").mkdir()
     (project / "model" / "w.json").write_text(json.dumps({"slope": 1.0}))
 
-    assert run(project, "init") == 0
     assert list(pd.read_csv(project / "task" / "data" / "test_inputs.csv").columns) == ["id", "x"]
+    assert run(project, "init") == 0
     assert run(project, "validate") == 0
     (project / "model" / "w.json").write_text(json.dumps({"slope": 2.0}))
     assert run(project, "submit", "--note", "the right slope") == 0
@@ -327,12 +315,12 @@ rows.assign(prediction=(rows["x"] > cut).map({True: "high", False: "low"}))[["id
 
 
 def test_an_evaluator_for_class_labels(tmp_path, monkeypatch, capsys):
-    """A per-class average is not a built-in; the labels are still checked at init."""
+    """A per-class average is not a built-in: the evaluator brings it."""
     monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
     project = tmp_path / "macro"
     (project / "task" / "data").mkdir(parents=True)
     toml = PRED_TOML.replace('primary = "worst_error"\ndirection = "minimize"', 'primary = "macro_recall"\ndirection = "maximize"')
-    write_task(project, toml.replace('type = "regression"', 'type = "classification"'))
+    write_task(project, toml)
     (project / "task" / "evaluate.py").write_text(MACRO_EVALUATE)
     frame = pd.DataFrame({"x": [float(i % 100) for i in range(300)]})
     frame["y"] = (frame["x"] > 70).map({True: "high", False: "low"})
@@ -342,12 +330,11 @@ def test_an_evaluator_for_class_labels(tmp_path, monkeypatch, capsys):
     (project / "model" / "w.json").write_text(json.dumps({"cut": 50}))
 
     assert run(project, "init") == 0
-    assert "not compared" not in capsys.readouterr().out, "labels are compared even with an evaluator"
     assert run(project, "validate") == 0
     (project / "model" / "w.json").write_text(json.dumps({"cut": 70}))
     assert run(project, "submit", "--note", "the right cut") == 0
     assert Experiments(project).best("macro_recall", "maximize")["number"] == 1
-    assert (project / "experiments" / "0001" / "validation_outputs.csv").exists()
+    assert (project / "experiments" / "0001" / "validation_outputs").exists()
 
 
 def test_finish_can_take_a_simpler_submission_with_a_reason(tmp_path, monkeypatch, capsys):
