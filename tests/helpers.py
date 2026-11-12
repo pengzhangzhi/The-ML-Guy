@@ -58,9 +58,10 @@ APPROVED_BRIEF = "# Brief\n\nApproved by the user: yes, go ahead (2026-11-11)\n"
 
 
 def write_task(project: Path, toml: str) -> None:
-    """task.toml, an approved brief, and the stand-in evaluator (a test may replace it)."""
+    """task.toml, an approved brief, an audit, and the stand-in evaluator (a test may replace it)."""
     task = project / "task"
     task.mkdir(parents=True, exist_ok=True)
     (task / "task.toml").write_text(toml)
     (task / "brief.md").write_text(APPROVED_BRIEF)
+    (task / "audit.md").write_text("# Audit\n\nNothing found that should stop the freeze.\n")
     (task / "evaluate.py").write_text(EVALUATE_PY)

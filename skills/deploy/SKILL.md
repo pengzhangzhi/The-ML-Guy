@@ -28,8 +28,8 @@ again.
   than asserting it.
 - **Say what it cannot do.** The split defines what was shown to work. A model tested on
   single mutants has not been shown to work on combinations, and saying so is part of the job.
-- **Carry the caveat forward.** If `validation_matches_test` is false, the report already
-  carries a warning; make sure it is in words they will understand.
+- **Carry the caveats forward.** The report quotes `validation_note` and points at
+  `task/audit.md`; say what both mean for this result, in words they will understand.
 - **Be straight when nothing improved.** If no submission beat the baseline, say that plainly
   and say what you would try next. A report that oversells is worse than no report.
 

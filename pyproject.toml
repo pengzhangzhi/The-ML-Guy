@@ -12,11 +12,10 @@ license = { text = "MIT" }
 dependencies = [
     "numpy>=1.26",
     "pandas>=2.0",
-    "scipy>=1.11",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "scipy>=1.11"]   # scipy: the tests' stand-in evaluator
 
 [project.scripts]
 mlguy = "mlguy.cli:main"

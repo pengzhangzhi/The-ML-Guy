@@ -14,7 +14,7 @@ import pandas as pd
 
 TEMPLATES = Path(__file__).parent / "templates"
 
-from mlguy import budget, checks, report
+from mlguy import budget, report
 from mlguy.judge import SubmissionError
 from mlguy.project import (
     TaskChanged,
@@ -25,7 +25,6 @@ from mlguy.project import (
     data_path,
     hidden_inputs_path,
     id_column,
-    target_column,
     evaluator_script,
     is_generation,
     sampling,
@@ -206,7 +205,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     task = load_task(args.project)
     _check_keys(task)
     project_dir, data = task["_project_dir"], task["data"]
-    id_col, tgt_col = id_column(task), target_column(task)
+    id_col = id_column(task)
     generation = is_generation(task)
     brief = project_dir / "task" / "brief.md"
     approval = [line for line in (brief.read_text().splitlines() if brief.exists() else [])
@@ -214,6 +213,21 @@ def cmd_init(args: argparse.Namespace) -> int:
     if not approval or not approval[0].strip()[len(APPROVAL):].strip(" -:*_") or "TODO" in approval[0]:
         raise CommandError(f"task/brief.md does not record the user's approval. Show them the brief, and "
                            f"once they approve, add a line '{APPROVAL} <their words, and the date>'.")
+
+    # Whoever drew the split and wrote the evaluator is about to be scored by them. The framework
+    # cannot tell a careful audit from a careless one, but it can make skipping it a decision that
+    # someone took and that the report repeats, rather than a step that was forgotten.
+    skipped = state_dir(task) / "audit_skipped.txt"
+    if (project_dir / "task" / "audit.md").exists():
+        skipped.unlink(missing_ok=True)
+    elif args.skip_audit:
+        skipped.parent.mkdir(parents=True, exist_ok=True)
+        skipped.write_text(args.skip_audit.strip() + "\n")
+    else:
+        raise CommandError("no task/audit.md: before the task is frozen, a fresh agent that has not seen "
+                           "this conversation tries to break the split and the evaluator (the audit skill) "
+                           "and writes what it found there. To freeze without one, pass "
+                           "--skip-audit \"why\"; the reason is printed in the final report.")
 
     owner = state_dir(task) / "project_path.txt"
     if owner.exists() and owner.read_text().strip() != str(project_dir):
@@ -279,14 +293,6 @@ def cmd_init(args: argparse.Namespace) -> int:
                "conditions." if generation else "Otherwise start a new project with a test set.")
         )
 
-    state_dir(task).mkdir(parents=True, exist_ok=True)
-    stored = {"train": data_path(task, "train"), "validation": data_path(task, "validation_inputs"),
-              "test": None if generation else test_inputs}
-    both_labelled = all(f is not None and tgt_col in f.columns for f in (validation_frame, test_frame))
-    found = checks.split_checks(task, validation_frame, test_frame, stored, id_col, tgt_col,
-                                compare_targets=both_labelled)
-    (state_dir(task) / "split_checks.json").write_text(json.dumps(found, indent=2))
-
     Experiments(project_dir).create()
     digest = _freeze_task(task)
     print(f"project '{task['name']}' ready")
@@ -303,34 +309,8 @@ def cmd_init(args: argparse.Namespace) -> int:
     caveat = validation_caveat(task)
     if caveat:
         print(f"  note: {caveat}")
-    if not (project_dir / "task" / "audit.md").exists():
-        print("  note: no task/audit.md, so no fresh agent has tried to break the split and the evaluator "
-              "(the audit skill)")
-    for item in found:
-        print(f"  check: {item}")
-    if found:
-        print("  fix each check above, or explain it in task/brief.md; they are repeated in the final report")
-    skipped = []
-    opaque = [name for name, path in stored.items()
-              if path is not None and not (path.suffix == ".csv" and path.is_file())]
-    if opaque:
-        skipped.append(f"whether the same example appears in two splits, because the {' and '.join(opaque)} "
-                       "inputs are not CSV tables the framework can read; check this yourself")
-    if generation:
-        # Say what was not looked at. "nothing raised" after no checks at all reads as a clean bill.
-        skipped.append("whether validation and the final conditions are distributed alike, because a "
-                       "generation task's conditions carry no label to compare. What was checked is "
-                       "that they do not overlap and that there are enough of them")
-    if not both_labelled and not generation:
-        skipped.append(f"the label distributions of validation and test were not compared, because the "
-                       f"labels files have no '{tgt_col}' column (set data.target_column if it has another name)")
-    elif not task["data"].get("validation_matches_test", True):
-        skipped.append("the label distributions of validation and test were not compared, because the "
-                       "difference is already on record (validation_matches_test = false)")
-    for item in skipped:
-        print(f"  not checked: {item}")
-    if not found:
-        print("  split checks: nothing raised")
+    if skipped.exists():
+        print(f"  not audited: {skipped.read_text().strip()}")
     print(f"next: train a model into model/, make {ENTRY_POINT} work, then run `mlguy validate`")
     return 0
 
@@ -577,6 +557,8 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_new)
 
     p = add("init", "check the task, hide the test labels, freeze task/", cmd_init)
+    p.add_argument("--skip-audit", default=None, metavar="REASON",
+                   help="freeze without task/audit.md; the reason goes in the final report")
 
     p = add("validate", "check that infer.py and scoring work; records the baseline as experiment 0", cmd_validate)
     p.add_argument("--note", default="baseline", help="one line on what this model is")

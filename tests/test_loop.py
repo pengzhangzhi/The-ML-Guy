@@ -207,23 +207,22 @@ def test_new_scaffolds_a_runnable_project(tmp_path):
     assert main(["new", str(target), "--name", "again"]) == 2, "must not overwrite a project"
 
 
-def test_validation_test_mismatch_is_carried_into_init_and_report(project, capsys):
+def test_what_the_user_was_told_about_the_split_reaches_the_report(project, capsys):
     toml = project / "task" / "task.toml"
     toml.write_text(toml.read_text().replace(
         "[metric]",
-        'validation_matches_test = false\n'
         'validation_note = "Validation is drawn like training; the test set is not."\n\n[metric]',
     ))
     run(project, "init")
-    assert "does not ask the same question" in capsys.readouterr().out
+    assert "Validation is drawn like training" in capsys.readouterr().out
 
     run(project, "validate")
     _write_model(project, 2.0)
     run(project, "submit", "--note", "double the scale")
     run(project, "finish")
     report = (project / "REPORT.md").read_text()
-    assert "does not ask the same question" in report
     assert "Validation is drawn like training" in report
+    assert "tried to break the split and the evaluator" in report and "task/audit.md" in report
 
 
 TABULAR_TOML = """\
@@ -487,28 +486,20 @@ def test_a_scoring_change_mid_project_says_how_to_check_it(project, capsys, monk
     assert (project / "experiments" / "0000" / "validation_outputs.csv").exists()
 
 
-def test_init_flags_a_split_that_would_mislead(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
-    project = tmp_path / "leaky"
-    (project / "task" / "data").mkdir(parents=True)
-    write_task(project, 
-        TASK_TOML.replace('type = "regression"', 'type = "classification"')
-                 .replace('primary = "spearman"', 'primary = "accuracy"'))
-    rng = random.Random(3)
-    seqs = ["".join(rng.choice("ACDE") for _ in range(8)) for _ in range(400)]
-    frame = pd.DataFrame({"sequence": seqs}).drop_duplicates("sequence").reset_index(drop=True)
-    train, validation, test = frame[:150].copy(), frame[150:270].copy(), frame[270:330].copy()
-    train["target"] = [i % 2 for i in range(len(train))]
-    validation["target"] = [1 if i % 5 == 0 else 0 for i in range(len(validation))]   # 20% positive
-    test["target"] = [i % 2 for i in range(len(test))]                                 # 50% positive
-    test = pd.concat([test, train[:7]])                                                # 7 leaked rows
-    write_splits(project / "task" / "data", train, validation, test)
+def test_init_refuses_an_unaudited_task_unless_told_why(project, capsys):
+    """The framework holds no opinion about a split: no thresholds, no reading of the inputs. What
+    it holds is that somebody without a stake looked, or that skipping it was said out loud."""
+    (project / "task" / "audit.md").unlink()
+    assert run(project, "init") == 2
+    assert "no task/audit.md" in capsys.readouterr().err
+    assert not (project / "experiments").exists(), "refused before anything is frozen or moved"
 
-    assert run(project, "init") == 0, "checks warn; they do not refuse"
-    out = capsys.readouterr().out
-    assert "7 rows have identical inputs in train and test" in out
-    assert "test has only 67 examples" in out
-    assert "80% of validation but" in out and "plain accuracy" in out
+    assert run(project, "init", "--skip-audit", "a toy project for a demo") == 0
+    assert "not audited: a toy project for a demo" in capsys.readouterr().out
+    run(project, "validate")
+    run(project, "finish")
+    report = (project / "REPORT.md").read_text()
+    assert "were not audited" in report and "a toy project for a demo" in report
 
 
 FOLDER_INFER = '''\

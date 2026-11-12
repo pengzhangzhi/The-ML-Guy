@@ -4,7 +4,7 @@ schema_version = "0.1"
 name = "TODO-project-name"           # short, kebab-case; names the folder under ~/.mlguy/projects/
 
 [task]
-type = "regression"                  # regression | classification | generation
+type = "prediction"                  # prediction | generation
 input = "TODO what one example is"   # e.g. "a protein sequence", "a cell", "a chest X-ray"
 output = "TODO_what_is_predicted"    # e.g. stability, solubility, response, readmission
 
@@ -25,10 +25,8 @@ test_labels = "data/test_labels.csv"            # `mlguy init` moves this out of
 # id_column = "id"
 # target_column = "target"
 
-# Does the validation set ask the same question as the test set? If it does not, hill-climbing
-# on validation can move away from what the user actually wants. Say so here, and the warning
-# follows through to the report.
-validation_matches_test = true
+# Anything the user should know about the split when they read the score: validation drawn
+# differently from test, patients shared between them. Quoted word for word in the report.
 # validation_note = "Validation is drawn like the training set, the test set is not, so ..."
 
 # The score comes from task/evaluate.py, written for this problem and frozen with the task.
