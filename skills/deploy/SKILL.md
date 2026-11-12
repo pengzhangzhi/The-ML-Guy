@@ -5,11 +5,31 @@ description: Finish a The-ML-Guy project: score the test set once, write the rep
 
 # Finishing a project
 
-The work is only useful if the scientist can run it and knows what to trust. Two things stand
-between the experiments and that: a report they can read, and a page they can use.
+The work is only useful if the scientist can run it and knows what to trust. Before
+writing a report and building a page, choose which experiment should become the final model.
+
+## Choose the final submission
+
+**You, the agent, make the selection.** Review `task/brief.md`, the approved task metric,
+and **all** experiments in `experiments/log.jsonl` (not just the most recent status lines).
+The highest validation score is the default. Consider other recorded metrics and, where
+the evidence supports it, practical differences such as model size, inference latency,
+simplicity, and deployment requirements **as they matter to this user**.
+
+When validation performance is comparable, you may prefer a simpler or more practical
+model. Do not invent a universal score tolerance, complexity penalty, or weighted formula:
+what counts as comparable depends on the task and the evidence. Do not claim a model is
+faster, smaller, or simpler without checking. If performance clearly matters above all
+else, favor the top-scoring model.
+
+The framework independently identifies the best validation score. To select it, run
+`mlguy finish`. To select a different successful submission, explain the trade-off and
+run `mlguy finish --experiment N --reason "why this one"`. The reason is preserved in the
+report. Never use the held-out test set to make this choice: the selected submission is
+scored on test **once**, only after selection.
 
 ```bash
-mlguy finish       # runs the final check on the best submission, once, and writes REPORT.md
+mlguy finish       # default: best validation score; alternative: --experiment N --reason "..."
 python app.py      # the page you build
 ```
 
