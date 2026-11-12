@@ -1,13 +1,13 @@
 # The-ML-Guy
 
-Describe a modelling problem — something to predict, or something to generate — to a coding agent (Claude Code or Codex) and get back a trained
+Describe a modelling problem to a coding agent (Claude Code or Codex) and get back a trained
 model, a report, and a web page for using it. It works whether or not you know machine learning.
 
 The design rule: **be exact about the problem and the scoring, and leave the modelling open.**
 
 | Strict: fixed when you approve the brief | Free: the agent's call |
 | --- | --- |
-| Task: input, output, prediction or generation | Model family and architecture |
+| Task: what the model is given and what it returns | Model family and architecture |
 | Data: train, validation and test sets | How the data is read, features and encodings |
 | The evaluator (`task/evaluate.py`) and its direction | Hyperparameters and training procedure |
 | Budget | Code structure, libraries, order of work |
@@ -45,7 +45,7 @@ where the agent can weigh it against the problem in front of it.
 ## Status
 
 Early but complete end to end: the project contract, the scoring rubric, the hill-climbing
-loop with its budget and experiment records, and the six skills. It has been run end to end
+loop with its budget and experiment records, and the seven skills. It has been run end to end
 by both Claude Code and Codex on five problems of different shapes — a clinical table,
 single-cell annotation, pathology tiles, protein variant ranking, and a generative design
 task. What was asked and what came back is in [gallery/](gallery/).
@@ -53,7 +53,7 @@ task. What was asked and what came back is in [gallery/](gallery/).
 See [INSTALL.md](INSTALL.md) to set it up for Claude Code or Codex.
 
 There is no sandbox. The agent runs with your permissions. Scores are protected against
-accidents (test labels live outside the project folder), not against an agent that
+accidents (the test split lives outside the project folder), not against an agent that
 deliberately goes looking for them.
 
 ## Install
@@ -96,12 +96,11 @@ primary = "recall_at_top20pct"     # a name evaluate.py reports
 direction = "maximize"
 ```
 
-It is called as `python task/evaluate.py --outputs FILE --reference LABELS --inputs PATH
---split validation|final --result FILE` and writes `{"metrics": {...}}`. `--inputs` is what the
-model was given for that split, so the score can depend on the example itself. The framework
-decides which labels it is given and when: validation labels on every submission, test labels once, at the
-end. `mlguy score --outputs FILE` runs it on any file, to check that it tells good outputs from
-bad before the task is frozen.
+It is called as `python task/evaluate.py --outputs PATH [--reference PATH] [--inputs PATH]
+--split validation|final --result FILE` and writes `{"metrics": {...}}`. The framework decides
+which split it is given and when: validation on every submission, the test split once, at the
+end. `mlguy score --outputs PATH` runs it on any outputs, to check that it tells good from bad
+before the task is frozen. Defining it with the user is the `evaluation` skill.
 
 **The audit.** Whoever builds the split and writes the evaluator is about to hill-climb on them,
 so before they are frozen, a fresh agent with no stake in the result tries to break them:
@@ -111,10 +110,11 @@ inside the splits, a test set that does not match the intended use. Its report,
 split, so `mlguy init` refuses without the audit, and without the user's approval recorded in
 the brief.
 
-**Generation is experimental.** A generative model has no answer key, so it always needs an
-evaluator, and the same `infer.py` is asked for `--n N --seed S` samples per condition. The
-mechanics are in place and tested on a toy problem; they have not yet been proven on a real
-one. Prediction is what the framework is being hardened for first.
+**One contract for every task.** The framework has no kinds of task: no prediction mode, no
+generation mode, no metrics, no formats. A split is up to two things — inputs the model is given,
+and a reference only the evaluator sees — and either can be anything. A task that samples fixes
+its sample count and seed in `[infer] args`, and its evaluator enforces them; a task that ranks,
+segments, forecasts or designs does whatever it needs the same way.
 
 ## Gallery
 
@@ -132,17 +132,16 @@ the same way is the whole of your half of the job.
 ```
 project/
 ├── task/            STRICT: brief.md (with the user's approval), task.toml, evaluate.py, audit.md, data
-├── infer.py         FIXED INTERFACE: --model DIR --input PATH --output FILE
-│                    (generation, experimental, adds --n N --seed S and writes n rows per condition)
+├── infer.py         FIXED INTERFACE: --model DIR [--input PATH] --output PATH [+ the task's [infer] args]
 ├── src/             FREE: any code, any structure
 ├── model/           the model as it stands now
 ├── experiments/     written only by `mlguy submit`: log.jsonl + a snapshot per submission
-├── final/           the scored submission, its test outputs and the test labels (by `mlguy finish`)
+├── final/           the scored submission, its test outputs and the test reference (by `mlguy finish`)
 ├── REPORT.md        written by `mlguy finish`
 └── app.py           FREE: the page, built by the agent for this problem
 ```
 
-Until `mlguy finish`, the test labels live in `~/.mlguy/projects/<name>/` (or under
+Until `mlguy finish`, the test split lives in `~/.mlguy/projects/<name>/` (or under
 `MLGUY_HOME`), outside the project folder, along with a hash of every file in `task/` taken when
 the brief was approved. A project folder is a git repository; `submit` and `finish` commit to it —
 but not `task/data`, which is usually too large and is fingerprinted rather than committed, so a
@@ -152,21 +151,24 @@ clone needs the data back from wherever the brief says it came from.
 project's page call it. `task/` is frozen and `src/` is free, so everything that decides what a
 good model means is settled before any model is trained, and nothing about how to build one is.
 
-**The framework does not depend on the form of a task's inputs.** They can be a table, an expression matrix, a
-folder of images or structures; only the project's code has to open them. The framework knows two
-things about an example, its id and its label, and matches outputs to labels by id.
+**The framework does not read a task's data.** Inputs and references can be a table, an
+expression matrix, a folder of images or structures; only the project's code and its evaluator
+open them.
 
 ```toml
 [data]
-train             = "data/train.h5ad"            # anything
-validation_inputs = "data/validation.h5ad"       # anything
-validation_labels = "data/validation_labels.csv" # id, target (generation: the conditions' ids alone)
-test_inputs       = "data/test.h5ad"
-test_labels       = "data/test_labels.csv"       # moved out of the project by `mlguy init`
+train                = "data/train.h5ad"           # anything; never read by mlguy
+validation_inputs    = "data/validation.h5ad"      # what infer.py is given
+validation_reference = "data/validation_ref.csv"   # what only evaluate.py sees
+test_inputs          = "data/test.h5ad"            # both test parts are moved out
+test_reference       = "data/test_ref.csv"         #   of the project by `mlguy init`
+
+[infer]
+args = { n = 20, seed = 0 }                        # optional: passed to infer.py as --n 20 --seed 0
 ```
 
 There is no built-in page and no domain code in the core. The agent writes `app.py` for the
-problem in front of it: the amylase example accepts FASTA and names each variant by its
+problem in front of it: a protein-variant page might accept FASTA and name each variant by its
 mutations; a clinical model would look nothing like it.
 
 ## For agents
@@ -180,6 +182,7 @@ the commands, and leaves the judgment to the agent.
 | `audit` | Run by a fresh agent: try to break the split and the evaluator before they are frozen |
 | `research` | The loop: the goal, the rubric, the budget, the commands. The approach is the agent's own |
 | `deploy` | Score the test set once, write the report, build a page for the user's problem, record what was learned |
+| `evaluation` | Turn what the user means by success into a metric on a split, try to break it, and write `task/evaluate.py` |
 | `environment` | Learn the user's machine — compute, scheduler, storage, where code and environments go, how to build one — prove it with a small job, and write it down once per machine |
 | `writing` | Used by the others for anything the user reads: what they need first, in their words, with the depth kept and the padding cut |
 

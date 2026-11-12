@@ -1,9 +1,10 @@
-"""A worked evaluator for a prediction task. Copy it, replace the marked part, delete the rest.
+"""A worked case: one output per example, matched by id to a known answer in the reference.
 
-Everything here except `score` is the contract, and is the same for every prediction task. `score`
-is yours: it is the only place that knows what this problem means.
+This is `reference/evaluate.py` filled in for that shape of problem — a CSV of `id, prediction`
+scored against a reference CSV of `id, target`. Use it if your problem has that shape; the id
+matching and the refusals are the part worth keeping. `score` is still yours.
 
-    python evaluate.py --outputs FILE --reference LABELS --inputs PATH \
+    python evaluate.py --outputs FILE --reference FILE [--inputs PATH] \
                        --split validation|final --result FILE
 """
 

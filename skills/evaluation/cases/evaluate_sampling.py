@@ -1,13 +1,12 @@
-"""A worked evaluator for a generation task. Copy it, replace the marked part, delete the rest.
+"""A worked case: the model draws samples for each condition, judged without an answer key.
 
-A generative task has no answer key, so this script is the entire definition of what good means.
-The contract below is what stops it being gamed; `quality` is yours.
+This is `reference/evaluate.py` filled in for that shape of problem. --inputs is a CSV of the
+conditions to generate for, each with an `id`; infer.py is called with `[infer] args` such as
+`--n 20 --seed 0` and writes `n` rows per condition (`id, sample`). There is no answer to match,
+so this script is the whole definition of good. `quality` is yours.
 
-    python evaluate.py --outputs FILE --reference CONDITIONS --inputs PATH \
+    python evaluate.py --outputs FILE --inputs CONDITIONS [--reference PATH] \
                        --split validation|final --result FILE
-
---reference lists the conditions to generate for, by id, and carries no target. --outputs holds
-`n` rows for every one of them, each row carrying its condition's id.
 """
 
 from __future__ import annotations
@@ -34,20 +33,20 @@ def quality(sample: str, condition) -> float:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--outputs", required=True)
-    parser.add_argument("--reference", required=True)
-    parser.add_argument("--inputs", required=True)   # generation almost always needs the conditions
+    parser.add_argument("--reference")               # real examples to compare against, if any
+    parser.add_argument("--inputs", required=True)   # the conditions
     parser.add_argument("--split", choices=["validation", "final"], required=True)
     parser.add_argument("--result", required=True)
     args = parser.parse_args()
 
-    # How many samples each condition gets is fixed by the task, so read it from task.toml rather
-    # than hard-coding it. Resolved against this file, not the working directory.
-    task = tomllib.loads((Path(__file__).parent / "task.toml").read_text())
-    expected = task["sampling"]["final_n" if args.split == "final" else "n"]
+    # How many samples each condition gets is fixed by the task's [infer] args, so read it from
+    # task.toml rather than hard-coding it. Resolved against this file, not the working directory.
+    infer = tomllib.loads((Path(__file__).parent / "task.toml").read_text())["infer"]
+    expected = int((infer.get("final_args", infer["args"]) if args.split == "final" else infer["args"])["n"])
 
     outputs = pd.read_csv(args.outputs, dtype={"id": str})
     conditions = pd.read_csv(args.inputs, dtype={"id": str}).set_index("id")
-    wanted = pd.read_csv(args.reference, dtype={"id": str})["id"].tolist()
+    wanted = conditions.index.tolist()
 
     if "sample" not in outputs.columns:
         raise SystemExit("outputs need a `sample` column")

@@ -17,18 +17,14 @@ refuses if it changed. That includes `task/evaluate.py`, when the task has its o
 One more thing is fixed, the command that runs your model:
 
 ```
-python infer.py --model model --input PATH --output outputs.csv
+python infer.py --model model --input PATH --output PATH [the task's [infer] args]
 ```
 
-`PATH` is a split's inputs, in whatever form the task stores them. The output is a CSV with one
-row per example (a generative task writes several per condition — see below): its `id`, and
-whatever `task/evaluate.py` reads from it — by convention a `prediction` column. Read the evaluator: it is the only thing that decides whether a column is
-needed, extra or wrong, and some refuse outputs they did not expect. `mlguy` and the project's
-page both call `infer.py`, so it must keep working.
-
-A generative task is called with two more arguments, `--n N --seed S` from `[sampling]` in
-`task.toml`, and writes `N` rows for every condition in `--input`, each carrying that condition's
-id. A submission holding a different number per condition is refused, not scored.
+`--input` is a split's inputs, in whatever form the task stores them. `--output` is a file or a
+folder, in whatever form `task/evaluate.py` reads; `[infer] args` in `task.toml`, if any, are
+passed as `--key value`. Read the evaluator: it is the only thing that decides what a good output
+looks like, and it refuses outputs it cannot score. `mlguy` and the project's page both call
+`infer.py`, so it must keep working.
 
 `infer.py` is run from a copy of the project holding only `infer.py`, `src/` and `model/` — and
 the user runs the finished model the same way, out of `final/`. Neither has a `task/`, so
@@ -54,8 +50,8 @@ mlguy finish                       # when you judge the work is done (--experime
 code and model, and tells you the score and the remaining budget. It refuses once the
 submissions are spent. Any other limit in `[budget]` — hours, a deadline, GPU-hours, money — is
 the user's and is yours to keep: `mlguy` shows it to you and prints it in the report, and
-stops nothing. A crash or a malformed predictions file is recorded as an error, not as a score of zero,
-but it still uses up a submission, so test your prediction command before you submit.
+stops nothing. A crash or outputs the evaluator refuses are recorded as an error, not as a score of zero,
+but it still uses up a submission, so test `infer.py` before you submit.
 
 `mlguy submit` runs `infer.py` on the machine you run it on. If the model needs a GPU or a
 scheduler job to predict, run `mlguy submit` inside such a job (with Slurm, `srun ... mlguy
@@ -87,17 +83,17 @@ look at the whole table before you do, and weigh whatever the brief makes releva
 There are no fixed penalties for complexity and no thresholds to clear. Make the judgement, and
 write down why in `--reason` so the user can disagree with it.
 
-Validation is the shared yardstick, and its labels are in the project only so that it can be
+Validation is the shared yardstick, and its reference is in the project only so that it can be
 scored. Read whatever `submit` reports, including any breakdown the evaluator gives. Make your
 own choices (hyperparameters, which idea to submit) on the training data, by cross-validation
-or however you like. Computing your own numbers against the validation labels outside `submit`
+or however you like. Computing your own numbers against the validation reference outside `submit`
 makes every recorded score optimistic.
 
 The budget is a ceiling, not a target. When you judge that more submissions would mostly fit
 noise, stop, and tell the user why.
 
 The final check belongs to `mlguy finish`: once, at the end, on whichever submission scored
-best. Do not go looking for the test labels, and do not tune a model to an evaluator's blind spots: a score
+best. Do not go looking for the test split, and do not tune a model to an evaluator's blind spots: a score
 won that way will not survive the final check or the user.
 
 ## Working well

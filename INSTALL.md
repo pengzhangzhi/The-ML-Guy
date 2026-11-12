@@ -44,12 +44,13 @@ the `AGENTS.md` of the project you are working in:
 ```markdown
 ## Building ML models
 
-This machine has The-ML-Guy installed. When asked to build a prediction model from data,
+This machine has The-ML-Guy installed. When asked to build an ML model from data,
 read and follow /absolute/path/to/The-ML-Guy/skills/build-project/SKILL.md, then
 skills/research/SKILL.md, then skills/deploy/SKILL.md. When build-project asks for an
 audit, start a separate Codex session (`codex exec`) that follows skills/audit/SKILL.md.
 Before writing anything the user will read, follow skills/writing/SKILL.md. To learn what
-this machine offers, follow skills/environment/SKILL.md.
+this machine offers, follow skills/environment/SKILL.md; to define how the model is
+judged, skills/evaluation/SKILL.md.
 Run `mlguy --help` for the commands.
 ```
 
@@ -67,14 +68,14 @@ not from a template you fill in alone.
 
 ## Where things are kept
 
-Test labels, the hash of the frozen task, and the final test score live in
+The test split, the hash of the frozen task, and the final test score live in
 `~/.mlguy/projects/<project-name>/`, outside the project folder, so that training code cannot
 read them by accident. Set `MLGUY_HOME` before `mlguy init` to put them somewhere else; the
 project remembers it, so later commands need not set it. Once `mlguy finish` has scored the test set, it
-copies the labels into the project's `final/` folder, since there is nothing left to protect.
+copies the test reference into the project's `final/` folder, since there is nothing left to protect.
 
 ## What this does not do
 
 There is no sandbox. The agent runs with your permissions, like any coding-agent session.
 Scores are protected against accidents, not against an agent that deliberately goes looking
-for the test labels.
+for the test split.
