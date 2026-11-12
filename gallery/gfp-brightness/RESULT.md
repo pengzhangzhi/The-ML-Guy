@@ -22,6 +22,3 @@ indicators — no language model, no GPU needed to run it.
 
 **What it took:** 5 of 12 submissions. The agent stopped early.
 
-**What it doesn't show:** the held-out variants come from the same deep mutational scan as the
-training data, split by mutation count. Real computational designs may not look like that scan's
-sequences, and that shift is not measured here. Brightness is also one assay on one protein.

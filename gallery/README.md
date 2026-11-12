@@ -37,8 +37,13 @@ of them are worth reading even if the problem is nothing like yours:
 ## Reading the numbers
 
 These are real runs, not benchmarks. Each problem was built once or twice, and each result was
-scored a single time on data held back from the start. The reports say what they do not show,
-and so does each `RESULT.md` here — that honesty is the point of the tool, not a disclaimer on it.
+scored a single time on data held back from the start.
+
+What is summarised here in a few lines arrives as a full `REPORT.md`, and the part worth
+expecting is the part that argues against itself. The pathology report, having given its 93%,
+goes on to work out that because stroma is under-called the tumour–stroma ratio reads low — a
+true 30% comes out around 21% — and says to use it for ranking slides rather than as a number.
+Nobody asked it for that. Every report here has a section like it.
 
 The data is not in this folder. Each prompt says what it is.
 

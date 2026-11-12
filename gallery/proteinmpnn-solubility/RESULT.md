@@ -22,6 +22,3 @@ moderate model instead, with the reason written into the report.
 
 **What it took:** 4 of 6 submissions, about 12 GPU-hours on one A100.
 
-**What it doesn't show:** the test backbones are natural PDB structures, not designed ones.
-Nothing was expressed — "soluble" here is a geometric estimate of exposed hydrophobic patches,
-not an assay. ESMFold is the only check that a design folds.

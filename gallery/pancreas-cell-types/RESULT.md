@@ -17,7 +17,3 @@ of being silently wrong.
 **What it took:** 2 of 8 submissions, CPU only, about a minute of training per attempt. The agent
 stopped early rather than spend the rest of the budget on noise.
 
-**What it doesn't show:** one held-out study is one sample of "a new lab" — a better test than a
-random split, but still n=1 on the thing that varies. The labels are the atlas's labels, not
-ground truth. And epsilon has 14 cells in the test set, so its contribution to the average is
-noisy by construction.

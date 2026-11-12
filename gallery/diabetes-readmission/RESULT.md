@@ -16,7 +16,3 @@ in those terms rather than as a metric, because that is the decision the team ac
 **What it took:** 4 of 10 submissions, CPU only, minutes of training per attempt. The agent
 stopped early, judging that more attempts would be fitting noise.
 
-**What it doesn't show:** "readmitted" means recorded in this hospital group — a patient
-readmitted elsewhere counts as a negative. The file has no discharge dates, so encounter order
-stands in for time. And calling someone does not itself prevent a readmission: this says who the
-list finds, not what acting on it achieves.

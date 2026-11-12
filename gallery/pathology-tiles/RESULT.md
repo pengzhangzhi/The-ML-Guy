@@ -24,6 +24,3 @@ after that helped — a bigger model didn't, an ensemble barely did, more augmen
 
 **What it took:** 5 of 8 submissions, CPU only.
 
-**What it doesn't show:** the final split is not patient-grouped, because no slide identifiers
-exist for these tiles, so the score is optimistic. The tiles are 28×28 pixels, so some confusions
-— stroma against smooth muscle above all — are a resolution limit rather than a model failure.
