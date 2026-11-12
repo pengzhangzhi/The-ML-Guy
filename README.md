@@ -184,7 +184,7 @@ the commands, and leaves the judgment to the agent.
 Starting a project by hand:
 
 ```bash
-mlguy new my-project --name my-project   # skeleton: task.toml, brief.md, a stub infer.py
+mlguy new my-project --name my-project   # skeleton: task.toml and a stub infer.py
 ```
 
 ## Licence

@@ -1,4 +1,4 @@
-# Project brief: TODO name
+# Project brief: TODO the project's name
 
 Written in the user's language, not in ML terms. The user approves this before anything is
 built, so every line has to be something they can check.

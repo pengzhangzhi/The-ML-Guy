@@ -30,6 +30,8 @@ again.
   single mutants has not been shown to work on combinations, and saying so is part of the job.
 - **Carry the caveats forward.** The report quotes `validation_note` and points at
   `task/audit.md`; say what both mean for this result, in words they will understand.
+- **Say how far the search moved it.** The table lists the starting model as experiment 0; put
+  the change from there to the result in a sentence.
 - **Be straight when nothing improved.** If no submission beat the baseline, say that plainly
   and say what you would try next. A report that oversells is worse than no report.
 

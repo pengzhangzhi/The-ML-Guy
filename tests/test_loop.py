@@ -201,8 +201,10 @@ def test_status_json_reports_best_and_budget(project, capsys):
 def test_new_scaffolds_a_runnable_project(tmp_path):
     target = tmp_path / "fresh"
     assert main(["new", str(target), "--name", "fresh-project"]) == 0
-    for name in ["task/task.toml", "task/brief.md", "task/evaluate.py", "infer.py", "PROJECT_MEMORY.md"]:
+    for name in ["task/task.toml", "infer.py"]:
         assert (target / name).exists(), name
+    assert sorted(p.name for p in (target / "task").iterdir()) == ["task.toml"], \
+        "the rest of task/ is the agent's to write; its starting points live with the skill"
     assert "fresh-project" in (target / "task" / "task.toml").read_text()
     assert main(["new", str(target), "--name", "again"]) == 2, "must not overwrite a project"
 
@@ -457,7 +459,7 @@ def test_the_report_and_status_name_the_result_rather_than_calling_it_the_best(p
     report = (project / "REPORT.md").read_text()
     assert "best submission" not in report, "experiment 1 is the result; experiment 0 scored best"
     assert "Validation (experiment 1)" in report
-    assert "experiment 1, the result, scored" in report
+    assert "The result is experiment 1" in report and "Experiment 1 is the result" in report
     assert "chosen over experiment 0" in report
 
     capsys.readouterr()

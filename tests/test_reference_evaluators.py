@@ -44,3 +44,11 @@ def test_a_reference_evaluator_runs_far_enough_to_report_its_arguments(script):
     assert done.returncode == 0, done.stderr
     for argument in ARGUMENTS:
         assert argument in done.stdout
+
+
+def test_the_reference_brief_ends_with_the_line_init_looks_for():
+    """The brief template lives with the skill, not in the framework, so nothing but this test
+    ties its last line to the one `mlguy init` refuses without."""
+    from mlguy.cli import APPROVAL
+    brief = (REFERENCE / "brief.md").read_text()
+    assert any(line.startswith(APPROVAL) for line in brief.splitlines())

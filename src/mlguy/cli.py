@@ -184,20 +184,17 @@ def cmd_new(args: argparse.Namespace) -> int:
 
     toml_path = target / "task" / "task.toml"
     toml_path.write_text(toml_path.read_text().replace("TODO-project-name", args.name))
-    brief = target / "task" / "brief.md"
-    brief.write_text(brief.read_text().replace("TODO name", args.name))
     # data is frozen by its hash, not by git, so large inputs do not end up in every clone
     (target / ".gitignore").write_text("model/\n!final/model/\nwork/\n__pycache__/\ntask/data/\n")
     subprocess.run(["git", "init", "-q"], cwd=target, capture_output=True)
 
     print(f"created {target}")
     print("  task/task.toml   the task: fill in every TODO, then agree it with the user")
-    print("  task/brief.md    the one page the user approves")
-    print("  this folder is a git repository: `validate`, `submit` and `finish` commit to it (not task/data)")
-    print("  task/evaluate.py the scoring, as a stub: write it for the problem; it is frozen with the task")
     print("  infer.py         the one fixed interface, as a stub; src/ is yours")
-    print("next: prepare task/data and write the evaluator, have the rubric audited, and get the brief")
-    print("      approved. Then `mlguy init` freezes it, and a first model earns its score.")
+    print("  this folder is a git repository: `validate`, `submit` and `finish` commit to it (not task/data)")
+    print("next: the build-project skill covers the rest of task/ — the data, evaluate.py, brief.md and")
+    print("      the audit — and has a starting point for each in its reference/ folder. `mlguy init`")
+    print("      freezes task/ once the brief is approved and the audit is written.")
     return 0
 
 
