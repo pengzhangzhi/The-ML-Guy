@@ -19,7 +19,6 @@ schema_version = "0.1"
 name = "tiny-test-project"
 
 [task]
-type = "regression"
 input = "protein_sequence"
 output = "activity"
 
@@ -90,9 +89,11 @@ def run(project: Path, *args: str) -> int:
 
 def test_full_loop(project, capsys):
     assert run(project, "init") == 0
-    assert not (project / "task" / "data" / "test_labels.csv").exists(), "the test labels should be gone"
-    assert (project / "task" / "data" / "test_inputs.csv").exists()
-    assert "target" not in pd.read_csv(project / "task" / "data" / "test_inputs.csv").columns
+    data = project / "task" / "data"
+    assert not (data / "test_reference.csv").exists(), "the test reference should be gone"
+    assert not (data / "test_inputs.csv").exists(), "and the test inputs with it"
+    held = project.parent / "state" / "projects" / "tiny-test-project"
+    assert "target" not in pd.read_csv(held / "test_inputs.csv").columns, "inputs carry no answers"
 
     assert run(project, "validate") == 0
     experiments = Experiments(project)
@@ -232,7 +233,6 @@ schema_version = "0.1"
 name = "tabular-test-project"
 
 [task]
-type = "regression"
 input = "a cell line and a drug dose"
 output = "response"
 
@@ -285,8 +285,8 @@ def test_a_project_with_no_sequences_at_all(tmp_path, monkeypatch):
     (project / "model" / "weights.json").write_text(json.dumps({"slope": 1.5}))
 
     assert run(project, "init") == 0
-    hidden = pd.read_csv(project / "task" / "data" / "test_inputs.csv")
-    assert list(hidden.columns) == ["id", "cell_line", "dose", "replicate"], "init leaves the inputs alone"
+    hidden = pd.read_csv(project.parent / "state" / "projects" / "tabular-test-project" / "test_inputs.csv")
+    assert list(hidden.columns) == ["id", "cell_line", "dose", "replicate"], "init moves the inputs, unchanged"
     assert run(project, "validate") == 0
     assert Experiments(project).best("pearson", "maximize")["metrics"]["pearson"] > 0.9
     assert run(project, "finish") == 0
@@ -321,7 +321,7 @@ def test_score_only_checks_a_given_file(project, tmp_path, capsys):
     for args in (["score"], ["score", "--split", "test"]):
         with pytest.raises(SystemExit):
             run(project, *args)
-    ids = pd.read_csv(project / "task" / "data" / "validation_labels.csv")["id"]
+    ids = pd.read_csv(project / "task" / "data" / "validation_reference.csv")["id"]
     pd.DataFrame({"id": ids, "prediction": range(len(ids))}).to_csv(tmp_path / "out.csv", index=False)
     capsys.readouterr()
     assert run(project, "score", "--outputs", str(tmp_path / "out.csv")) == 0
@@ -329,12 +329,12 @@ def test_score_only_checks_a_given_file(project, tmp_path, capsys):
     assert Experiments(project).all() == [], "nothing is recorded"
 
 
-def test_finish_leaves_the_test_outputs_and_labels_in_final(project):
+def test_finish_leaves_the_test_outputs_and_reference_in_final(project):
     run(project, "init")
     run(project, "validate")
     run(project, "finish")
-    outputs = pd.read_csv(project / "final" / "test_outputs.csv")
-    labels = pd.read_csv(project / "final" / "test_labels.csv")
+    outputs = pd.read_csv(project / "final" / "test_outputs")
+    labels = pd.read_csv(project / "final" / "test_reference.csv")
     assert set(outputs["id"]) == set(labels["id"]) and "target" in labels
     report = (project / "REPORT.md").read_text()
     assert "0 of 2 submissions used" in report and "after the budget was spent" not in report
@@ -351,9 +351,9 @@ def test_python_caches_in_task_do_not_count_as_a_change(project, capsys):
     _write_model(project, 2.0)
     assert run(project, "submit", "--note", "after a cache appeared") == 0
 
-    (project / "task" / "data" / "validation_labels.csv").write_text("id,target\nv0,1\n")
-    assert run(project, "submit", "--note", "after the labels changed") == 2
-    assert "data/validation_labels.csv (changed)" in capsys.readouterr().err, "the error names the file"
+    (project / "task" / "data" / "validation_reference.csv").write_text("id,target\nv0,1\n")
+    assert run(project, "submit", "--note", "after the reference changed") == 2
+    assert "data/validation_reference.csv (changed)" in capsys.readouterr().err, "the error names the file"
 
 
 def test_the_baseline_cannot_become_a_free_submission(project):
@@ -387,7 +387,7 @@ def test_each_submission_is_one_score_set_against_the_best(project, capsys):
     _write_model(project, -1.0)
     run(project, "submit", "--note", "flip the sign")
     record = Experiments(project).all()[-1]
-    assert set(record) >= {"metrics", "n_validation"} and "interval" not in record
+    assert "metrics" in record and "interval" not in record
     out = capsys.readouterr().out
     assert "-1.9397 spearman against experiment 0, the best before this" in out
     assert "best so far: experiment 0" in out
@@ -415,7 +415,7 @@ def test_what_a_submission_costs_to_run_is_recorded_and_shown(project, capsys):
     capsys.readouterr()
     assert run(project, "finish") == 0
     report = (project / "REPORT.md").read_text()
-    assert "on disk" in report and "validation examples on the machine" in report
+    assert "on disk" in report and "over the validation split on the machine" in report
 
 
 def test_an_error_before_the_snapshot_exists_is_still_recorded(project, capsys):
@@ -482,10 +482,10 @@ def test_a_scoring_change_mid_project_says_how_to_check_it(project, capsys, monk
     assert run(project, "submit", "--note", "after an upgrade") == 0
     out = capsys.readouterr().out
     assert "scoring code changed during this project" in out
-    assert "mlguy score --outputs experiments/0000/validation_outputs.csv" in out
+    assert "mlguy score --outputs experiments/0000/validation_outputs" in out
     assert f"spearman={baseline['metrics']['spearman']:.4f}" in out, \
         "with the number to compare against, so the check is one command and one glance"
-    assert (project / "experiments" / "0000" / "validation_outputs.csv").exists()
+    assert (project / "experiments" / "0000" / "validation_outputs").exists()
 
 
 def test_init_refuses_an_unaudited_task_unless_told_why(project, capsys):
@@ -518,13 +518,13 @@ pd.DataFrame(rows).to_csv(a.output, index=False)
 
 
 def test_inputs_can_be_anything_the_projects_code_can_read(tmp_path, monkeypatch):
-    """One file per example in a folder, no table anywhere: the core only needs ids and labels."""
+    """One file per example in a folder, no table anywhere: the core reads neither inputs nor reference."""
     monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
     project = tmp_path / "files"
     data = project / "task" / "data"
     toml = TABULAR_TOML.replace(DATA_TOML, 'train = "data/train"\nvalidation_inputs = "data/validation"\n'
-                                'validation_labels = "data/validation_labels.csv"\ntest_inputs = "data/test"\n'
-                                'test_labels = "data/test_labels.csv"\n')
+                                'validation_reference = "data/validation_reference.csv"\ntest_inputs = "data/test"\n'
+                                'test_reference = "data/test_reference.csv"\n')
     assert "data/validation\"" in toml
     data.mkdir(parents=True)
     write_task(project, toml)
@@ -537,12 +537,12 @@ def test_inputs_can_be_anything_the_projects_code_can_read(tmp_path, monkeypatch
             (data / split / f"{split}-{i}.json").write_text(json.dumps({"reading": reading}))
             labels.append({"id": f"{split}-{i}", "target": reading * 2 + rng.random() * 0.1})
         if split != "train":
-            pd.DataFrame(labels).to_csv(data / f"{split}_labels.csv", index=False)
+            pd.DataFrame(labels).to_csv(data / f"{split}_reference.csv", index=False)
     (project / "infer.py").write_text(FOLDER_INFER)
     (project / "model").mkdir()
 
     assert run(project, "init") == 0
-    assert (data / "test").is_dir() and not (data / "test_labels.csv").exists()
+    assert not (data / "test").exists() and not (data / "test_reference.csv").exists()
     assert run(project, "validate") == 0
     assert Experiments(project).best("pearson", "maximize")["metrics"]["pearson"] > 0.99
     assert run(project, "finish") == 0
@@ -621,3 +621,26 @@ def test_only_the_submission_count_is_enforced(project, capsys):
     assert limits["deadline"] == {"limit": "2020-01-01", "enforced": False}
     run(project, "finish")
     assert "the agent's to keep: max_gpu_hours = 40" in (project / "REPORT.md").read_text()
+
+
+def test_the_framework_has_no_kinds_of_task(project, capsys):
+    """One contract for everything: a task declares inputs and a reference per split, and any
+    arguments infer.py needs. Keys from the contract that knew two kinds of task are refused
+    rather than ignored, because an ignored test_labels file is a test set left in the project."""
+    toml = project / "task" / "task.toml"
+    toml.write_text(toml.read_text().replace("test_reference =", "test_labels ="))
+    assert run(project, "init") == 2
+    assert "test_labels" in capsys.readouterr().err
+    assert (project / "task" / "data" / "test_reference.csv").exists(), "nothing was moved"
+
+
+def test_a_task_that_holds_nothing_back_reruns_validation_at_the_end(project, capsys):
+    toml = project / "task" / "task.toml"
+    text = toml.read_text()
+    toml.write_text("\n".join(line for line in text.splitlines() if not line.startswith("test_")) + "\n")
+    assert run(project, "init") == 0
+    assert "no test split is held back" in capsys.readouterr().out
+    run(project, "validate")
+    assert run(project, "finish") == 0
+    report = (project / "REPORT.md").read_text()
+    assert "No test split was held back" in report and "| Final check |" in report

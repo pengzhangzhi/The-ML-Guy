@@ -14,7 +14,6 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from mlguy import judge
 
 SNAPSHOT_PATHS = ("infer.py", "src", "model")
 SNAPSHOT_WARN_MB = 200
@@ -42,7 +41,7 @@ def tool_version() -> str:
     return __version__
 
 
-SCORING_SOURCES = ("project.py", "judge.py")
+SCORING_SOURCES = ("project.py",)
 
 
 def scoring_digest() -> str:
@@ -124,6 +123,12 @@ def hash_task(project_dir: Path) -> str:
     return hashlib.sha256(json.dumps(task_manifest(project_dir), sort_keys=True).encode()).hexdigest()
 
 
+def is_better(new: float, old: float | None, direction: str) -> bool:
+    if old is None:
+        return True
+    return new > old if direction == "maximize" else new < old
+
+
 class Experiments:
     """The experiments/ folder: log.jsonl plus one folder per submission."""
 
@@ -151,7 +156,7 @@ class Experiments:
     def best(self, primary: str, direction: str) -> dict | None:
         best = None
         for record in self.submissions():
-            if best is None or judge.is_better(record["metrics"][primary], best["metrics"][primary], direction):
+            if best is None or is_better(record["metrics"][primary], best["metrics"][primary], direction):
                 best = record
         return best
 
@@ -167,7 +172,7 @@ class Experiments:
 
     def outputs(self, number: int) -> Path:
         """What the submission produced for the validation examples, exactly as written."""
-        return self.dir / f"{number:04d}" / "validation_outputs.csv"
+        return self.dir / f"{number:04d}" / "validation_outputs"
 
     @staticmethod
     def megabytes(path: Path) -> float | None:

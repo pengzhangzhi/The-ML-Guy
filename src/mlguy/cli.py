@@ -10,31 +10,27 @@ import sys
 import tempfile
 from pathlib import Path
 
-import pandas as pd
-
 TEMPLATES = Path(__file__).parent / "templates"
 
 from mlguy import budget, report
-from mlguy.judge import SubmissionError
 from mlguy.project import (
+    ENTRY_POINT,
+    STATE_POINTER,
+    TEST_KEYS,
+    SubmissionError,
     TaskChanged,
     check_task_unchanged,
-    task_changes,
-    direction,
-    ENTRY_POINT,
     data_path,
-    hidden_inputs_path,
-    id_column,
+    direction,
     evaluator_script,
-    is_generation,
-    sampling,
-    STATE_POINTER,
-    mlguy_home,
+    has_test_split,
+    held_back_path,
+    infer_args,
     load_task,
+    mlguy_home,
     score_split,
     state_dir,
-    submission_shape,
-    test_labels_path,
+    task_changes,
     validation_caveat,
 )
 from mlguy.records import (
@@ -48,11 +44,7 @@ from mlguy.records import (
     tool_version,
 )
 
-REQUIRED_KEYS = [("name",), ("task", "type"), ("task", "output"), ("data", "train"),
-                 ("metric", "primary"), ("metric", "direction")]
-# prediction: each split is inputs (any format) plus a table of ids and labels
-PREDICTION_KEYS = [("data", "validation_inputs"), ("data", "validation_labels"),
-                   ("data", "test_inputs"), ("data", "test_labels")]
+REQUIRED_KEYS = [("name",), ("task", "output"), ("metric", "primary"), ("metric", "direction")]
 APPROVAL = "Approved by the user:"
 
 
@@ -62,8 +54,7 @@ class CommandError(Exception):
 
 def _check_keys(task: dict) -> None:
     missing = []
-    generation = task.get("task", {}).get("type") == "generation"
-    for path in REQUIRED_KEYS + ([] if generation else PREDICTION_KEYS):
+    for path in REQUIRED_KEYS:
         node = task
         for key in path:
             if not isinstance(node, dict) or key not in node:
@@ -76,10 +67,7 @@ def _check_keys(task: dict) -> None:
         raise CommandError("metric.direction must be 'maximize' or 'minimize'")
     if not evaluator_script(task).exists():
         raise CommandError(f"no evaluator at {evaluator_script(task)}: every task carries its own "
-                           "(the build-project skill covers writing it)")
-    for inputs, labels in (("validation_inputs", "validation_labels"), ("test_inputs", "test_labels")):
-        if inputs in task["data"] and labels not in task["data"]:
-            raise CommandError(f"task.toml has data.{inputs} but no data.{labels} (the ids to produce outputs for)")
+                           "(the evaluation skill covers writing it)")
 
 
 def _freeze_task(task: dict) -> str:
@@ -124,7 +112,6 @@ def _record_score(experiments: Experiments, task: dict, number: int, note: str,
     }
     if result:
         record["metrics"] = result["metrics"]
-        record["n_validation"] = result["n"]
         cost = _cost(result, snapshot)
         if cost:
             record["cost"] = cost
@@ -141,7 +128,7 @@ def _print_scored(record: dict, task: dict, experiments: Experiments,
                   previous_best: dict | None = None) -> None:
     primary = task["metric"]["primary"]
     metrics = "  ".join(f"{k}={v:.4f}" for k, v in record["metrics"].items())
-    print(f"experiment {record['number']}: {metrics}  (validation, n={record['n_validation']})")
+    print(f"experiment {record['number']}: {metrics}  (validation)")
     if previous_best and previous_best["number"] != record["number"]:
         change = record["metrics"][primary] - previous_best["metrics"][primary]
         print(f"  {change:+.4f} {primary} against experiment {previous_best['number']}, the best before this")
@@ -161,7 +148,7 @@ def _print_scored(record: dict, task: dict, experiments: Experiments,
         if earlier:
             print(f"           to find out, rescore an earlier submission's saved outputs with the code "
                   f"as it is now:\n"
-                  f"             mlguy score --outputs experiments/{earlier['number']:04d}/validation_outputs.csv\n"
+                  f"             mlguy score --outputs experiments/{earlier['number']:04d}/validation_outputs\n"
                   f"           it costs no submission. If it reports {primary}="
                   f"{earlier['metrics'][primary]:.4f}, what a score means has not changed.")
     elif len(scored_by) > 1:
@@ -201,9 +188,7 @@ def cmd_new(args: argparse.Namespace) -> int:
 def cmd_init(args: argparse.Namespace) -> int:
     task = load_task(args.project)
     _check_keys(task)
-    project_dir, data = task["_project_dir"], task["data"]
-    id_col = id_column(task)
-    generation = is_generation(task)
+    project_dir, data = task["_project_dir"], task.get("data", {})
     brief = project_dir / "task" / "brief.md"
     approval = [line for line in (brief.read_text().splitlines() if brief.exists() else [])
                 if line.strip().startswith(APPROVAL)]
@@ -242,64 +227,41 @@ def cmd_init(args: argparse.Namespace) -> int:
             "or start a new project for the new task."
         )
 
-    def labels_table(path: Path, name: str) -> pd.DataFrame:
-        frame = pd.read_csv(path, dtype={id_col: str})
-        for column in [id_col]:
-            if column not in frame.columns:
-                raise CommandError(f"{path.name} has no '{column}' column; found {list(frame.columns)}")
-        if frame[id_col].duplicated().any():
-            raise CommandError(f"{path.name}: {int(frame[id_col].duplicated().sum())} ids are repeated; "
-                               f"every {name} example needs its own id")
-        return frame
+    for key, name in data.items():
+        if key.endswith(("_inputs", "_reference")) or key == "train":
+            if key not in TEST_KEYS and not data_path(task, key).exists():
+                raise CommandError(f"data.{key} names {name}, but there is nothing at {data_path(task, key)}")
 
-    for key in ("train", "validation_inputs", "validation_labels"):
-        if key in data and not data_path(task, key).exists():
-            raise CommandError(f"{key} not found at {data_path(task, key)}")
-    validation_frame = labels_table(data_path(task, "validation_labels"), "validation") \
-        if "validation_labels" in data else None
-
-    # Hold back the test set. Prediction keeps the inputs in the project and hides the labels;
-    # generation hides the inputs too, so the final conditions are unseen until `finish`.
-    test_labels, test_inputs, test_frame = data_path(task, "test_labels"), data_path(task, "test_inputs"), None
-    if test_labels is not None and test_labels.exists():
-        if not test_inputs.exists():
-            raise CommandError(f"test_inputs not found at {test_inputs}")
-        test_frame = labels_table(test_labels, "test")
-        test_labels_path(task).parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(test_labels, test_labels_path(task))
-        if generation:
-            shutil.move(test_inputs, hidden_inputs_path(task))
-        print(f"test {'set' if generation else 'labels'} moved out of the project: {test_labels_path(task).parent}")
-        print("  anything else that still holds those answers — the file your preparation script "
+    # Hold back the test split: its inputs and its reference both leave the project, so nothing
+    # the agent runs can read them, and they come back only for the final check.
+    for key in TEST_KEYS:
+        if key not in data:
+            continue
+        here, kept = data_path(task, key), held_back_path(task, key)
+        if here.exists():
+            kept.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(here, kept)
+            print(f"data.{key} moved out of the project: {kept}")
+        elif not kept.exists():
+            # Declared, but in neither place. Letting init pass here is how a project ends up with
+            # a confident "final" score measured on validation: the test set is gone and nothing says so.
+            raise CommandError(
+                f"data.{key} names {data[key]}, but it is neither in the project at {here} nor held "
+                f"back at {kept}. `mlguy init` moves it out of task/ once; if the state folder has since "
+                f"been deleted or MLGUY_HOME now points somewhere else, that part of the test split is "
+                f"what was lost. Restore {kept.parent}, or set MLGUY_HOME back.")
+    if any(key in data for key in TEST_KEYS):
+        print("  anything else that still holds the test split — the file your preparation script "
               "read — belongs outside the project too; training code can open any path")
-    elif test_labels_path(task).exists():
-        test_frame = pd.read_csv(test_labels_path(task), dtype={id_col: str})
-        if not generation and not test_inputs.exists():
-            raise CommandError(f"test labels are stored but the test inputs are missing at {test_inputs}")
-    elif "test_labels" in data:
-        # Declared, but in neither place. Letting init pass here is how a project ends up with a
-        # confident "final" score measured on validation: the test set is gone and nothing says so.
-        raise CommandError(
-            f"data.test_labels names {data['test_labels']}, but it is neither in the project at "
-            f"{test_labels} nor held back at {test_labels_path(task)}. `mlguy init` moves it out of "
-            f"task/ once; if the state folder has since been deleted or MLGUY_HOME now points "
-            f"somewhere else, the held-back half of the test set is what was lost. Restore "
-            f"{test_labels_path(task).parent}, or set MLGUY_HOME back. "
-            + ("Remove data.test_labels and data.test_inputs only if this task is meant to hold "
-               "nothing back, and the final check should draw fresh samples for the validation "
-               "conditions." if generation else "Otherwise start a new project with a test set.")
-        )
 
     Experiments(project_dir).create()
     digest = _freeze_task(task)
     print(f"project '{task['name']}' ready")
-    sizes = [("validation", validation_frame), ("test", test_frame)]
-    print(f"  train {data['train']}  " + "  ".join(f"{name} {len(frame)}" for name, frame in sizes if frame is not None))
-    if generation:
-        (n, seed), (final_n, final_seed) = sampling(task, "validation"), sampling(task, "test")
-        per = " per condition" if validation_frame is not None else ""
-        print(f"  sampling: {n}{per} on every submission (seed {seed}); {final_n}{per} for the final "
-              f"check (seed {final_seed}" + (", held-out conditions)" if test_frame is not None else ")"))
+    if infer_args(task, "validation"):
+        print(f"  {ENTRY_POINT} is called with {' '.join(infer_args(task, 'validation'))} on every submission, "
+              f"and {' '.join(infer_args(task, 'test'))} for the final check")
+    if not has_test_split(task):
+        print("  no test split is held back: the final check runs the model again on validation")
     scored_by = f"task/{evaluator_script(task).name}"
     print(f"  metric {task['metric']['primary']} ({direction(task)}, {scored_by})  |  {budget.describe(task, [])}")
     print(f"  task frozen (hash {digest[:12]})")
@@ -438,33 +400,36 @@ def cmd_finish(args: argparse.Namespace) -> int:
         raise CommandError(f"no saved submission for experiment {chosen['number']} at {snapshot}")
     try:
         with tempfile.TemporaryDirectory() as tmp:
-            outputs = Path(tmp) / "test_outputs.csv"
+            outputs = Path(tmp) / "test_outputs"
             test_result = score_split(project_dir, "test", run_dir=snapshot, keep_outputs=outputs)
             final_dir = project_dir / "final"
             if final_dir.exists():
                 shutil.rmtree(final_dir)
             shutil.copytree(snapshot, final_dir)
-            shutil.copy2(outputs, final_dir / "test_outputs.csv")
+            shutil.move(outputs, final_dir / "test_outputs")
     except SubmissionError as e:
         raise CommandError(f"the best submission failed the final check:\n{e}")
 
     # The working folder holds whatever was tried last; final/ holds what was scored, and the
-    # page and the user run the model from there. The test set is now spent, so its labels go
-    # beside the outputs: the report can say what the score means case by case.
-    labels_beside = test_labels_path(task).exists()
-    if labels_beside:
-        shutil.copy2(test_labels_path(task), final_dir / "test_labels.csv")
+    # page and the user run the model from there. The test split is now spent, so its reference
+    # goes beside the outputs: the report can say what the score means case by case.
+    reference_beside = None
+    if "test_reference" in task.get("data", {}) and held_back_path(task, "test_reference").exists():
+        kept = held_back_path(task, "test_reference")
+        reference_beside = final_dir / kept.name
+        (shutil.copytree if kept.is_dir() else shutil.copy2)(kept, reference_beside)
 
     final_path.parent.mkdir(parents=True, exist_ok=True)
     final_path.write_text(json.dumps({"number": chosen["number"], "best_on_validation": best["number"],
                                       "reason": reason, "time": now(), **test_result}, indent=2))
     path = report.write(project_dir, task, records, chosen, test_result, best_on_validation=best, reason=reason)
     git_commit(project_dir, f"finish: test {primary}={test_result['metrics'][primary]:.4f}")
-    label = "final" if is_generation(task) else "test"
-    print(f"{label} {primary} = {test_result['metrics'][primary]:.4f}  (n={test_result['n']}, scored once)")
+    print(f"test {primary} = {test_result['metrics'][primary]:.4f}  (scored once)")
     print(f"report written to {path}")
-    print("final/ holds the scored model, with its test outputs" +
-          (" and the test labels beside them" if labels_beside else " beside it"))
+    print("final/ holds the scored model, with its test outputs"
+          + (f" and the test reference ({reference_beside.name}) beside them" if reference_beside else " beside it"))
+    if "test_inputs" in task.get("data", {}):
+        print(f"the test inputs are spent too, and stay at {held_back_path(task, 'test_inputs')}")
     return 0
 
 
@@ -487,8 +452,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         }, indent=2))
         return 0
 
-    verb = "generating" if is_generation(task) else "predicting"
-    print(f"project: {task['name']}  |  {verb} {task['task']['output']}  |  metric {primary}")
+    print(f"project: {task['name']}  |  {task['task']['output']}  |  metric {primary}")
     if not records:
         print("nothing recorded yet; train a model into model/ and run `mlguy validate`")
         return 0
@@ -526,15 +490,7 @@ def cmd_score(args: argparse.Namespace) -> int:
     except SubmissionError as e:
         print(json.dumps({"status": "error", "split": "validation", "error": str(e)}, indent=2))
         return 1
-    # This command scores any file, on purpose: that is how you find out what the evaluator does
-    # with outputs a submission would be refused for. But then the number it prints is not always
-    # the number a submission of the same outputs would earn, and that has to be said here, where
-    # it is read, rather than left for whoever compares the two later.
-    shape = submission_shape(args.project, "validation", args.outputs)
-    extra = {"not_shaped_like_a_submission": shape,
-             "warning": "a submission of these outputs would be refused, not scored, so this number "
-                        "is not comparable with any experiment's"} if shape else {}
-    print(json.dumps({"status": "ok", **result, **extra}, indent=2))
+    print(json.dumps({"status": "ok", **result}, indent=2))
     return 0
 
 
@@ -553,7 +509,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--name", required=True, help="short kebab-case project name")
     p.set_defaults(func=cmd_new)
 
-    p = add("init", "check the task, hide the test labels, freeze task/", cmd_init)
+    p = add("init", "check the task, hold the test split back, freeze task/", cmd_init)
     p.add_argument("--skip-audit", default=None, metavar="REASON",
                    help="freeze without task/audit.md; the reason goes in the final report")
 
@@ -577,7 +533,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = add("score", "run the task's scoring on a file of outputs, to check that it tells good from bad "
                      "before the task is frozen. Records nothing.", cmd_score)
-    p.add_argument("--outputs", required=True, help="a file of outputs for the validation examples")
+    p.add_argument("--outputs", required=True, help="outputs for the validation split, a file or a folder")
 
     args = parser.parse_args(argv)
     try:

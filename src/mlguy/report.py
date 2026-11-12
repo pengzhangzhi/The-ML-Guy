@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from mlguy import budget
-from mlguy.project import (direction, is_generation, sampling, state_dir, test_labels_path,
+from mlguy.project import (direction, has_test_split, held_back_path, infer_args, state_dir,
                            validation_caveat)
 
 
@@ -74,21 +74,20 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
     limit = task.get("budget", {}).get("max_submissions")
     used = f"{counted} of {limit} submissions" if limit else f"{counted} submissions"
     output = task["task"]["output"].replace("_", " ")
-    for prefix in ("predicted ", "generated ", "designed "):   # task.output often already says it
-        if output.lower().startswith(prefix):
-            output = output[len(prefix):]
     given = task["task"].get("input", "").replace("_", " ")
-    final_n, final_seed = sampling(task, "test")
-    if is_generation(task):
-        headline = f"Generates **{output}**" + (f" for {given}." if given else ".")
-        measured = [f"Measured on {test_result['n']} samples drawn fresh for the final check (seed {final_seed}),",
-                    f"scored once, at the end of the search ({used} used)."]
-        columns = f"| Metric | Final check | During the search (experiment {best['number']}) |"
-    else:
-        headline = f"Predicts **{output}** from {given}."
-        measured = [f"Measured on {test_result['n']} held-out examples the model never saw during the search,",
+    headline = f"Takes {given} and returns **{output}**." if given else f"Returns **{output}**."
+    final_args = " ".join(infer_args(task, "test"))
+    if has_test_split(task):
+        measured = ["Measured on the held-out test split, which stayed outside the project until now,",
                     f"scored once, at the end of the search ({used} used)."]
         columns = f"| Metric | Test | Validation (experiment {best['number']}) |"
+    else:
+        # Nothing was held back, so the final check is a fresh run on validation. Say so, because
+        # the two columns then share their inputs and are closer than a held-out test would be.
+        measured = ["No test split was held back. The final check ran the model again on the validation",
+                    "split" + (f", with {final_args}," if final_args else "")
+                    + f" once, at the end of the search ({used} used)."]
+        columns = f"| Metric | Final check | Validation (experiment {best['number']}) |"
 
     lines = [
         f"# {task['name']}: result",
@@ -135,17 +134,16 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
         lines += ["", f"This table shows {len(names)} of the evaluator's {len(scored)} metrics; it also "
                       f"reports {', '.join(scored[len(names):])}. Every submission's full set is in "
                       f"`experiments/log.jsonl`."]
-    # The task fixes how many samples a condition gets, so the example has to quote the task's own
-    # numbers: a copied `--n 100` would tell the user to run the model unlike the way it was scored.
-    n, seed = sampling(task, "validation")
-    usage = ["cd final", "python infer.py --model model --input my_data --output outputs.csv"
-             + (f" --n {n} --seed {seed}" if is_generation(task) else "")]
+    # The task fixes infer.py's extra arguments, so the example quotes them: run any other way,
+    # the model is not the one that was scored.
+    usage = ["cd final", " ".join(["python infer.py --model model --input my_data --output outputs",
+                                   *infer_args(task, "validation")])]
+    reference_kept = "test_reference" in task.get("data", {}) and held_back_path(task, "test_reference").exists()
     lines += [
         "",
         f"Experiment {best['number']} is the result. Its exact code and model are in `final/`, with its "
         "outputs on the test set beside them"
-        + (", and the test labels, now that the score has been taken." if
-           test_labels_path(task).exists() else "."),
+        + (", and the test reference, now that the score has been taken." if reference_kept else "."),
         "",
         "## Budget",
         "",
@@ -167,10 +165,9 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
         if "model_mb" in cost:
             size = "under 1 MB" if cost["model_mb"] < 1 else f"{cost['model_mb']:.1f} MB"
             measured.append(f"The model is {size} on disk")
-        if "predict_seconds" in cost and best.get("n_validation"):
-            measured.append(f"it took {cost['predict_seconds']:.1f} s to run over the "
-                            f"{best['n_validation']} validation examples on the machine it was "
-                            f"scored on")
+        if "predict_seconds" in cost:
+            measured.append(f"it took {cost['predict_seconds']:.1f} s to run over the validation "
+                            f"split on the machine it was scored on")
         lines += [" and ".join(measured) + ".", ""]
     path = Path(project_dir) / "REPORT.md"
     path.write_text("\n".join(lines))

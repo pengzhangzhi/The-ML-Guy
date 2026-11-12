@@ -1,33 +1,34 @@
 # The task. Everything here is settled with the user before any modelling starts, and frozen
 # by `mlguy init`. Replace every TODO, then delete this comment block.
-schema_version = "0.1"
+schema_version = "0.2"
 name = "TODO-project-name"           # short, kebab-case; names the folder under ~/.mlguy/projects/
 
 [task]
-type = "prediction"                  # prediction | generation
-input = "TODO what one example is"   # e.g. "a protein sequence", "a cell", "a chest X-ray"
-output = "TODO_what_is_predicted"    # e.g. stability, solubility, response, readmission
+input = "TODO what the model is given"     # e.g. "a protein sequence", "a backbone", "a chest X-ray"
+output = "TODO what the model returns"     # e.g. "stability", "designed sequences", "a diagnosis"
 
+# A split is up to two things, each in any form (a table, a folder, an .h5ad) or absent:
+#   inputs     what infer.py is given
+#   reference  what only task/evaluate.py sees: labels, real examples to compare against, anything
+# `mlguy init` moves the test inputs and test reference out of the project; they come back once,
+# for the final check. Declare no test split at all and the final check reruns validation.
 [data]
 source = "TODO where the data came from"
-split = "TODO how train/validation/test were separated, in one line"
-
-# Inputs can be in any form: a CSV, an .h5ad, a folder of images or structures. Only the
-# project's code reads them. Every example needs an id that the inputs carry.
-train = "data/train.csv"                        # inputs and labels together, however suits
+split = "TODO how the splits were drawn, in one line"
+train = "data/train"                 # yours: never read by mlguy
 validation_inputs = "data/validation_inputs.csv"
+validation_reference = "data/validation_reference.csv"
 test_inputs = "data/test_inputs.csv"
-
-# Labels are always a small CSV with an id column and a target column. For generation there is
-# no target: the file lists the conditions to sample for, and anything else the evaluator needs.
-validation_labels = "data/validation_labels.csv"
-test_labels = "data/test_labels.csv"            # `mlguy init` moves this out of the project
-# id_column = "id"
-# target_column = "target"
-
-# Anything the user should know about the split when they read the score: validation drawn
-# differently from test, patients shared between them. Quoted word for word in the report.
+test_reference = "data/test_reference.csv"
+# Anything the user should know about the split when they read the score. Quoted word for word
+# in the report.
 # validation_note = "Validation is drawn like the training set, the test set is not, so ..."
+
+# Extra arguments for infer.py, fixed so that every submission runs the same way. Each entry
+# becomes --key value. The final check uses final_args when given.
+# [infer]
+# args = { n = 20, seed = 0 }
+# final_args = { n = 100, seed = 1 }
 
 # The score comes from task/evaluate.py, written for this problem and frozen with the task.
 # `primary` is the name of the metric it reports that the search climbs.
@@ -37,14 +38,6 @@ direction = "maximize"               # or "minimize"
 
 # [evaluator]
 # timeout_minutes = 60
-
-# Generation only (experimental): how many samples are drawn each time, so submissions are
-# comparable. The inputs are then the conditions, and the test ones stay unseen until the end.
-# `n` is per condition when a labels file lists them, and the whole batch when none does.
-# [sampling]
-# n = 100                            # per condition, on every submission
-# seed = 0
-# final_n = 1000                     # for the one final check
 
 # `max_submissions` is enforced: `mlguy submit` refuses past it. Any other limit the user set
 # goes here under whatever name fits; it is shown to the agent and printed in the report, and
