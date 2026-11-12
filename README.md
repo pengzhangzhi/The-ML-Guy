@@ -223,6 +223,19 @@ There is no built-in page and no domain code in the core. The agent writes `app.
 problem in front of it: the amylase example accepts FASTA and names each variant by its
 mutations; a clinical model would look nothing like it.
 
+## Gallery: what to say, and what came back
+
+[`gallery/`](gallery/) holds five problems that have been built end to end — a clinical table,
+single-cell annotation, pathology tiles, protein variant ranking, and a generative protein design
+task — kept as **the request and the conversation**, not as code. Each one has the scientist's own
+words, the questions the agent asked before it would freeze anything, and what came out with what
+not to believe about it.
+
+It is there because the modelling is the agent's job and your half of the contract is describing
+the problem well enough to build a rubric from. That is the part with no reference material
+anywhere else. `gallery/*/QUESTIONS.md` is the most useful file in each folder: the gap between
+the request and what still had to be asked is the measure of how complete the request was.
+
 ## For agents
 
 The `skills/` folder holds what a coding agent loads. Each skill states the goal, the rules and
