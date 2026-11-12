@@ -26,23 +26,59 @@ def now() -> str:
 
 IGNORED_IN_TASK = ("__pycache__", ".ipynb_checkpoints", ".DS_Store")
 
+# The task must not change once it is frozen, and that is checked on every submission. Proving
+# it byte for byte would mean reading the whole dataset each time, so files are fingerprinted at
+# a level of detail that scales: small ones by their contents, large ones by their size and
+# their two ends, and a folder of very many files by the names and sizes it holds. This catches
+# a task that was edited, regenerated or swapped; it is not meant to defeat a forgery.
+SMALL_FILE = 4 << 20       # read a file this size or smaller in full
+EDGE = 1 << 20             # of a larger file, read the first and last megabyte
+CROWDED = 2000             # a folder holding more than this many files is read by its listing
+
 
 def _task_files(task_dir: Path) -> list[Path]:
     return sorted(p for p in task_dir.rglob("*") if p.is_file() and p.suffix != ".pyc"
                   and not any(part in IGNORED_IN_TASK for part in p.relative_to(task_dir).parts))
 
 
+def _fingerprint(path: Path) -> str:
+    size = path.stat().st_size
+    h = hashlib.sha256(f"{size}:".encode())
+    with open(path, "rb") as f:
+        if size <= SMALL_FILE:
+            for block in iter(lambda: f.read(1 << 20), b""):
+                h.update(block)
+        else:
+            h.update(f.read(EDGE))
+            f.seek(-EDGE, 2)
+            h.update(f.read(EDGE))
+    return h.hexdigest()
+
+
+def _listing(folder: Path) -> str:
+    """A folder of very many files, as the names and sizes it holds. No file is read."""
+    files = _task_files(folder)
+    h = hashlib.sha256()
+    for path in files:
+        h.update(f"{path.relative_to(folder)}:{path.stat().st_size}\n".encode())
+    total = sum(p.stat().st_size for p in files)
+    return f"{len(files)} files, {total} bytes, {h.hexdigest()}"
+
+
 def task_manifest(project_dir: Path) -> dict[str, str]:
-    """A hash of every file in task/, by path, so a changed task is noticed and named.
+    """A fingerprint of everything in task/, by path, so a changed task is noticed and named.
     Caches that Python and editors write by themselves are ignored."""
     task_dir = Path(project_dir) / "task"
     manifest = {}
-    for path in _task_files(task_dir):
-        h = hashlib.sha256()
-        with open(path, "rb") as f:
-            for block in iter(lambda: f.read(1 << 20), b""):
-                h.update(block)
-        manifest[str(path.relative_to(task_dir))] = h.hexdigest()
+    for entry in sorted(task_dir.iterdir()) if task_dir.exists() else []:
+        if entry.name in IGNORED_IN_TASK:
+            continue
+        if entry.is_dir() and len(_task_files(entry)) > CROWDED:
+            manifest[f"{entry.name}/"] = _listing(entry)
+            continue
+        for path in ([entry] if entry.is_file() else _task_files(entry)):
+            if path.suffix != ".pyc":
+                manifest[str(path.relative_to(task_dir))] = _fingerprint(path)
     return manifest
 
 

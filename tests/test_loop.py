@@ -447,3 +447,36 @@ def test_init_needs_the_users_approval_and_an_evaluator(project, capsys):
     (project / "task" / "evaluate.py").unlink()
     assert run(project, "init") == 2
     assert "no evaluator" in capsys.readouterr().err
+
+
+def test_a_large_task_is_fingerprinted_without_reading_all_of_it(project, capsys):
+    """Freezing must not cost a full read of the data on every submission, but a change
+    anywhere in it must still be caught."""
+    from mlguy.records import CROWDED, SMALL_FILE, task_manifest
+
+    big = project / "task" / "data" / "big.bin"
+    big.write_bytes(b"\0" * (SMALL_FILE + 4 * (1 << 20)))
+    crowd = project / "task" / "data" / "many"
+    crowd.mkdir()
+    for i in range(CROWDED + 1):
+        (crowd / f"{i}.txt").write_text(str(i))
+
+    run(project, "init")
+    run(project, "validate")
+    present = sum(1 for p in (project / "task" / "data").rglob("*") if p.is_file())
+    assert task_manifest(project)["data/"].startswith(f"{present} files, ")
+    assert not any(key.startswith("data/") and key != "data/" for key in task_manifest(project)), \
+        "the whole folder is one entry, so no file in it is read"
+
+    # the middle of a large file: changed length is what is noticed
+    content = bytearray(big.read_bytes())
+    content[len(content) // 2:len(content) // 2] = b"x"
+    big.write_bytes(bytes(content))
+    assert run(project, "submit", "--note", "after growing the data") == 2
+    assert "task/ has changed" in capsys.readouterr().err
+
+    big.write_bytes(bytes(content[:len(content) // 2] + content[len(content) // 2 + 1:]))
+    assert run(project, "submit", "--note", "data restored") == 0
+    (crowd / "0.txt").write_text("changed, and a different length")
+    assert run(project, "submit", "--note", "after editing one of many files") == 2
+    assert "task/ has changed" in capsys.readouterr().err
