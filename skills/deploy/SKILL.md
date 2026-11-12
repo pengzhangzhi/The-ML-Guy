@@ -50,6 +50,13 @@ Three things are not:
   using it cold will see it.
 - **`python app.py [--port N]` starts it,** so anyone can run it the same way.
 
+**`final/` holds only `infer.py`, `src/` and `model/`.** That is what was scored, and it is what
+the user will copy and run. Anything the model reaches for outside it — a weights cache, a folding
+model, a shared data folder — has to be found by an absolute path or a named environment variable,
+and the report has to say which one and what to set it to. Test it from `final/` itself, not from
+the working folder: a path that resolves only where you built the model works for you and for
+nobody else.
+
 Accept input in the form they already have it, and when a row cannot be used, say why in
 their terms. Check it yourself before handing over: start it, feed it real data, and feed it
 something broken.
