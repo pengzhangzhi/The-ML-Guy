@@ -46,9 +46,9 @@ run `mlguy submit` inside a job that has one.
 
 ## 3. Ask only what is missing
 
-These are the things only they can tell you. Skip any the data or their first message already
-answers. Ask at most five questions in all, merging where you can, each with the answer you
-would guess.
+Below is what only they can tell you. It is not a script: by now the data and their first
+message have answered some of it, and you should not spend their attention on those. Ask at
+most five questions in all, merging where you can, each with the answer you would guess.
 
 1. What do you want to predict, and from what?
 2. Where is the data?
@@ -67,7 +67,8 @@ these as headings.
 
 ## 4. Choose the split with care
 
-Build the split so that scoring on it resembles the use they described in question 4. For example, a random
+Build the split so that scoring on it resembles the use they described when they said what new
+inputs would look like. For example, a random
 split is almost always wrong when rows are related to each other — similar sequences, repeat
 measurements on the same subject, cells from one donor: near-duplicates land on both sides
 and every number comes out flattering.
