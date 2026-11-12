@@ -114,7 +114,15 @@ well-tested library for standard metrics rather than writing them by hand.
 **For generation, how good outputs are recognised is the user's knowledge, not yours.** Ask how
 they would judge a batch of outputs by hand, and what they already trust to do it: a folding
 model, a classifier, a simulation, a comparison with real data. (Generative tasks are
-experimental; say so if a user asks for one.)
+experimental; say so if a user asks for one.) A generative task has no labels: its
+`validation_labels` and `test_labels` files list the conditions to sample for, so the framework
+knows how many samples to expect for each, and the conditions themselves stay in the inputs.
+
+**If the scoring needs a different environment from the model** — a folding model that will not
+coexist with your training stack, a tool in another language — `evaluate.py` is still the entry
+point, called with the interpreter `mlguy` runs under. Have it start the other environment
+itself. Set `[evaluator] timeout_minutes` to fit: scoring runs on every submission, and the
+budget is in wall-clock as much as in submissions.
 
 The search will optimise exactly what this script rewards, so:
 

@@ -18,7 +18,8 @@ train = "data/train.csv"                        # inputs and labels together, ho
 validation_inputs = "data/validation_inputs.csv"
 test_inputs = "data/test_inputs.csv"
 
-# Labels are always a small CSV with an id column and a target column.
+# Labels are always a small CSV with an id column and a target column. For generation there is
+# no target: the file lists the conditions to sample for, and anything else the evaluator needs.
 validation_labels = "data/validation_labels.csv"
 test_labels = "data/test_labels.csv"            # `mlguy init` moves this out of the project
 # id_column = "id"
@@ -41,6 +42,7 @@ direction = "maximize"               # or "minimize"
 
 # Generation only (experimental): how many samples are drawn each time, so submissions are
 # comparable. The inputs are then the conditions, and the test ones stay unseen until the end.
+# `n` is per condition when a labels file lists them, and the whole batch when none does.
 # [sampling]
 # n = 100                            # per condition, on every submission
 # seed = 0
