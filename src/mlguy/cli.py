@@ -501,6 +501,13 @@ def cmd_status(args: argparse.Namespace) -> int:
         print(f" {mark}{record['number']:>4}  {metrics:<34}  {record.get('note', '')[:50]}")
     if best:
         print(f"best: experiment {best['number']} with {primary}={best['metrics'][primary]:.4f}  (* above)")
+    final_path = state_dir(task) / "test_score.json"
+    if final_path.exists():
+        # Without this, a finished project looks exactly like one that still has its final check to
+        # take, and the only record of the score that counts is REPORT.md.
+        final = json.loads(final_path.read_text())
+        print(f"final: experiment {final['number']} scored {primary}="
+              f"{final['metrics'][primary]:.4f} on the test set, once, on {final['time'][:10]}")
     print(budget.describe(task, records))
     return 0
 

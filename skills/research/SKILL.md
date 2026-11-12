@@ -21,8 +21,8 @@ python infer.py --model model --input PATH --output outputs.csv
 ```
 
 `PATH` is a split's inputs, in whatever form the task stores them. The output is a CSV with one
-row per example: its `id`, and whatever `task/evaluate.py` reads from it — by convention a
-`prediction` column. Read the evaluator: it is the only thing that decides whether a column is
+row per example (a generative task writes several per condition — see below): its `id`, and
+whatever `task/evaluate.py` reads from it — by convention a `prediction` column. Read the evaluator: it is the only thing that decides whether a column is
 needed, extra or wrong, and some refuse outputs they did not expect. `mlguy` and the project's
 page both call `infer.py`, so it must keep working.
 

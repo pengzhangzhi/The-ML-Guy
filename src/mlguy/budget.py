@@ -55,6 +55,12 @@ def describe(task: dict, records: list[dict]) -> str:
     if not status["limits"]:
         return "No budget set."
     if status["spent"]:
+        # "Run `mlguy finish`" after it has already run sends an agent back to a command that will
+        # refuse it, and reads as though the project were unfinished. The final score is taken once,
+        # so once it exists there is nothing left to run.
+        from mlguy.project import state_dir   # here, so this module stays a leaf at import time
+        if (state_dir(task) / "test_score.json").exists():
+            return f"Budget spent: {status['reason']}. The final score has been taken; see REPORT.md."
         return f"Budget spent: {status['reason']}. Run `mlguy finish`."
     parts = []
     unenforced = [k for k, v in status["limits"].items() if isinstance(v, dict) and v.get("enforced") is False]

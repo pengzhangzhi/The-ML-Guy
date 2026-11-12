@@ -392,6 +392,45 @@ def test_each_submission_is_one_score_set_against_the_best(project, capsys):
     assert "best so far: experiment 0" in out
 
 
+def test_the_score_table_keeps_every_metric_the_evaluator_reports():
+    """The experiment table truncates to stay readable; the score table must not, or a metric that
+    disagrees with the headline can go unseen. One trial's evaluator reported nine and four showed."""
+    from mlguy.report import MAX_COLUMNS, _all_metrics
+    test = {"metrics": {f"m{i}": 0.0 for i in range(6)}}
+    best = {"metrics": {"m0": 0.0, "only_scored_on_validation": 0.0}}
+    names = _all_metrics("m3", best, test)
+    assert names[0] == "m3", "the primary comes first"
+    assert "only_scored_on_validation" in names, "a metric one side alone reports still has a row"
+    assert len(names) == 7 and len(names) > MAX_COLUMNS
+
+
+def test_the_report_and_status_name_the_result_rather_than_calling_it_the_best(project, capsys):
+    """`finish --experiment N` takes a submission that did not win on validation, so every line
+    that calls the result "the best submission" is then wrong — and after the final score has been
+    taken, `status` has to say so instead of sending the agent back to `finish`."""
+    run(project, "init")
+    run(project, "validate")
+    _write_model(project, -1.0)
+    run(project, "submit", "--note", "flip the sign")
+    _write_model(project, -0.5)
+    run(project, "submit", "--note", "flip it less")
+    capsys.readouterr()
+
+    assert run(project, "finish", "--experiment", "1", "--reason", "the brief wants the sign") == 0
+    report = (project / "REPORT.md").read_text()
+    assert "best submission" not in report, "experiment 1 is the result; experiment 0 scored best"
+    assert "Validation (experiment 1)" in report
+    assert "experiment 1, the result, scored" in report
+    assert "chosen over experiment 0" in report
+
+    capsys.readouterr()
+    assert run(project, "status") == 0
+    out = capsys.readouterr().out
+    assert "final: experiment 1 scored spearman=" in out and "on the test set, once" in out
+    assert "Run `mlguy finish`" not in out, "it has run; sending an agent back to it is a dead end"
+    assert "see REPORT.md" in out
+
+
 def test_a_scoring_change_mid_project_says_how_to_check_it(project, capsys, monkeypatch):
     """mlguy cannot tell a change that moved a number from a refactor around it, so the warning
     has to point at the way to find out — and not at anything that costs a submission."""

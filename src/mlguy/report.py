@@ -13,6 +13,19 @@ from mlguy.project import (direction, is_generation, sampling, state_dir, test_l
 MAX_COLUMNS = 4  # the experiment table shows the primary metric and a few others; log.jsonl has them all
 
 
+def _all_metrics(primary: str, *results: dict) -> list[str]:
+    """Every metric name any of these results reports, primary first.
+
+    The score table shows all of them. The evaluator's author chose what to report, and a metric
+    left out of the report is one the user does not see: one trial's evaluator reported nine, four
+    reached REPORT.md, and the one that disagreed with the headline was among the five dropped.
+    """
+    names = [primary]
+    for result in results:
+        names += [name for name in result["metrics"] if name not in names]
+    return names
+
+
 def _row(record: dict, names: list[str]) -> str:
     note = record.get("note", "").replace("|", "/")
     if record["status"] != "ok":
@@ -45,7 +58,8 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
           best_on_validation: dict | None = None, reason: str | None = None) -> Path:
     """`best` is the submission taken as the result; normally also the best on validation."""
     primary = task["metric"]["primary"]
-    names = ([primary] + [m for m in best["metrics"] if m != primary])[:MAX_COLUMNS]
+    scored = _all_metrics(primary, best, test_result)   # the score table: all of them
+    names = scored[:MAX_COLUMNS]                        # the experiment table: as many as fit
     better = "higher" if direction(task) == "maximize" else "lower"
     counted = sum(1 for r in records if r.get("counts_against_budget"))
     limit = task.get("budget", {}).get("max_submissions")
@@ -61,12 +75,12 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
         headline = f"Generates **{output}**" + (f" for {given}." if given else ".")
         measured = [f"Measured on {test_result['n']} samples drawn fresh for the final check (seed {final_seed}),",
                     f"scored once, at the end of the search ({used} used)."]
-        columns = "| Metric | Final check | During the search (best submission) |"
+        columns = f"| Metric | Final check | During the search (experiment {best['number']}) |"
     else:
         headline = f"Predicts **{output}** from {given}."
         measured = [f"Measured on {test_result['n']} held-out examples the model never saw during the search,",
                     f"scored once, at the end of the search ({used} used)."]
-        columns = "| Metric | Test | Validation (best submission) |"
+        columns = f"| Metric | Test | Validation (experiment {best['number']}) |"
 
     lines = [
         f"# {task['name']}: result",
@@ -80,12 +94,11 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
         columns,
         "| --- | --- | --- |",
     ]
-    for name in names:
-        test_value = test_result["metrics"].get(name)
-        lines.append(
-            f"| {name} | n/a | {best['metrics'][name]:.4f} |" if test_value is None else
-            f"| {name} | {test_value:.4f} | {best['metrics'][name]:.4f} |"
-        )
+    for name in scored:
+        def cell(result: dict) -> str:
+            value = result["metrics"].get(name)
+            return "n/a" if value is None else f"{value:.4f}"
+        lines.append(f"| {name} | {cell(test_result)} | {cell(best)} |")
     lines += ["", f"The score that counts is **{primary} = {test_result['metrics'][primary]:.4f}** "
                   f"({better} is better).", ""]
 
@@ -102,10 +115,15 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
     if baseline and baseline["number"] != best["number"]:
         delta = best["metrics"][primary] - baseline["metrics"][primary]
         lines += [
-            f"The starting model scored {baseline['metrics'][primary]:.4f} on validation and the best "
-            f"submission scored {best['metrics'][primary]:.4f}, a change of {delta:+.4f}.",
+            f"The starting model scored {baseline['metrics'][primary]:.4f} on validation and "
+            f"experiment {best['number']}, the result, scored {best['metrics'][primary]:.4f}, a change "
+            f"of {delta:+.4f}.",
             "",
         ]
+    elif baseline and best_on_validation and best_on_validation["number"] != best["number"]:
+        # The starting model is the result because it was chosen, not because nothing beat it.
+        lines += ["The starting model is the result, chosen over a submission that scored better on "
+                  "validation, for the reason above.", ""]
     elif baseline:
         lines += ["No submission beat the starting model, so the starting model is the result.", ""]
 
@@ -122,6 +140,12 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
         "| --- | --- | " + " | ".join("---" for _ in names) + " |",
     ]
     lines += [_row(r, names) for r in records]
+    if len(scored) > len(names):
+        # Say which columns were left out, so a reader who only has this file knows there are more
+        # and where they are. The score table above carries all of them for the result.
+        lines += ["", f"This table shows {len(names)} of the evaluator's {len(scored)} metrics; it also "
+                      f"reports {', '.join(scored[len(names):])}. Every submission's full set is in "
+                      f"`experiments/log.jsonl`."]
     # The task fixes how many samples a condition gets, so the example has to quote the task's own
     # numbers: a copied `--n 100` would tell the user to run the model unlike the way it was scored.
     n, seed = sampling(task, "validation")
