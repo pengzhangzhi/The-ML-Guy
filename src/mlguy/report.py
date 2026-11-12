@@ -1,4 +1,9 @@
-"""REPORT.md: the final scores, in the language of the brief."""
+"""REPORT.md: what was measured, as tables and plain statements of fact.
+
+What the numbers mean for the user is not written here. That takes knowing their problem, so the
+agent writes it at the top of this file afterwards (the deploy skill). What is here is the part
+an agent should not be the one to choose: every metric, every submission, what was agreed.
+"""
 
 from __future__ import annotations
 
@@ -68,7 +73,6 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
     counted = sum(1 for r in records if r.get("counts_against_budget"))
     limit = task.get("budget", {}).get("max_submissions")
     used = f"{counted} of {limit} submissions" if limit else f"{counted} submissions"
-    baseline = next((r for r in records if r["number"] == 0 and r["status"] == "ok"), None)
     output = task["task"]["output"].replace("_", " ")
     for prefix in ("predicted ", "generated ", "designed "):   # task.output often already says it
         if output.lower().startswith(prefix):
@@ -114,22 +118,7 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
 
     caveat = validation_caveat(task)
     if caveat:
-        lines += ["> **Read the two columns above with care.** " + caveat, ""]
-
-    if baseline and baseline["number"] != best["number"]:
-        delta = best["metrics"][primary] - baseline["metrics"][primary]
-        lines += [
-            f"The starting model scored {baseline['metrics'][primary]:.4f} on validation and "
-            f"experiment {best['number']}, the result, scored {best['metrics'][primary]:.4f}, a change "
-            f"of {delta:+.4f}.",
-            "",
-        ]
-    elif baseline and best_on_validation and best_on_validation["number"] != best["number"]:
-        # The starting model is the result because it was chosen, not because nothing beat it.
-        lines += ["The starting model is the result, chosen over a submission that scored better on "
-                  "validation, for the reason above.", ""]
-    elif baseline:
-        lines += ["No submission beat the starting model, so the starting model is the result.", ""]
+        lines += ["> **About the split, as agreed before the search:** " + caveat, ""]
 
     lines += [_audit(task), ""]
 

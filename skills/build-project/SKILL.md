@@ -74,8 +74,8 @@ most five questions in all, merging where you can, each with the answer you woul
 6. How much time and compute may this use?
 7. Anything you want followed or avoided, and what would be good enough?
 
-If they would rather write than talk, `src/mlguy/templates/proposal.md` in the tool's repository has
-these as headings.
+If they would rather write than talk, `reference/proposal.md` beside this skill has these as
+headings.
 
 ## 4. Choose the split with care
 
@@ -188,7 +188,8 @@ The search will optimise exactly what this script rewards, so:
 
 ```bash
 mlguy new <folder> --name <project-name>
-# task/task.toml from what you have agreed so far; task/evaluate.py as above
+# it creates task/task.toml and a stub infer.py. Fill in task.toml from what you have agreed so
+# far, and write task/evaluate.py as above, starting from the reference evaluator that fits.
 # prepare task/data with a script kept in task/ (task/prepare.py, say), so how the data and
 # split were made is frozen with them. Copy what it needs into task/data, or record in the
 # brief where the raw data lives. Run it before `init`: task/data is frozen too, so the
@@ -242,7 +243,7 @@ hypothesis of your own — a finding it had to reach by itself is worth more tha
 
 ## 8. Write the brief and get it approved
 
-Fill in `task/brief.md`: goal, input, output, data, how it is tested, how it is scored, the
+Copy `reference/brief.md` (beside this skill) to `task/brief.md` and fill it in: goal, input, output, data, how it is tested, how it is scored, the
 starting model, the budget, what the audit found, and the assumptions you made rather than were
 told. Every line in their language.
 
