@@ -1,7 +1,9 @@
 """The budget: whatever limit fits the user. `mlguy submit` refuses once any one is reached.
 
-Enforced now: number of submissions, wall-clock hours from the first submission, a deadline.
-Recorded but not enforced: GPU-hours and money, which need the Slurm backend.
+Enforced: number of submissions, wall-clock hours from the first submission, a deadline.
+Recorded but not enforced: GPU-hours and money. The framework does not manage compute, so it
+cannot see a job's GPU time or its cost; it carries the number the user agreed to so that it
+reaches the agent and the report, and `describe` says plainly that keeping it is the agent's job.
 """
 
 from __future__ import annotations
