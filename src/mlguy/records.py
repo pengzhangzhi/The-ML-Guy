@@ -93,9 +93,6 @@ class Experiments:
         kept = [r for r in self.all() if r["number"] != record["number"]]
         self.log.write_text("".join(json.dumps(r) + "\n" for r in sorted(kept + [record], key=lambda r: r["number"])))
 
-    def predictions(self, number: int) -> Path:
-        return self.dir / f"{number:04d}" / "validation_predictions.csv"
-
     def outputs(self, number: int) -> Path:
         """What the submission produced for the validation examples, exactly as written."""
         return self.dir / f"{number:04d}" / "validation_outputs.csv"

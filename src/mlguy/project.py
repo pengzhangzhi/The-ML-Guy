@@ -19,7 +19,6 @@ from __future__ import annotations
 import json
 import math
 import os
-from concurrent.futures import ThreadPoolExecutor
 import shutil
 import subprocess
 import sys
@@ -27,7 +26,6 @@ import tempfile
 import tomllib
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from mlguy import judge
@@ -53,11 +51,11 @@ def load_task(project_dir: str | Path) -> dict:
 
 
 def validation_caveat(task: dict) -> str | None:
-    """The warning to carry everywhere when validation does not ask the test set's question."""
+    """The caveat to carry everywhere: a validation/test mismatch, and any note on the split."""
     data = task.get("data", {})
-    if data.get("validation_matches_test", True):
-        return None
     note = data.get("validation_note", "").strip()
+    if data.get("validation_matches_test", True):
+        return note or None
     return (
         "Validation does not ask the same question as the test set, so a better validation "
         "score does not reliably mean a better model." + (f" {note}" if note else "")
@@ -226,26 +224,26 @@ def _produce(task: dict, split: str, run_dir: Path, reference: Path | None, outp
     judge.check_generated(_read_outputs(output), n, read_ids(task, reference) if reference else None)
 
 
-def _builtin_scores(task: dict, reference: Path, outputs: Path, keep: Path | None) -> tuple[dict, list | None, int]:
+def _builtin_scores(task: dict, reference: Path, outputs: Path) -> tuple[dict, int]:
     labels = pd.read_csv(reference, dtype={id_column(task): str})
     y_true = labels[target_column(task)].to_numpy()
     y_pred, y_score = judge.check_predictions(_read_outputs(outputs), labels[id_column(task)].tolist(),
                                               numeric=task["task"]["type"] != "classification")
     primary = task["metric"]["primary"]
     names = [primary] + [m for m in task["metric"].get("secondary", []) if m != primary]
-    metrics = judge.score(y_true, y_pred, names, y_score=y_score)
-    if keep is not None:
-        saved = pd.DataFrame({"id": labels[id_column(task)], "prediction": y_pred})
-        if y_score is not None:
-            saved["score"] = y_score
-        saved.to_csv(keep, index=False)
-    return metrics, judge.interval(y_true, y_pred, primary, y_score=y_score), int(len(y_true))
+    return judge.score(y_true, y_pred, names, y_score=y_score), int(len(y_true))
 
 
-def _run_evaluator(task: dict, split: str, reference: Path | None, outputs: Path) -> tuple[dict, dict]:
-    """One call of the task's evaluator. Returns (metrics, the whole result), primary first."""
+def _evaluator_scores(task: dict, split: str, reference: Path | None, outputs: Path) -> tuple[dict, int]:
+    """One call of the task's evaluator:
+
+        python <script> --outputs FILE --reference LABELS --split validation|final --result FILE
+
+    It writes JSON {"metrics": {name: number, ...}} with the primary metric included and finite.
+    Returns the metrics, primary first.
+    """
     script, primary = evaluator_script(task), task["metric"]["primary"]
-    result_file = outputs.parent / f"{outputs.stem}.result.json"
+    result_file = outputs.parent / "result.json"
     cmd = [sys.executable, str(script), "--outputs", str(outputs),
            "--split", "final" if split == "test" else "validation", "--result", str(result_file)]
     if reference is not None:
@@ -259,113 +257,28 @@ def _run_evaluator(task: dict, split: str, reference: Path | None, outputs: Path
         raise SubmissionError(f"the evaluator could not score these outputs (exit {proc.returncode}):\n"
                               f"{proc.stderr.strip()[-2000:]}")
     try:
-        result = json.loads(result_file.read_text())
-        metrics = {k: float(v) for k, v in result["metrics"].items()}
+        metrics = {k: float(v) for k, v in json.loads(result_file.read_text())["metrics"].items()}
     except Exception as e:
         raise SubmissionError(f"the evaluator did not write a usable result file: {e}")
-    if primary not in metrics or not all(math.isfinite(v) for v in metrics.values()):
-        raise SubmissionError(f"the evaluator must report a finite '{primary}'; it reported {metrics}")
-    return {primary: metrics[primary], **{k: v for k, v in metrics.items() if k != primary}}, result
-
-
-def resample_count(task: dict) -> int:
-    """`[evaluator] resample = N`: re-run a cheap evaluator on N resamples of the examples."""
-    return int(task.get("evaluator", {}).get("resample", 0))
-
-
-def _resampled_scores(task: dict, reference: Path, outputs: Path, work: Path) -> list[float | None]:
-    """The primary metric on resampled examples, drawn with replacement.
-
-    The draws depend only on the number of examples, so every submission is scored on the same
-    resamples and two submissions can be compared draw by draw. An example drawn twice appears
-    under two ids (`id~0`, `id~1`), so the evaluator never sees a repeated id.
-    """
-    id_col, primary = id_column(task), task["metric"]["primary"]
-    labels = pd.read_csv(reference, dtype={id_col: str})
-    produced = pd.read_csv(outputs, dtype={"id": str})
-    by_id = {k: g for k, g in produced.groupby("id", sort=False)}
-    ids = labels[id_col].tolist()
-    draws = np.random.default_rng(0).integers(0, len(ids), size=(resample_count(task), len(ids)))
-
-    def one(k: int) -> float | None:
-        seen: dict[str, int] = {}
-        new_ids = []
-        for i in draws[k]:
-            j = seen.get(ids[i], 0)
-            seen[ids[i]] = j + 1
-            new_ids.append(f"{ids[i]}~{j}")
-        ref = labels.iloc[draws[k]].assign(**{id_col: new_ids})
-        out = pd.concat([by_id[ids[i]].assign(id=new) for i, new in zip(draws[k], new_ids) if ids[i] in by_id])
-        folder = work / f"resample{k}"
-        folder.mkdir()
-        ref.to_csv(folder / "reference.csv", index=False)
-        out.to_csv(folder / "outputs.csv", index=False)
-        try:
-            return _run_evaluator(task, "validation", folder / "reference.csv", folder / "outputs.csv")[0][primary]
-        except SubmissionError:
-            return None
-
-    with ThreadPoolExecutor(max_workers=os.cpu_count() or 1) as pool:
-        return list(pool.map(one, range(len(draws))))
-
-
-def _evaluator_scores(task: dict, split: str, reference: Path | None, outputs: Path,
-                      keep: Path | None) -> tuple[dict, list | None, int]:
-    """Run the task's evaluator:
-
-        python <script> --outputs FILE --reference LABELS --split validation|final --result FILE
-
-    It writes JSON: {"metrics": {name: number, ...}}, primary metric included. The noise on the
-    primary metric comes from one of three places, first that applies:
-
-      [evaluator] resample = N   the framework re-runs the evaluator on N resamples of the
-                                 examples: an interval, and paired comparison between
-                                 submissions. For evaluators cheap enough to run N times.
-      "per_item": [number, ...]  in the result, when the metric is the plain mean of independent
-                                 per-example scores, in the same order every time (sorted by id).
-                                 Also gives both an interval and comparison.
-      "interval": [low, high]    in the result: the evaluator's own 95% interval. Submissions are
-                                 then not compared.
-    """
-    metrics, result = _run_evaluator(task, split, reference, outputs)
-    items, own = result.get("per_item"), result.get("interval")
-
-    if split == "validation" and reference is not None and resample_count(task):
-        scores = _resampled_scores(task, reference, outputs, outputs.parent)
-        usable = [v for v in scores if v is not None]
-        interval = None
-        if len(usable) >= len(scores) // 2:
-            interval = [float(v) for v in np.percentile(usable, [2.5, 97.5])]
-        if keep is not None:
-            pd.DataFrame({"resample": scores}).to_csv(keep, index=False)
-    elif own is not None:
-        try:
-            low, high = (float(v) for v in own)
-        except Exception:
-            raise SubmissionError(f"the evaluator's 'interval' must be [low, high]; it reported {own!r}")
-        interval = [low, high]
-    else:
-        interval = judge.mean_interval(items) if items else None
-        if items and keep is not None:
-            pd.DataFrame({"item": items}).to_csv(keep, index=False)
-    return metrics, interval, int(len(_read_outputs(outputs)))
+    if primary not in metrics:
+        raise SubmissionError(f"the evaluator must report '{primary}'; it reported {sorted(metrics)}")
+    if not math.isfinite(metrics[primary]):
+        raise SubmissionError(f"the evaluator reported {primary} = {metrics[primary]}; it must be a finite number")
+    return {primary: metrics[primary], **{k: v for k, v in metrics.items() if k != primary}}, \
+        int(len(_read_outputs(outputs)))
 
 
 def score_split(project_dir: str | Path, split: str, run_dir: str | Path | None = None,
-                keep_predictions: Path | None = None, outputs: str | Path | None = None,
-                keep_outputs: Path | None = None) -> dict:
-    """Produce outputs for one split and evaluate them.
+                outputs: str | Path | None = None, keep_outputs: Path | None = None) -> dict:
+    """Produce outputs for one split and evaluate them: one run, one score.
 
     `run_dir` is where infer.py, src/ and model/ live; it defaults to the project itself,
-    and is an experiment snapshot when scoring a past submission. `keep_predictions` saves what
-    is needed to compare a later submission with this one. `outputs` skips the first step and
-    evaluates a file that already exists.
+    and is an experiment snapshot when scoring a past submission. `outputs` skips the first
+    step and evaluates a file that already exists. `keep_outputs` saves what the model produced.
     """
     task = load_task(project_dir)
     run_dir = Path(run_dir) if run_dir else task["_project_dir"]
     reference = _reference(task, split)
-    if keep_predictions is not None:
-        keep_predictions.parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as tmp:
         produced = Path(tmp) / "outputs.csv"
@@ -383,32 +296,8 @@ def score_split(project_dir: str | Path, split: str, run_dir: str | Path | None 
             scratch.mkdir()
             staged = scratch / "outputs.csv"
             staged.symlink_to(produced)
-            metrics, interval, n = _evaluator_scores(task, split, reference, staged, keep_predictions)
+            metrics, n = _evaluator_scores(task, split, reference, staged)
         else:
-            metrics, interval, n = _builtin_scores(task, reference, produced, keep_predictions)
+            metrics, n = _builtin_scores(task, reference, produced)
 
-    return {"split": split, "n": n, "primary": task["metric"]["primary"], "metrics": metrics, "interval": interval}
-
-
-def compare_with(project_dir: Path, new_file: Path, old_file: Path) -> float | None:
-    """How often the newer validation outputs beat the older ones, over resampled rows."""
-    task = load_task(project_dir)
-    if not (new_file.exists() and old_file.exists()):
-        return None
-    new, old = pd.read_csv(new_file), pd.read_csv(old_file)
-    if len(new) != len(old):
-        return None
-    if evaluator_script(task) is not None:
-        if "resample" in new and "resample" in old:
-            return judge.paired_chance_better(new["resample"].to_numpy(dtype=float),
-                                              old["resample"].to_numpy(dtype=float), direction(task))
-        if "item" not in new or "item" not in old:
-            return None
-        return judge.mean_chance_better(new["item"].to_numpy(dtype=float), old["item"].to_numpy(dtype=float),
-                                        direction(task))
-    y_true = pd.read_csv(_reference(task, "validation"))[target_column(task)].to_numpy()
-    if len(new) != len(y_true):
-        return None
-    pairs = [(f["prediction"].to_numpy(), f["score"].to_numpy(dtype=float) if "score" in f else None)
-             for f in (new, old)]
-    return judge.chance_better(y_true, pairs[0], pairs[1], task["metric"]["primary"])
+    return {"split": split, "n": n, "primary": task["metric"]["primary"], "metrics": metrics}

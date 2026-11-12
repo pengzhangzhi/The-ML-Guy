@@ -53,8 +53,7 @@ if "value" not in samples:
     raise SystemExit("samples need a 'value' column")
 distance = (samples["value"] - samples["id"].map(truth.set_index("id")["mean"])).abs()
 json.dump({"metrics": {"distance": float(distance.mean()), "spread": float(samples["value"].std()),
-                       "final": float(a.split == "final")},
-           "per_item": distance.tolist()}, open(a.result, "w"))
+                       "final": float(a.split == "final")}}, open(a.result, "w"))
 '''
 
 GENERATE_PY = '''\
@@ -114,14 +113,12 @@ def test_generation_loop(generation, capsys):
     experiments = Experiments(project)
     baseline = experiments.all()[0]
     assert baseline["metrics"]["distance"] == pytest.approx(2.0, abs=0.1)
-    assert baseline["n_validation"] == 60 and baseline["interval"] is not None
+    assert baseline["n_validation"] == 60
     assert list(baseline["metrics"]) == ["distance", "spread", "final"], "primary first, then whatever else it reports"
     assert baseline["metrics"]["final"] == 0.0
 
     _model(project, error=0.5)
     assert run(project, "submit", "--note", "closer means") == 0
-    better = experiments.all()[-1]
-    assert better["vs_best"] == {"number": 0, "chance_better": 1.0}, "lower distance is better"
     assert experiments.best("distance", "minimize")["number"] == 1
     assert (experiments.dir / "0001" / "submission" / "infer.py").exists()
 
@@ -242,7 +239,6 @@ def test_a_prediction_task_can_bring_its_own_metric(tmp_path, monkeypatch, capsy
     assert run(project, "init") == 0
     assert list(pd.read_csv(project / "task" / "data" / "test_inputs.csv").columns) == ["id", "x"]
     assert run(project, "validate") == 0
-    assert Experiments(project).all()[0]["interval"] is None, "no per-item scores, so no interval is claimed"
     (project / "model" / "w.json").write_text(json.dumps({"slope": 2.0}))
     assert run(project, "submit", "--note", "the right slope") == 0
     assert Experiments(project).best("worst_error", "minimize")["number"] == 1
@@ -250,18 +246,18 @@ def test_a_prediction_task_can_bring_its_own_metric(tmp_path, monkeypatch, capsy
     assert "worst_error = 0.0000" in capsys.readouterr().out
 
 
-OWN_INTERVAL = PRED_EVALUATE.replace(
+UNDEFINED_SECONDARY = PRED_EVALUATE.replace(
     'json.dump({"metrics": {"worst_error": float(error.max())}}, open(a.result, "w"))',
-    'json.dump({"metrics": {"worst_error": float(error.max())}, "interval": [0.0, 9.0]}, open(a.result, "w"))')
+    'json.dump({"metrics": {"worst_error": float(error.max()), "ratio": float("nan")}}, open(a.result, "w"))')
 
 
-def test_an_evaluator_can_report_its_own_interval(tmp_path, monkeypatch):
-    """For a score that is not a plain mean, the evaluator knows its noise better than a bootstrap."""
+def test_only_the_primary_metric_must_be_a_number(tmp_path, monkeypatch, capsys):
+    """A secondary metric can be undefined for some outputs; that must not void the submission."""
     monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
     project = tmp_path / "custom"
     (project / "task" / "data").mkdir(parents=True)
     (project / "task" / "task.toml").write_text(PRED_TOML)
-    (project / "task" / "evaluate.py").write_text(OWN_INTERVAL)
+    (project / "task" / "evaluate.py").write_text(UNDEFINED_SECONDARY)
     frame = pd.DataFrame({"x": [float(i) for i in range(300)]})
     frame["y"] = frame["x"] * 2
     write_splits(project / "task" / "data", frame[:100], frame[100:200], frame[200:], target="y")
@@ -269,8 +265,8 @@ def test_an_evaluator_can_report_its_own_interval(tmp_path, monkeypatch):
     (project / "model").mkdir()
     (project / "model" / "w.json").write_text(json.dumps({"slope": 1.0}))
     run(project, "init")
-    run(project, "validate")
-    assert Experiments(project).all()[0]["interval"] == [0.0, 9.0]
+    assert run(project, "validate") == 0
+    assert Experiments(project).all()[0]["metrics"]["worst_error"] == pytest.approx(199.0)
 
 
 MACRO_EVALUATE = '''\
@@ -299,13 +295,12 @@ rows.assign(prediction=(rows["x"] > cut).map({True: "high", False: "low"}))[["id
 '''
 
 
-def test_a_cheap_evaluator_can_be_resampled_for_noise_and_comparison(tmp_path, monkeypatch, capsys):
-    """A per-class average is not a plain mean, so the framework re-runs the evaluator on resamples."""
+def test_an_evaluator_for_class_labels(tmp_path, monkeypatch, capsys):
+    """A per-class average is not a built-in; the labels are still checked at init."""
     monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
     project = tmp_path / "macro"
     (project / "task" / "data").mkdir(parents=True)
-    toml = PRED_TOML.replace('script = "evaluate.py"', 'script = "evaluate.py"\nresample = 40') \
-                    .replace('primary = "worst_error"\ndirection = "minimize"', 'primary = "macro_recall"\ndirection = "maximize"')
+    toml = PRED_TOML.replace('primary = "worst_error"\ndirection = "minimize"', 'primary = "macro_recall"\ndirection = "maximize"')
     (project / "task" / "task.toml").write_text(toml.replace('type = "regression"', 'type = "classification"'))
     (project / "task" / "evaluate.py").write_text(MACRO_EVALUATE)
     frame = pd.DataFrame({"x": [float(i % 100) for i in range(300)]})
@@ -318,11 +313,9 @@ def test_a_cheap_evaluator_can_be_resampled_for_noise_and_comparison(tmp_path, m
     assert run(project, "init") == 0
     assert "not compared" not in capsys.readouterr().out, "labels are compared even with an evaluator"
     assert run(project, "validate") == 0
-    low, high = Experiments(project).all()[0]["interval"]
-    assert 0 < low < high <= 1.0
     (project / "model" / "w.json").write_text(json.dumps({"cut": 70}))
     assert run(project, "submit", "--note", "the right cut") == 0
-    assert Experiments(project).all()[-1]["vs_best"]["chance_better"] > 0.95
+    assert Experiments(project).best("macro_recall", "maximize")["number"] == 1
     assert (project / "experiments" / "0001" / "validation_outputs.csv").exists()
 
 

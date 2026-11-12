@@ -65,7 +65,8 @@ The last command should print a validation score of about 0.68 and say the loop 
 
 Test labels, the hash of the frozen task, and the final test score live in
 `~/.mlguy/projects/<project-name>/`, outside the project folder, so that training code cannot
-read them by accident. Set `MLGUY_HOME` to put them somewhere else. Once `mlguy finish` has scored the test set, it
+read them by accident. Set `MLGUY_HOME` before `mlguy init` to put them somewhere else; the
+project remembers it, so later commands need not set it. Once `mlguy finish` has scored the test set, it
 copies the labels into the project's `final/` folder, since there is nothing left to protect.
 
 ## What this does not do

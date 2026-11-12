@@ -377,26 +377,18 @@ def test_a_changed_task_cannot_be_refrozen_once_there_are_results(project, capsy
     assert "cannot be re-frozen" in capsys.readouterr().err
 
 
-def test_scores_come_with_their_noise(project, capsys):
+def test_each_submission_is_one_score_set_against_the_best(project, capsys):
     run(project, "init")
     run(project, "validate")
-    baseline = Experiments(project).all()[0]
-    low, high = baseline["interval"]
-    assert low < baseline["metrics"]["spearman"] < high
+    capsys.readouterr()
 
     _write_model(project, -1.0)
     run(project, "submit", "--note", "flip the sign")
     record = Experiments(project).all()[-1]
-    assert record["vs_best"] == {"number": 0, "chance_better": 0.0}
-    assert "really worse" in capsys.readouterr().out
-
-    _write_model(project, 2.0)  # same ranking as the baseline
-    run(project, "submit", "--note", "double the scale")
-    assert Experiments(project).all()[-1]["vs_best"]["chance_better"] == 0.5
-    assert "cannot be told apart" in capsys.readouterr().out
-
-    run(project, "finish")
-    assert "95% interval" in (project / "REPORT.md").read_text()
+    assert set(record) >= {"metrics", "n_validation"} and "interval" not in record
+    out = capsys.readouterr().out
+    assert "-1.9397 spearman against experiment 0, the best before this" in out
+    assert "best so far: experiment 0" in out
 
 
 def test_init_flags_a_split_that_would_mislead(tmp_path, monkeypatch, capsys):

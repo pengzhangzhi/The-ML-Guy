@@ -61,3 +61,5 @@ so, what you would try with more budget, and anything about the data worth knowi
 concrete. "Gradient boosting scored 0.27 against ridge's 0.69, probably because 1,375 sparse
 binary features and 2,574 rows is the wrong shape for trees" is worth keeping. "Tried several
 models" is not.
+
+When the report, the page and the memory are done, commit them to the project's git repository.

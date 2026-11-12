@@ -49,7 +49,7 @@ deliberately goes looking for them.
 
 ```bash
 uv venv --python 3.11 && source .venv/bin/activate
-uv pip install -e ".[dashboard]"           # add examples,dev to run the examples and tests
+uv pip install -e ".[dashboard]"           # numpy, pandas, scikit-learn come with it; add examples,dev for the examples and tests
 ```
 
 ## What keeps the score honest
@@ -63,8 +63,9 @@ about.
   validation. No other command touches it.
 - **The split is checked before it is frozen:** identical inputs in two splits, sets too small to
   measure anything, a validation set that looks unlike the test set.
-- **Every score carries its noise:** a 95% interval, and how often a submission beats the best
-  so far on the same resampled rows. "0.6935 against 0.6933" is reported as what it is.
+- **One run, one score:** every submission is scored by the same frozen evaluation on the same
+  validation set. When scores are about the same, the simpler model is preferred, and choosing
+  it over the top score is recorded with a reason.
 - **A failure is an error, never a zero,** and still uses up budget.
 
 ## Metrics
@@ -93,9 +94,7 @@ direction = "maximize"
 ```
 
 It is called as `python evaluate.py --outputs FILE --reference LABELS --split validation|final
---result FILE` and writes `{"metrics": {...}}`. Its noise is measured by re-running it on
-resamples (`resample = 200`, for cheap evaluators), from `per_item` scores (when the metric is a
-plain mean), or from an `interval` it reports itself. `mlguy score --outputs FILE` runs the task's scoring on
+--result FILE` and writes `{"metrics": {...}}`. `mlguy score --outputs FILE` runs the task's scoring on
 any file, to check that it can tell good outputs from bad before the task is frozen.
 
 **Generation is experimental.** A generative model has no answer key, so it always needs an

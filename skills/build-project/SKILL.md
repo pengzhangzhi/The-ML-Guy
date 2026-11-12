@@ -99,7 +99,8 @@ python evaluate.py --outputs FILE --reference LABELS --split validation|final --
 ```
 
 It reads the model's outputs and the labels file of that split, matched by `id`, and writes
-`{"metrics": {"name": number, ...}}` plus the noise on the primary metric (below). Set
+`{"metrics": {"name": number, ...}}`. The primary metric must be a number; others may be
+`NaN` when undefined. Set
 `[evaluator] script`, and `[metric] primary` and `direction`, in `task.toml`. Training code may
 import from it to tune against the same measure.
 
@@ -111,14 +112,6 @@ The search will optimise exactly what this script rewards, so:
 - **Prove it can tell good from bad before freezing it.** Run `mlguy score --outputs FILE` on
   real held-out data and on something broken (shuffled, random, copied from training). If the
   scores do not separate, it cannot guide a search.
-- **Make its noise measurable,** or no submission can be shown to beat another:
-  - If it runs in seconds, set `[evaluator] resample = 200`. The framework re-runs it on the
-    same 200 resamples of the examples for every submission, which gives each score an
-    interval and compares submissions draw by draw. This works for any metric.
-  - If the metric is the plain mean of independent per-example scores, return them as
-    `per_item`, in the same order every time (sorted by id). Same result, one run.
-  - Otherwise return your own 95% `interval: [low, high]`. Submissions are then not compared,
-    so say in the brief that the search will judge improvements by eye.
 - **It runs on every submission,** so its cost is part of the budget.
 
 ## 6. Write the brief and get it approved
@@ -127,7 +120,7 @@ Fill in `task/brief.md`: goal, input, output, data, how it is tested, how it is 
 starting model, the budget, and the assumptions you made rather than were told. Every line in
 their language.
 
-**Show them examples, not descriptions.** They cannot judge "held out by similarity" or
+**Show them examples, not descriptions; this is required, not optional.** They cannot judge "held out by similarity" or
 "Spearman correlation", but they can judge what those mean on their own data:
 
 - For the split, show a handful of real test examples, and where it makes sense the training
@@ -145,7 +138,8 @@ the one point where a wrong metric or a wrong split is cheap to fix.
 ```bash
 mlguy new <folder> --name <project-name>
 # write task/task.toml from the approved brief; prepare task/data with a script kept in
-# task/ (task/prepare.py, say), so how the data and split were made is frozen with them
+# task/ (task/prepare.py, say), so how the data and split were made is frozen with them.
+# Copy what it needs into task/data, or record in the brief where the raw data lives.
 # write the simplest model that runs: train it into model/, and make infer.py work
 mlguy init          # checks the task and the split, moves the test labels out, freezes task/
 mlguy validate      # proves infer.py and scoring work; records experiment 0
@@ -154,7 +148,8 @@ mlguy validate      # proves infer.py and scoring work; records experiment 0
 **The data.** Keep the inputs in whatever form suits them: a table, an expression matrix, a
 folder of images or structures. `mlguy` never reads them; only your code does. What it needs is
 an `id` for every validation and test example, carried by the inputs, and a small labels CSV
-for each of those two splits with `id` and `target`. Training data is yours to lay out.
+for each of those two splits with `id` and `target`. Training data is yours to lay out. A
+folder of many small files is fine; freezing it takes a little longer.
 
 **The one fixed interface** is `python infer.py --model model --input PATH --output FILE`,
 where `PATH` is a split's inputs exactly as `task.toml` names them, and the output is a CSV
@@ -164,8 +159,12 @@ It also sees a whole split at once. Leave out of the validation and test inputs 
 links rows to each other, such as a patient or donor number, unless the model will have it in
 use too: rows from the same patient later in the file can give the outcome away.
 
+A caveat about the split that is not a validation/test mismatch (validation and test share
+patients, say) goes in `[data] validation_note`; it is carried into the report either way.
+
 `mlguy init` moves the test labels to `~/.mlguy/projects/<name>/`, outside the project, along
-with the record of the frozen task. Set `MLGUY_HOME` first to keep them somewhere else. The
+with the record of the frozen task. Set `MLGUY_HOME` before `init` to keep them somewhere else;
+`init` remembers the choice (in `.mlguy-home`), so later commands need not set it again. The
 project folder is a git repository, and `mlguy submit` and `finish` commit to it.
 
 **The split is checked** before it is frozen: identical inputs in two splits, a validation or

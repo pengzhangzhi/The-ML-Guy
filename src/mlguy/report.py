@@ -5,9 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from mlguy import budget, judge
-from mlguy.project import compare_with, direction, is_generation, sampling, state_dir, validation_caveat
-from mlguy.records import Experiments
+from mlguy import budget
+from mlguy.project import direction, is_generation, sampling, state_dir, validation_caveat
 
 
 MAX_COLUMNS = 4  # the experiment table shows the primary metric and a few others; log.jsonl has them all
@@ -34,11 +33,6 @@ def _budget_used(task: dict, records: list[dict]) -> str:
     if errors:
         parts.append(f"{errors} submission(s) failed to run")
     return (", ".join(parts).capitalize() + ".") if parts else "No budget was set."
-
-
-def _chance_over_baseline(project_dir: Path, best: dict) -> float | None:
-    experiments = Experiments(project_dir)
-    return compare_with(project_dir, experiments.predictions(best["number"]), experiments.predictions(0))
 
 
 def _split_checks(task: dict) -> list[str]:
@@ -92,10 +86,6 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
         )
     lines += ["", f"The score that counts is **{primary} = {test_result['metrics'][primary]:.4f}** "
                   f"({better} is better).", ""]
-    if test_result.get("interval"):
-        low, high = test_result["interval"]
-        lines += [f"On a different draw of {test_result['n']} it would be expected to fall "
-                  f"between {low:.4f} and {high:.4f} (95% interval).", ""]
 
     if best_on_validation and best_on_validation["number"] != best["number"]:
         top = best_on_validation["metrics"][primary]
@@ -114,10 +104,6 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
             f"submission scored {best['metrics'][primary]:.4f}, a change of {delta:+.4f}.",
             "",
         ]
-        chance = _chance_over_baseline(project_dir, best)
-        if chance is not None:
-            lines += [f"Scored on the same resampled items, the best submission beats the starting "
-                      f"model {chance:.0%} of the time: **{judge.verdict(chance)}**.", ""]
     elif baseline:
         lines += ["No submission beat the starting model, so the starting model is the result.", ""]
 

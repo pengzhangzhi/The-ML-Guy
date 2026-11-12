@@ -47,16 +47,17 @@ code and model, and tells you the score and the remaining budget. It refuses onc
 spent. A crash or a malformed predictions file is recorded as an error, not as a score of zero,
 but it still uses up a submission, so test your prediction command before you submit.
 
-Every score comes with its noise: the range it would fall in on another draw of the validation
-rows, and how often it beats the best so far when both are scored on the same resampled rows.
-A gain the data cannot tell from noise is not a gain. Do not build on it as if it were, and
-between two models that cannot be told apart, prefer the simpler: by default `mlguy finish`
-takes the best validation score, so when a simpler submission is within noise of it, finish
-with `mlguy finish --experiment N --reason "..."`. The reason goes in the report.
+Each submission gets one score, on the same validation set every time; that score is the
+result of the run. A small gain on a finite validation set may be luck, so judge it as you
+would any measurement. When two submissions score about the same, prefer the simpler, or the
+one that better serves what the brief asks for: by default `mlguy finish` takes the best
+validation score, so to take another, finish with `mlguy finish --experiment N --reason "..."`.
+The reason goes in the report.
 
 Validation is the shared yardstick, and its labels are in the project only so that it can be
-scored. Make your own choices — hyperparameters, which idea to submit — on the training data,
-by cross-validation or however you like. Tuning against the validation labels outside `submit`
+scored. Read whatever `submit` reports, including any breakdown the evaluator gives. Make your
+own choices (hyperparameters, which idea to submit) on the training data, by cross-validation
+or however you like. Computing your own numbers against the validation labels outside `submit`
 makes every recorded score optimistic.
 
 The budget is a ceiling, not a target. When you judge that more submissions would mostly fit

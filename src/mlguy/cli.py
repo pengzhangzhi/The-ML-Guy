@@ -20,7 +20,6 @@ from mlguy.project import (
     TaskChanged,
     check_task_unchanged,
     task_changes,
-    compare_with,
     direction,
     ENTRY_POINT,
     data_path,
@@ -94,8 +93,7 @@ def _freeze_task(task: dict) -> str:
 
 
 def _record_score(experiments: Experiments, task: dict, number: int, note: str,
-                  counts: bool, result: dict | None, error: str | None,
-                  previous_best: dict | None = None) -> dict:
+                  counts: bool, result: dict | None, error: str | None) -> dict:
     record = {
         "number": number,
         "time": now(),
@@ -106,12 +104,6 @@ def _record_score(experiments: Experiments, task: dict, number: int, note: str,
     if result:
         record["metrics"] = result["metrics"]
         record["n_validation"] = result["n"]
-        record["interval"] = result.get("interval")
-        if previous_best and previous_best["number"] != number:
-            chance = compare_with(task["_project_dir"], experiments.predictions(number),
-                                  experiments.predictions(previous_best["number"]))
-            if chance is not None:
-                record["vs_best"] = {"number": previous_best["number"], "chance_better": round(chance, 3)}
     else:
         record["error"] = error
     if any(r["number"] == number for r in experiments.all()):
@@ -121,17 +113,14 @@ def _record_score(experiments: Experiments, task: dict, number: int, note: str,
     return record
 
 
-def _print_scored(record: dict, task: dict, experiments: Experiments) -> None:
+def _print_scored(record: dict, task: dict, experiments: Experiments,
+                  previous_best: dict | None = None) -> None:
     primary = task["metric"]["primary"]
     metrics = "  ".join(f"{k}={v:.4f}" for k, v in record["metrics"].items())
     print(f"experiment {record['number']}: {metrics}  (validation, n={record['n_validation']})")
-    if record.get("interval"):
-        low, high = record["interval"]
-        print(f"  {primary} would fall between {low:.4f} and {high:.4f} on another draw of the validation rows")
-    if record.get("vs_best"):
-        versus = record["vs_best"]
-        print(f"  against experiment {versus['number']}, the best before this: better on "
-              f"{versus['chance_better']:.0%} of resamples: {judge.verdict(versus['chance_better'])}")
+    if previous_best and previous_best["number"] != record["number"]:
+        change = record["metrics"][primary] - previous_best["metrics"][primary]
+        print(f"  {change:+.4f} {primary} against experiment {previous_best['number']}, the best before this")
     best = experiments.best(primary, direction(task))
     if best and best["number"] != record["number"]:
         print(f"best so far: experiment {best['number']} with {primary}={best['metrics'][primary]:.4f}")
@@ -250,6 +239,11 @@ def cmd_init(args: argparse.Namespace) -> int:
     if found:
         print("  fix each check above, or explain it in task/brief.md; they are repeated in the final report")
     skipped = []
+    opaque = [name for name, path in stored.items()
+              if path is not None and not (path.suffix == ".csv" and path.is_file())]
+    if opaque and not generation:
+        skipped.append(f"whether the same example appears in two splits, because the {' and '.join(opaque)} "
+                       "inputs are not CSV tables the framework can read; check this yourself")
     if not both_labelled and not generation:
         skipped.append(f"the label distributions of validation and test were not compared, because the "
                        f"labels files have no '{tgt_col}' column (set data.target_column if it has another name)")
@@ -275,8 +269,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
                            "submission the budget does not count. Use `mlguy submit`.")
 
     try:
-        result = score_split(args.project, "validation", keep_predictions=experiments.predictions(0),
-                             keep_outputs=experiments.outputs(0))
+        result = score_split(args.project, "validation", keep_outputs=experiments.outputs(0))
     except SubmissionError as e:
         print(f"the pipeline does not work yet:\n{e}", file=sys.stderr)
         return 1
@@ -308,7 +301,6 @@ def cmd_submit(args: argparse.Namespace) -> int:
     previous_best = experiments.best(task["metric"]["primary"], direction(task))
     try:
         result, error = score_split(args.project, "validation",
-                                    keep_predictions=experiments.predictions(number),
                                     keep_outputs=experiments.outputs(number)), None
     except SubmissionError as e:
         result, error = None, str(e)
@@ -316,7 +308,7 @@ def cmd_submit(args: argparse.Namespace) -> int:
     target, size_mb = experiments.snapshot(task["_project_dir"], number)
     if size_mb > 200:
         print(f"note: the snapshot of this submission is {size_mb:.0f} MB", file=sys.stderr)
-    record = _record_score(experiments, task, number, args.note, True, result, error, previous_best)
+    record = _record_score(experiments, task, number, args.note, True, result, error)
     commit = git_commit(task["_project_dir"], f"experiment {number}: {args.note}")
     if commit:
         record["commit"] = commit
@@ -325,7 +317,7 @@ def cmd_submit(args: argparse.Namespace) -> int:
         print(f"experiment {number} did not score:\n{error}", file=sys.stderr)
         print("recorded as an error, not as a zero. " + budget.describe(task, experiments.all()), file=sys.stderr)
         return 1
-    _print_scored(record, task, experiments)
+    _print_scored(record, task, experiments, previous_best)
     return 0
 
 
@@ -386,9 +378,6 @@ def cmd_finish(args: argparse.Namespace) -> int:
     git_commit(project_dir, f"finish: test {primary}={test_result['metrics'][primary]:.4f}")
     label = "final" if is_generation(task) else "test"
     print(f"{label} {primary} = {test_result['metrics'][primary]:.4f}  (n={test_result['n']}, scored once)")
-    if test_result.get("interval"):
-        print(f"  it would fall between {test_result['interval'][0]:.4f} and {test_result['interval'][1]:.4f} "
-              "on another draw")
     print(f"report written to {path}")
     print("final/ holds the scored model, with its test outputs and the test labels beside them")
     return 0

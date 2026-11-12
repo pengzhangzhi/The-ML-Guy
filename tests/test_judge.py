@@ -95,18 +95,6 @@ def test_check_predictions_matches_by_id_and_returns_the_optional_score():
         judge.check_predictions(pd.DataFrame({"id": ["a", "a"], "prediction": [0, 1]}), ["a", "b"])
 
 
-def test_noise_estimates():
-    rng = np.random.default_rng(0)
-    y = rng.normal(size=300)
-    good, poor = y + rng.normal(scale=0.3, size=300), y + rng.normal(scale=3.0, size=300)
-    low, high = judge.interval(y, good, "spearman")
-    assert low < judge.score(y, good, ["spearman"])["spearman"] < high
-    assert judge.chance_better(y, (good, None), (poor, None), "spearman") > 0.99
-    assert judge.chance_better(y, (good, None), (good, None), "spearman") == 0.5
-    assert judge.chance_better(y, (good, None), (poor, None), "rmse") > 0.99, "lower is better for rmse"
-    assert judge.interval(y, np.zeros(300), "spearman") is None, "undefined everywhere: no interval, no crash"
-
-
 def test_multiclass_text_labels():
     y = np.array(["alpha", "beta", "beta", "delta", "delta", "delta"])
     pred = np.array(["alpha", "beta", "delta", "delta", "delta", "gamma"])   # gamma never occurs: just wrong
@@ -119,8 +107,6 @@ def test_multiclass_text_labels():
     values, _ = judge.check_predictions(pd.DataFrame({"id": ["a", "b"], "prediction": ["beta", "alpha"]}),
                                         ["a", "b"], numeric=False)
     assert list(values) == ["beta", "alpha"]
-    low, high = judge.interval(np.repeat(y, 20), np.repeat(pred, 20), "balanced_accuracy")
-    assert low < high <= 1.0
 
 
 def test_binary_metrics_unchanged_and_labels_match_across_types():
