@@ -93,9 +93,8 @@ Make the validation set resemble the test set. Hill-climbing happens on validati
 validation asks an easier or simply different question, the search will optimise for the wrong
 thing and the final score will disappoint. When the split makes that unavoidable — because a
 published split is being reproduced, or the data only allows one sensible division — say so in
-the brief, and set `validation_matches_test = false` with a `validation_note` in `task.toml`.
-The warning then follows through to the report. A caveat that is not a mismatch (validation and
-test share patients, say) also goes in `validation_note`; it reaches the report either way.
+the brief, and say it in `validation_note` in `task.toml`. Any other caveat about the split
+(validation and test share patients, say) goes there too.
 
 `validation_note` is frozen with the rest of `task.toml` and quoted **word for word into the
 report the user reads**, so write it as prose for them and get it right the first time: a mistake
@@ -229,6 +228,8 @@ You built the split and wrote the evaluator, and you are about to hill-climb on 
 someone without that stake try to break them: a fresh session or subagent that has not seen this
 conversation, following the `audit` skill. It writes `task/audit.md`. Fix what it finds, or
 explain in the brief why it does not matter, and keep the audit's summary for the user.
+`mlguy init` refuses without that file. Nothing in the framework inspects the split, so the
+audit is the only check it gets.
 
 **Draft the brief first** (step 8), even though the user has not seen it: the auditor reads it to
 learn what the scoring is meant to do, and cannot tell a metric that misses its description from
@@ -264,7 +265,7 @@ point where a wrong metric or a wrong split is cheap to fix.
 
 ```bash
 # write the simplest model that runs: train it into model/, and make infer.py work
-mlguy init          # checks the task and the split, moves the test labels out, freezes task/
+mlguy init          # moves the test labels out and freezes task/
 mlguy validate      # proves infer.py and scoring work; records experiment 0
 ```
 
@@ -272,12 +273,6 @@ mlguy validate      # proves infer.py and scoring work; records experiment 0
 with the record of the frozen task. Set `MLGUY_HOME` before `init` to keep them somewhere else;
 `init` remembers the choice (in `.mlguy-home`), so later commands need not set it again. The
 project folder is a git repository, and `mlguy submit` and `finish` commit to it.
-
-**The split is checked** before it is frozen: identical inputs in two splits, a validation or
-test set too small to measure anything, a validation set whose labels look unlike the test
-set's. Each `check:` line `mlguy init` prints is a way the final score could mislead. Fix it,
-or explain it in the brief and to the user, before going on; once anything is scored, the task
-can no longer be changed.
 
 **The starting model** exists to prove the pipeline runs and to give later work a number to
 beat. Choose the simplest thing that is reasonable for this data, keep it fast, and do not

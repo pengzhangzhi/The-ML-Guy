@@ -47,7 +47,12 @@ groups are where evaluators quietly differ from their description.
 
 ## The split
 
-- **Leakage between splits:** the same or near-identical examples in two splits; related rows
+The framework checks nothing about the split: it does not read the inputs and holds no
+thresholds. You are the only check there is, so start with the blunt ones and compute them:
+
+- **The same thing twice:** ids that appear in two splits, and inputs that are identical in two
+  splits whatever their ids. Count them.
+- **Leakage between splits:** near-identical examples in two splits; related rows
   (the same patient, donor, family, sequence cluster, slide) spread across them when the brief
   says new cases will be unrelated.
 - **A grouping borrowed from somewhere else may not group these examples.** Published clusters,
@@ -61,11 +66,15 @@ groups are where evaluators quietly differ from their description.
   that implies the outcome, a timestamp after the event, an identifier that links a test row to a
   labelled training row).
 - **Does validation ask the test's question?** Compare how they were drawn and what they
-  contain. If they differ, is `validation_matches_test = false` set, and is the reason given?
+  contain: the class balance, the spread of the target, whatever the metric is sensitive to. If
+  they differ, does `validation_note` in `task.toml` say so, in words the user will understand?
+  That note is what reaches the report.
 - **Does the test match the use?** The brief says what new inputs will look like. Would a high
   score on this test set mean the model works there?
 - **Sizes:** enough examples, and enough of each class or group the metric depends on, for the
-  score to mean something.
+  score to mean something. There is no fixed number: estimate how far the metric moves from
+  resampling this many examples alone, and say whether the differences the search will be
+  chasing are bigger than that.
 
 ## What to write
 

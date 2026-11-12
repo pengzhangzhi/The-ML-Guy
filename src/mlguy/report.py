@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from mlguy import budget
@@ -49,9 +48,13 @@ def _budget_used(task: dict, records: list[dict]) -> str:
     return (", ".join(parts).capitalize() + ".") if parts else "No budget was set."
 
 
-def _split_checks(task: dict) -> list[str]:
-    path = state_dir(task) / "split_checks.json"
-    return json.loads(path.read_text()) if path.exists() else []
+def _audit(task: dict) -> str:
+    skipped = state_dir(task) / "audit_skipped.txt"
+    if skipped.exists():
+        return ("> **The split and the evaluator were not audited before they were frozen.** "
+                f"The reason given: {skipped.read_text().strip()}")
+    return ("Before any modelling, a separate agent tried to break the split and the evaluator; "
+            "what it found is in `task/audit.md`.")
 
 
 def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_result: dict,
@@ -127,11 +130,7 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
     elif baseline:
         lines += ["No submission beat the starting model, so the starting model is the result.", ""]
 
-    found = _split_checks(task)
-    if found:
-        lines += ["## Raised when the task was set up", "",
-                  "These were flagged about the data split before any modelling. Each affects how far the "
-                  "score above can be trusted.", ""] + [f"- {item}" for item in found] + [""]
+    lines += [_audit(task), ""]
 
     lines += [
         "## What was tried",

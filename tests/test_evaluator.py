@@ -109,9 +109,6 @@ def test_generation_loop(generation, capsys):
     assert run(project, "init") == 0
     out = capsys.readouterr().out
     assert "20 per condition on every submission" in out and "50 per condition for the final" in out
-    assert "validation has only 3 conditions" in out and "test has only 3 conditions" in out, \
-        "a generation task's conditions are still counted, and too few of them is still a noisy score"
-    assert "not checked:" in out, "and what was not looked at is said, rather than implied by silence"
     data = project / "task" / "data"
     assert not (data / "test_labels.csv").exists() and not (data / "test_inputs.csv").exists(), \
         "the final conditions stay unseen until finish"

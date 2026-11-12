@@ -52,15 +52,8 @@ def load_task(project_dir: str | Path) -> dict:
 
 
 def validation_caveat(task: dict) -> str | None:
-    """The caveat to carry everywhere: a validation/test mismatch, and any note on the split."""
-    data = task.get("data", {})
-    note = data.get("validation_note", "").strip()
-    if data.get("validation_matches_test", True):
-        return note or None
-    return (
-        "Validation does not ask the same question as the test set, so a better validation "
-        "score does not reliably mean a better model." + (f" {note}" if note else "")
-    )
+    """What the user was told about the split, to carry into the report word for word."""
+    return task.get("data", {}).get("validation_note", "").strip() or None
 
 
 STATE_POINTER = ".mlguy-home"

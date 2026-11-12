@@ -21,7 +21,7 @@ uv venv --python 3.11 && source .venv/bin/activate
 uv pip install -e .
 ```
 
-The core install is only what running and recording a project needs (numpy, pandas, scipy).
+The core install is only what running and recording a project needs (numpy, pandas).
 Each project's evaluator, model and page bring their own libraries (scikit-learn, scanpy,
 lightgbm, torch, gradio...), installed by the agent when that project needs them.
 
