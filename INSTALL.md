@@ -48,6 +48,7 @@ This machine has The-ML-Guy installed. When asked to build a prediction model fr
 read and follow /absolute/path/to/The-ML-Guy/skills/build-project/SKILL.md, then
 skills/research/SKILL.md, then skills/deploy/SKILL.md. When build-project asks for an
 audit, start a separate Codex session (`codex exec`) that follows skills/audit/SKILL.md.
+Before writing anything the user will read, follow skills/writing/SKILL.md.
 Run `mlguy --help` for the commands.
 ```
 

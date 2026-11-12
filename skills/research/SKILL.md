@@ -118,3 +118,6 @@ won that way will not survive the final check or the user.
 After `mlguy finish`, write what you learned into `PROJECT_MEMORY.md`: what worked, what did
 not and why you think so, and what you would try with more budget. Keep it short and concrete
 enough that someone picking the project up later does not repeat your dead ends.
+
+When you tell the user where things stand, during the search or at the end, follow the
+`writing` skill: the score and what it means for them first, then what you tried.

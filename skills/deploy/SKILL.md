@@ -20,7 +20,7 @@ submission in `final/`, together with its outputs on the test set (`test_outputs
 test labels (`test_labels.csv`). The test set is spent once it is scored, so use them freely
 from here on. Your job is to make the top of `REPORT.md` answer the question they actually
 asked, in the words of `task/brief.md`; edit it as you see fit, since `finish` will not write it
-again.
+again. The `writing` skill covers how; what follows is what the report must say.
 
 - **Lead with what the number means for them,** not with the number. A Spearman of 0.63 means
   little; "if you pick the 50 variants this model ranks highest, about N of them are in the
@@ -59,7 +59,7 @@ and the report has to say which one and what to set it to. Test it from `final/`
 the working folder: a path that resolves only where you built the model works for you and for
 nobody else.
 
-Accept input in the form they already have it, and when a row cannot be used, say why in
+The text on the page follows the `writing` skill too. Accept input in the form they already have it, and when a row cannot be used, say why in
 their terms. Check it yourself before handing over: start it, feed it real data, and feed it
 something broken.
 

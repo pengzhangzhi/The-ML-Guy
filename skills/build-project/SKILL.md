@@ -25,6 +25,9 @@ translation. Never ask them to choose a metric, a split, a model or a loss by na
 they will do with the predictions and what the new inputs will look like, and derive the rest
 yourself.
 
+Everything you write for them — the questions, the brief, the hand-over — follows the `writing`
+skill.
+
 ## 1. Look at the data first
 
 Before asking anything, open the data and find out what you can: columns, number of rows,
