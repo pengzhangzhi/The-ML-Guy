@@ -202,6 +202,8 @@ def cmd_init(args: argparse.Namespace) -> int:
         if generation:
             shutil.move(test_inputs, hidden_inputs_path(task))
         print(f"test {'set' if generation else 'labels'} moved out of the project: {test_labels_path(task).parent}")
+        print("  anything else that still holds those answers — the file your preparation script "
+              "read — belongs outside the project too; training code can open any path")
     elif test_labels_path(task).exists():
         test_frame = pd.read_csv(test_labels_path(task), dtype={id_col: str})
         if not generation and not test_inputs.exists():

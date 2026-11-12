@@ -136,6 +136,12 @@ mlguy new <folder> --name <project-name>
 # brief where the raw data lives.
 ```
 
+**Put the raw source out of reach.** The file the user handed you usually holds every
+measurement, including the ones you are about to hold back, and it is usually joinable to the
+inputs by something the model is shown. Hiding `test_labels.csv` achieves nothing while that
+file sits beside the project: move it outside the project folder, say where it went in the
+brief, and prepare the data from there. Every audit so far has caught this.
+
 Nothing is frozen yet. **The data.** Keep the inputs in whatever form suits them: a table, an
 expression matrix, a folder of images or structures. `mlguy` never reads them; only your code
 does. What it needs is an `id` for every validation and test example, carried by the inputs, and
