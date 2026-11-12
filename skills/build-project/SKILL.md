@@ -121,6 +121,13 @@ metric must be a number; others may be `NaN` when undefined. Set `[metric] prima
 from it to tune against the same measure. Refuse outputs that cannot be scored (missing or
 repeated ids, wrong columns) by exiting with an error; never score them as zero.
 
+**Two worked evaluators sit beside this skill**, in `reference/`:
+`evaluate_prediction.py` and `evaluate_generation.py`. Each is a complete, runnable script where
+everything except one marked function is the contract — the argument handling, what gets refused,
+matching by id, and writing only `--result`. Copy the one that fits, replace the marked function,
+delete the rest. The generative one also shows how to read `[sampling] n` and why the count and
+the per-sample average are load-bearing rather than bookkeeping.
+
 **Write nothing but `--result`.** The evaluator runs with `task/` as its working directory, so a
 relative path it writes to lands in the frozen task and breaks its fingerprint, and the next
 submission is refused. Nothing but `--result` is read back either, so a file written beside it is
