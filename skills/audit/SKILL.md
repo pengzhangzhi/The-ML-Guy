@@ -12,7 +12,7 @@ conversation with the user, and that is the point: judge what is on disk.
 
 Read `task/brief.md`, `task/task.toml`, `task/evaluate.py`, the script that prepared
 `task/data`, and the data itself. Do not change any of it; report. Do not train models beyond
-what a check needs, and never score anything against the test labels: count and compare them,
+what a check needs, and never score anything on the test split: count and compare it,
 nothing more.
 
 ## The evaluator
@@ -21,16 +21,16 @@ The search will optimise exactly what it rewards. Run it with
 `mlguy score --outputs FILE` (it scores validation) on outputs you construct, and record each
 score:
 
-- **Good:** the true labels written as outputs, where that makes sense. It should score at or
-  near the best possible value. A generative task has no true output, so stand something known
-  to be good in its place: outputs from a published model for this problem, or real examples of
-  the thing being generated. Give it the number of samples per condition the task fixes — the
-  best of many scores better than many do, and `mlguy score` will say so if you do not.
-- **Degenerate:** a constant, the majority class, shuffled labels, random values, training
-  labels copied over by any shared key, one good output repeated (for generation). None of
-  these should come anywhere near "good".
-- **Malformed:** a missing id, a repeated id, an id that is not in the split, a missing column,
-  a NaN. Each should be refused with an error, not scored, and certainly not scored as zero.
+- **Good:** the best outputs available — the true answers written as outputs where the
+  reference holds them, otherwise something known to be good: a published model's outputs, real
+  examples of what is being produced. Shape them exactly as a submission would be, including any
+  count `[infer] args` fixes. It should score at or near the best possible value.
+- **Degenerate:** a constant, the most common answer, a shuffle, random values, answers copied
+  from training by any shared key, one good output repeated, and whatever shortcut this problem
+  invites. None of these should come anywhere near "good".
+- **Malformed:** missing items, repeated items, items not in the split, the wrong form, the
+  wrong count, a NaN. Each should be refused with an error, not scored, and certainly not
+  scored as zero.
 - **Reordered:** the same outputs in another row order must score the same.
 - **Can it resolve a real difference?** Good against degenerate only shows the metric is not
   broken. What the search needs is for it to separate two *plausible* models. Where something is
@@ -60,8 +60,7 @@ thresholds. You are the only check there is, so start with the blunt ones and co
   the project's examples are often not that thing: a held-out item may be a fragment, a crop, a
   window or a derived row whose parent sits in another cluster, so holding out by cluster holds
   out nothing. Check it the blunt way — look for the held-out examples themselves, or their
-  content, inside the training set. One trial's split was grouped by published 30%-identity
-  clusters and 15 of its 192 held-out items were in training verbatim.
+  content, inside the training set.
 - **Leakage inside the inputs:** columns that encode the answer or the future (a discharge code
   that implies the outcome, a timestamp after the event, an identifier that links a test row to a
   labelled training row).

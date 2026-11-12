@@ -13,7 +13,7 @@ sequence."
 Paths to files, or where they can be downloaded. Say which column is the measurement if it is
 not obvious.
 
-## 3. What will you do with the predictions?
+## 3. What will you do with what the model produces?
 
 This decides how the model is scored, so be concrete. "I'll rank a few thousand candidates and
 test the top 50 in the lab" leads to a different model from "I need the predicted value to be

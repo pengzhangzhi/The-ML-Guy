@@ -46,5 +46,5 @@ The data is not in this folder. Each prompt says what it is.
 ## Starting your own
 
 There is no example project to copy. `mlguy new my-project` scaffolds the skeleton, and the agent
-fills it in with you — that conversation is what this folder is a record of. Two worked
-evaluators sit in `skills/build-project/reference/` for the one part with a fixed shape.
+fills it in with you — that conversation is what this folder is a record of. The evaluator
+contract, and worked cases for common shapes of problem, sit in `skills/evaluation/`.

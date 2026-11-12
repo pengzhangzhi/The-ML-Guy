@@ -16,15 +16,16 @@ python app.py      # the page you build
 ## The report
 
 `mlguy finish` writes `REPORT.md` with the scores and the experiment table, and puts the scored
-submission in `final/`, together with its outputs on the test set (`test_outputs.csv`) and the
-test labels (`test_labels.csv`). The test set is spent once it is scored, so use them freely
+submission in `final/`, together with its outputs on the test split (`test_outputs`) and the
+test reference beside them; `finish` prints where the test inputs are kept. The test split is
+spent once it is scored, so use all of it freely
 from here on. Your job is to make the top of `REPORT.md` answer the question they actually
 asked, in the words of `task/brief.md`; edit it as you see fit, since `finish` will not write it
 again. The `writing` skill covers how; what follows is what the report must say.
 
 - **Lead with what the number means for them,** not with the number. A Spearman of 0.63 means
   little; "if you pick the 50 variants this model ranks highest, about N of them are in the
-  true top 10%" is something they can act on. Compute that from the test predictions rather
+  true top 10%" is something they can act on. Compute that from the test outputs rather
   than asserting it.
 - **Say what it cannot do.** The split defines what was shown to work. A model tested on
   single mutants has not been shown to work on combinations, and saying so is part of the job.

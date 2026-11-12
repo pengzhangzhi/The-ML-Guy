@@ -13,13 +13,20 @@ from pathlib import Path
 
 import pytest
 
-REFERENCE = Path(__file__).resolve().parents[1] / "skills" / "build-project" / "reference"
-SCRIPTS = sorted(REFERENCE.glob("evaluate_*.py"))
+SKILLS = Path(__file__).resolve().parents[1] / "skills"
+REFERENCE = SKILLS / "build-project" / "reference"
+EVALUATION = SKILLS / "evaluation"
+SCRIPTS = [EVALUATION / "reference" / "evaluate.py", *sorted((EVALUATION / "cases").glob("evaluate_*.py"))]
 ARGUMENTS = ("--outputs", "--reference", "--inputs", "--split", "--result")
 
 
-def test_there_is_a_worked_evaluator_for_both_kinds_of_task():
-    assert {p.name for p in SCRIPTS} == {"evaluate_prediction.py", "evaluate_generation.py"}
+def test_the_evaluation_skill_has_a_template_and_worked_cases():
+    """The template is the contract for any task; each case is one shape of problem, and every
+    case evaluator a case note points to exists."""
+    assert all(p.exists() for p in SCRIPTS) and len(SCRIPTS) >= 2
+    for note in (EVALUATION / "cases").glob("*.md"):
+        for name in (w.strip("`.,") for w in note.read_text().split() if w.strip("`.,").endswith(".py")):
+            assert (EVALUATION / "cases" / name).exists(), f"{note.name} points to a missing {name}"
 
 
 @pytest.mark.parametrize("script", SCRIPTS, ids=lambda p: p.name)
@@ -56,7 +63,7 @@ def test_the_reference_brief_ends_with_the_line_init_looks_for():
 
 def test_every_skill_that_writes_for_the_user_points_at_the_writing_skill():
     """A skill nothing points to does not get loaded, so the pointers are what make it apply."""
-    skills = REFERENCE.parents[1]
+    skills = SKILLS
     assert (skills / "writing" / "SKILL.md").exists()
     for name in ("build-project", "audit", "research", "deploy"):
         assert "`writing` skill" in " ".join((skills / name / "SKILL.md").read_text().split()), name
@@ -66,3 +73,18 @@ def test_the_build_skill_hands_the_machine_to_the_environment_skill():
     skills = REFERENCE.parents[1]
     assert (skills / "environment" / "SKILL.md").exists()
     assert "`environment` skill" in " ".join((skills / "build-project" / "SKILL.md").read_text().split())
+
+
+def test_the_build_skill_hands_success_to_the_evaluation_skill():
+    text = " ".join((SKILLS / "build-project" / "SKILL.md").read_text().split())
+    assert "`evaluation` skill" in text
+    assert "## 5. Write the evaluator" not in text, "the method lives in one place"
+
+
+def test_the_main_skills_hold_no_task_kinds():
+    """Lessons about particular shapes of problem live in evaluation/cases/, opened only when a
+    problem looks like them. The skills every project reads stay general."""
+    for name in ("build-project", "research", "audit", "evaluation"):
+        text = (SKILLS / name / "SKILL.md").read_text()
+        for word in ("[sampling]", "test_labels", "validation_labels", "generative task", "per condition"):
+            assert word not in text, f"{name} still says {word!r}"
