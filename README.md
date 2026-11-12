@@ -24,6 +24,15 @@ The-ML-Guy is a thin layer on top of a coding agent, not a framework that runs o
 - **Maximum room for the agent.** The task, the data, the metric and the budget are fixed. The
   modelling is not: any architecture, any library, any code structure. Autoresearch is only as
   good as the freedom it has, so the tool stays out of it.
+- **Skills before framework code.** For each new feature, first ask whether a short agent skill
+  can deliver the user's goal. Add framework code only when reliable enforcement, shared
+  interfaces, durable state, or reproducibility requires it. Skills guide judgment; code
+  protects invariants.
+- **Agent judgment for user-specific choices.** The framework reports the best validation
+  score and keeps evaluation honest. The agent reviews the evidence and the user's priorities
+  to choose the final model: highest score by default, or a comparably strong but simpler or
+  more practical submission with an explicit recorded reason. No universal complexity
+  penalty or hard-coded trade-off is imposed.
 - **Domain- and format-agnostic.** The core knows nothing about proteins, cells, patients or
   images, does not depend on how a task stores its inputs, and knows nothing about what makes
   an output good beyond what the task tells it. Domain knowledge lives in the projects.
