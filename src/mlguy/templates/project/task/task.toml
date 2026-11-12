@@ -46,7 +46,10 @@ direction = "maximize"               # or "minimize"
 # seed = 0
 # final_n = 1000                     # for the one final check
 
+# `max_submissions` is enforced: `mlguy submit` refuses past it. Any other limit the user set
+# goes here under whatever name fits; it is shown to the agent and printed in the report, and
+# keeping it is the agent's job.
 [budget]
 max_submissions = 10
-# max_hours = 6
-# deadline = "2026-12-01T09:00:00"
+# max_gpu_hours = 40
+# deadline = "2026-12-01"

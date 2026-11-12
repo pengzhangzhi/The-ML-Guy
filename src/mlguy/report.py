@@ -39,13 +39,14 @@ def _budget_used(task: dict, records: list[dict]) -> str:
     if "submissions" in status["limits"]:
         s = status["limits"]["submissions"]
         parts.append(f"{s['used']} of {s['limit']} submissions used")
-    if "hours" in status["limits"]:
-        h = status["limits"]["hours"]
-        parts.append(f"{h['used']} of {h['limit']} hours used")
     errors = sum(1 for r in records if r["status"] == "error")
     if errors:
         parts.append(f"{errors} submission(s) failed to run")
-    return (", ".join(parts).capitalize() + ".") if parts else "No budget was set."
+    line = (", ".join(parts).capitalize() + ".") if parts else "No submission limit was set."
+    if budget.agreed_only(task):
+        # Not checked by anyone but the agent, so it is reported as what was agreed, not as kept.
+        line += f" Also agreed, and the agent's to keep: {budget.agreed_only(task)}."
+    return line
 
 
 def _audit(task: dict) -> str:

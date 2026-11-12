@@ -1,52 +1,38 @@
-"""The budget: whatever limit fits the user. `mlguy submit` refuses once any one is reached.
+"""The budget: how many scored submissions the search gets. `mlguy submit` refuses past it.
 
-Enforced: number of submissions, wall-clock hours from the first submission, a deadline.
-Recorded but not enforced: GPU-hours and money. The framework does not manage compute, so it
-cannot see a job's GPU time or its cost; it carries the number the user agreed to so that it
-reaches the agent and the report, and `describe` says plainly that keeping it is the agent's job.
+The count is the one limit that protects the score. Every look at validation fits the search to
+it a little more, so how many looks there are is part of the rubric. Time, GPU-hours and money
+are the user's limits too, but they do not change what a score means and the framework never
+sees the compute. Whatever else `[budget]` holds is carried to the agent and the report as it
+was written, and keeping it is the agent's job.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
-ENFORCED = ("max_submissions", "max_hours", "deadline")
-RECORDED_ONLY = ("max_gpu_hours", "max_usd")
-
-
-def _parse(stamp: str) -> datetime:
-    value = datetime.fromisoformat(stamp)
-    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+ENFORCED = "max_submissions"
 
 
 def state(task: dict, records: list[dict]) -> dict:
     """What the budget allows right now, and why it is spent if it is."""
     spec = task.get("budget", {})
-    counted = [r for r in records if r.get("counts_against_budget", True)]
-    used = len(counted)
-    started = _parse(counted[0]["time"]) if counted else None
-    now = datetime.now(timezone.utc)
+    used = sum(1 for r in records if r.get("counts_against_budget", True))
+    limits, reason = {}, None
+    if ENFORCED in spec:
+        limits["submissions"] = {"used": used, "limit": spec[ENFORCED]}
+        if used >= spec[ENFORCED]:
+            reason = f"all {spec[ENFORCED]} submissions are used"
+    for key, value in spec.items():
+        if key != ENFORCED:
+            # TOML reads a bare date as a date, which `status --json` could not print.
+            limits[key] = {"limit": value if isinstance(value, (int, float, str)) else str(value),
+                           "enforced": False}
+    return {"limits": limits, "spent": reason is not None, "reason": reason}
 
-    limits, spent = {}, []
-    if "max_submissions" in spec:
-        limits["submissions"] = {"used": used, "limit": spec["max_submissions"]}
-        if used >= spec["max_submissions"]:
-            spent.append(f"all {spec['max_submissions']} submissions are used")
-    if "max_hours" in spec:
-        hours = (now - started).total_seconds() / 3600 if started else 0.0
-        limits["hours"] = {"used": round(hours, 2), "limit": spec["max_hours"]}
-        if started and hours >= spec["max_hours"]:
-            spent.append(f"{spec['max_hours']} hours have passed since the first submission")
-    if "deadline" in spec:
-        deadline = _parse(str(spec["deadline"]))
-        limits["deadline"] = {"at": deadline.isoformat(timespec="seconds")}
-        if now >= deadline:
-            spent.append(f"the deadline of {deadline.isoformat(timespec='seconds')} has passed")
-    for key in RECORDED_ONLY:
-        if key in spec:
-            limits[key] = {"limit": spec[key], "enforced": False}
 
-    return {"limits": limits, "spent": bool(spent), "reason": "; ".join(spent) or None}
+def agreed_only(task: dict) -> str | None:
+    """The limits the user set that the framework does not enforce, as they were written."""
+    rest = [f"{key} = {value}" for key, value in task.get("budget", {}).items() if key != ENFORCED]
+    return ", ".join(rest) or None
 
 
 def describe(task: dict, records: list[dict]) -> str:
@@ -63,17 +49,10 @@ def describe(task: dict, records: list[dict]) -> str:
             return f"Budget spent: {status['reason']}. The final score has been taken; see REPORT.md."
         return f"Budget spent: {status['reason']}. Run `mlguy finish`."
     parts = []
-    unenforced = [k for k, v in status["limits"].items() if isinstance(v, dict) and v.get("enforced") is False]
     if "submissions" in status["limits"]:
         s = status["limits"]["submissions"]
-        parts.append(f"{s['limit'] - s['used']} of {s['limit']} submissions left")
-    if "hours" in status["limits"]:
-        h = status["limits"]["hours"]
-        parts.append(f"{max(0.0, h['limit'] - h['used']):.2f} of {h['limit']} hours left")
-    if "deadline" in status["limits"]:
-        remaining = _parse(status["limits"]["deadline"]["at"]) - datetime.now(timezone.utc)
-        parts.append(f"deadline in {max(timedelta(0), remaining)}")
-    line = "Budget: " + ", ".join(parts) + "."
-    if unenforced:
-        line += f" ({', '.join(sorted(unenforced))} is recorded in task.toml but not enforced: keep it yourself.)"
-    return line
+        parts.append(f"Budget: {s['limit'] - s['used']} of {s['limit']} submissions left.")
+    if agreed_only(task):
+        parts.append(f"Also agreed with the user: {agreed_only(task)}. `mlguy` does not enforce "
+                     "these: keep them yourself.")
+    return " ".join(parts)
