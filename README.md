@@ -1,7 +1,7 @@
 # The-ML-Guy
 
 Describe a modelling problem — something to predict, or something to generate — to a coding agent (Claude Code or Codex) and get back a trained
-model, a report, and a web page for using it. No ML background needed.
+model, a report, and a web page for using it. It works whether or not you know machine learning.
 
 The design rule: **be exact about the problem and the scoring, and leave the modelling open.**
 
@@ -45,7 +45,7 @@ where the agent can weigh it against the problem in front of it.
 ## Status
 
 Early but complete end to end: the project contract, the scoring rubric, the hill-climbing
-loop with its budget and experiment records, and the five skills. It has been run end to end
+loop with its budget and experiment records, and the six skills. It has been run end to end
 by both Claude Code and Codex on five problems of different shapes — a clinical table,
 single-cell annotation, pathology tiles, protein variant ranking, and a generative design
 task. What was asked and what came back is in [gallery/](gallery/).
@@ -180,7 +180,8 @@ the commands, and leaves the judgment to the agent.
 | `audit` | Run by a fresh agent: try to break the split and the evaluator before they are frozen |
 | `research` | The loop: the goal, the rubric, the budget, the commands. The approach is the agent's own |
 | `deploy` | Score the test set once, write the report, build a page for the user's problem, record what was learned |
-| `writing` | Used by the other four for anything the user reads: what they need first, in their words, with the depth kept and the padding cut |
+| `environment` | Find out what the machine offers — compute, scheduler, storage, software — and write it down once for every later step |
+| `writing` | Used by the others for anything the user reads: what they need first, in their words, with the depth kept and the padding cut |
 
 Starting a project by hand:
 

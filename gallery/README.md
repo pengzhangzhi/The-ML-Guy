@@ -5,9 +5,10 @@ Each one is a single page with the same three parts: **the request** the scienti
 questions** the agent asked back before anything was frozen, and **what you get**.
 
 If you have a problem of your own, read the prompt closest to it and write yours the same way.
-You do not need to know any machine learning to write a good one — none of these name a model, a
-metric or a loss. They say what the data is, what the answer will be used for, and what counts
-as better than what you do today.
+Write it in whatever terms you think in. Most of these name no model, metric or loss; the
+ProteinMPNN one names the folding model and the score it wants, and the agent took them as
+requirements. What every good one says is what the data is, what the answer will be used for,
+and what counts as better than what you do today.
 
 | Problem | Data | What came out |
 | --- | --- | --- |
