@@ -149,6 +149,38 @@ def test_validate_refuses_before_a_model_exists(project, capsys):
     assert "model" in capsys.readouterr().err
 
 
+def test_a_model_that_reads_task_fails_at_validate_not_at_finish(project, capsys):
+    """Submissions are scored from their own copy, which holds no task/.
+
+    A model that reads its data out of task/ when it predicts used to pass every submission and
+    fail at `mlguy finish`, with the budget spent and the test set about to be opened. It has to
+    fail on the free baseline instead, and the error has to say why.
+    """
+    (project / "task" / "data" / "offset.txt").write_text("1.5")
+    run(project, "init")
+    (project / "infer.py").write_text(
+        'import argparse, json\n'
+        'from pathlib import Path\n'
+        'import pandas as pd\n'
+        'p = argparse.ArgumentParser()\n'
+        'p.add_argument("--model", type=Path, required=True)\n'
+        'p.add_argument("--input", type=Path, required=True)\n'
+        'p.add_argument("--output", type=Path, required=True)\n'
+        'a = p.parse_args()\n'
+        '# the trap: a reference file read relative to this script, inside task/\n'
+        'offset = float((Path(__file__).resolve().parent / "task" / "data" / "offset.txt").read_text())\n'
+        'rows = pd.read_csv(a.input)\n'
+        'rows["prediction"] = [offset + s.count("A") for s in rows["sequence"]]\n'
+        'rows[["id", "prediction"]].to_csv(a.output, index=False)\n'
+    )
+
+    assert run(project, "validate") == 1
+    message = capsys.readouterr().err
+    assert "task/" in message and "model/" in message
+    # nothing was recorded, so the loop never opened on a pipeline that cannot be reproduced
+    assert Experiments(project).all() == []
+
+
 def test_submit_requires_validate_first(project, capsys):
     run(project, "init")
     assert run(project, "submit", "--note", "skip the gate") == 2

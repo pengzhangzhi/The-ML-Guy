@@ -85,6 +85,10 @@ the brief, and set `validation_matches_test = false` with a `validation_note` in
 The warning then follows through to the report. A caveat that is not a mismatch (validation and
 test share patients, say) also goes in `validation_note`; it reaches the report either way.
 
+`validation_note` is frozen with the rest of `task.toml` and quoted **word for word into the
+report the user reads**, so write it as prose for them and get it right the first time: a mistake
+in it cannot be corrected afterwards, only apologised for underneath.
+
 ## 5. Write the evaluator
 
 Every task carries its own scoring, `task/evaluate.py`, frozen with the task. The framework has
@@ -133,6 +137,13 @@ The search will optimise exactly what this script rewards, so:
 - **Prove it can tell good from bad.** Run `mlguy score --outputs FILE` on something good (the
   validation labels themselves, where that makes sense) and on something broken (shuffled,
   constant, random). If the scores do not separate, it cannot guide a search.
+- **Check the metric is not already saturated.** Train the simplest reasonable model and score it
+  now, before the freeze, rather than at step 9. If that baseline already sits near the best
+  possible value, the entire budget can only move the number by the little left over, and most of
+  that will be noise: the project is finished before it starts. A ceiling found now is fixed by a
+  harder metric or a harder split; found afterwards it cannot be fixed at all, because the task
+  cannot change once anything is scored. In one trial a sixteen-second ridge regression scored
+  0.94 of a possible 1.00, which nothing in the twelve submissions that followed could improve on.
 - **Prove it can resolve a real difference, and not merely a broken one.** Good against broken is
   a floor check; the search needs the metric to separate two plausible models. If anything is
   already known to help on this problem — a published model, a standard baseline — score it
@@ -169,7 +180,13 @@ to lay out. A folder of many small files is fine; freezing it takes a little lon
 where `PATH` is a split's inputs exactly as `task.toml` names them, and the output is a CSV
 with `id` and whatever your evaluator reads (by convention `prediction`). `infer.py` only ever
 sees inputs, so the inputs must carry the `id`; the model should ignore it. It also sees a
-whole split at once. Leave out of the validation and test inputs anything that links rows to
+whole split at once. **`infer.py` must not read anything out of `task/` when it predicts.** Every
+submission is scored from its own copy, holding only `infer.py`, `src/` and `model/`, and the user
+runs the finished model the same way out of `final/`; neither has a `task/`. A parent sequence, a
+scaler, a vocabulary or a label list that the model needs at prediction time belongs in `model/`,
+written there by the training code.
+
+Leave out of the validation and test inputs anything that links rows to
 each other, such as a patient or donor number, unless the model will have it in use too: rows
 from the same patient later in the file can give the outcome away.
 
@@ -177,9 +194,17 @@ from the same patient later in the file can give the outcome away.
 
 You built the split and wrote the evaluator, and you are about to hill-climb on them. Have
 someone without that stake try to break them: a fresh session or subagent that has not seen this
-conversation, following the `audit` skill. Give it only the project folder. It writes
-`task/audit.md`. Fix what it finds, or explain in the brief why it does not matter, and keep
-the audit's summary for the user.
+conversation, following the `audit` skill. It writes `task/audit.md`. Fix what it finds, or
+explain in the brief why it does not matter, and keep the audit's summary for the user.
+
+**Draft the brief first** (step 8), even though the user has not seen it: the auditor reads it to
+learn what the scoring is meant to do, and cannot tell a metric that misses its description from
+one that matches it otherwise. Audit the draft, then correct it and send it to be approved.
+
+The auditor starts from the project folder, but it has none of what you have learned about this
+machine, so tell it the rest: which interpreter or virtual environment to use, that `mlguy score`
+runs from inside the project, where to put scratch files, and what compute it has. Give it no
+hypothesis of your own — a finding it had to reach by itself is worth more than one it agreed to.
 
 ## 8. Write the brief and get it approved
 

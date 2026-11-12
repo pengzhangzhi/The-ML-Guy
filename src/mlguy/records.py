@@ -42,6 +42,25 @@ def tool_version() -> str:
     return __version__
 
 
+SCORING_SOURCES = ("project.py", "judge.py")
+
+
+def scoring_digest() -> str:
+    """A fingerprint of the framework code that turns a submission into a score.
+
+    `tool_version` says which mlguy scored a submission, but most of what changes between two
+    versions has nothing to do with scoring, and a warning that fires on every upgrade leaves
+    the reader to diff the tool themselves. This narrows it to the files that decide what a
+    score is, so an upgrade can be reported as harmless when it was.
+    """
+    here = Path(__file__).resolve().parent
+    h = hashlib.sha256()
+    for name in SCORING_SOURCES:
+        path = here / name
+        h.update(path.read_bytes() if path.exists() else b"")
+    return h.hexdigest()[:12]
+
+
 IGNORED_IN_TASK = ("__pycache__", ".ipynb_checkpoints", ".DS_Store")
 
 # The task must not change once it is frozen, and that is checked on every submission. Proving

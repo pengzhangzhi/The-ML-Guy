@@ -37,7 +37,16 @@ from mlguy.project import (
     test_labels_path,
     validation_caveat,
 )
-from mlguy.records import Experiments, git_commit, hash_task, now, task_manifest, tool_version
+from mlguy.records import (
+    SNAPSHOT_PATHS,
+    Experiments,
+    git_commit,
+    hash_task,
+    now,
+    scoring_digest,
+    task_manifest,
+    tool_version,
+)
 
 REQUIRED_KEYS = [("name",), ("task", "type"), ("task", "output"), ("data", "train"),
                  ("metric", "primary"), ("metric", "direction")]
@@ -92,6 +101,7 @@ def _record_score(experiments: Experiments, task: dict, number: int, note: str,
         "status": "ok" if result else "error",
         "counts_against_budget": counts,
         "tool": tool_version(),
+        "scoring": scoring_digest(),
     }
     if result:
         record["metrics"] = result["metrics"]
@@ -113,10 +123,18 @@ def _print_scored(record: dict, task: dict, experiments: Experiments,
     if previous_best and previous_best["number"] != record["number"]:
         change = record["metrics"][primary] - previous_best["metrics"][primary]
         print(f"  {change:+.4f} {primary} against experiment {previous_best['number']}, the best before this")
+    # An upgrade mid-project is only a problem if it touched the scoring itself, so say which
+    # of the two happened rather than leaving the reader to diff the tool.
     scored_by = {r["tool"] for r in experiments.all() if r.get("tool")}
-    if len(scored_by) > 1:
-        print(f"  warning: these submissions were not all scored by the same mlguy "
-              f"({', '.join(sorted(scored_by))}); their scores may not be comparable")
+    scoring = {r["scoring"] for r in experiments.all() if r.get("scoring")}
+    if len(scoring) > 1:
+        print(f"  warning: mlguy's own scoring code changed during this project "
+              f"({', '.join(sorted(scored_by))}); scores from either side of it are not comparable, "
+              f"and `mlguy submit` on the earlier experiments would rescore them")
+    elif len(scored_by) > 1:
+        print(f"  note: these submissions were scored by more than one mlguy "
+              f"({', '.join(sorted(scored_by))}), but its scoring code was the same in each, so the "
+              f"scores are comparable")
     best = experiments.best(primary, direction(task))
     if best and best["number"] != record["number"]:
         print(f"best so far: experiment {best['number']} with {primary}={best['metrics'][primary]:.4f}")
@@ -267,6 +285,29 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def _ready_to_score(project_dir: Path) -> None:
+    """What a submission must hold to be runnable, checked in the project itself, where the
+    paths still mean something to whoever reads the error."""
+    for name in (ENTRY_POINT, "model"):
+        if not (project_dir / name).exists():
+            raise SubmissionError(f"no {name} in {project_dir}: write {ENTRY_POINT} and train a model "
+                                  "into model/ before scoring")
+
+
+SNAPSHOT_HINT = (
+    f"\n\nnote: scoring runs {ENTRY_POINT} from the submission's own copy, which holds "
+    f"{', '.join(SNAPSHOT_PATHS)} and nothing else. A model that reads something out of task/ when it "
+    "predicts works in the project and fails here. Copy what it needs into model/ instead: the "
+    "model the user runs out of final/ will not have task/ either."
+)
+
+
+def _reads_task(message: str) -> str:
+    """Point at the usual cause when a submission cannot find a file."""
+    missing = ("FileNotFoundError", "No such file", "does not exist", "cannot find")
+    return SNAPSHOT_HINT if any(m in message for m in missing) else ""
+
+
 def cmd_validate(args: argparse.Namespace) -> int:
     task = load_task(args.project)
     check_task_unchanged(task)
@@ -277,14 +318,19 @@ def cmd_validate(args: argparse.Namespace) -> int:
         raise CommandError("the baseline cannot be redone once submissions exist: it would be a "
                            "submission the budget does not count. Use `mlguy submit`.")
 
+    # Score the submission's own copy, not the working folder. `finish` and the page both run
+    # the model from a copy that holds no task/, so a model that reads its data there has to
+    # fail now, on the free baseline, rather than at the final check with the budget spent.
+    number = 0
     try:
-        result = score_split(args.project, "validation", keep_outputs=experiments.outputs(0))
+        _ready_to_score(task["_project_dir"])
+        snapshot, _ = experiments.snapshot(task["_project_dir"], number)
+        result = score_split(args.project, "validation", run_dir=snapshot,
+                             keep_outputs=experiments.outputs(0))
     except SubmissionError as e:
-        print(f"the pipeline does not work yet:\n{e}", file=sys.stderr)
+        print(f"the pipeline does not work yet:\n{e}{_reads_task(str(e))}", file=sys.stderr)
         return 1
 
-    number = 0
-    experiments.snapshot(task["_project_dir"], number)
     record = _record_score(experiments, task, number, args.note, False, result, None)
     git_commit(task["_project_dir"], f"experiment 0 (starting model): {args.note}")
     print(f"{ENTRY_POINT} and scoring work end to end.")
@@ -309,14 +355,14 @@ def cmd_submit(args: argparse.Namespace) -> int:
     number = experiments.next_number()
     previous_best = experiments.best(task["metric"]["primary"], direction(task))
     try:
-        result, error = score_split(args.project, "validation",
+        _ready_to_score(task["_project_dir"])
+        target, size_mb = experiments.snapshot(task["_project_dir"], number)
+        if size_mb > 200:
+            print(f"note: the snapshot of this submission is {size_mb:.0f} MB", file=sys.stderr)
+        result, error = score_split(args.project, "validation", run_dir=target,
                                     keep_outputs=experiments.outputs(number)), None
     except SubmissionError as e:
-        result, error = None, str(e)
-
-    target, size_mb = experiments.snapshot(task["_project_dir"], number)
-    if size_mb > 200:
-        print(f"note: the snapshot of this submission is {size_mb:.0f} MB", file=sys.stderr)
+        result, error = None, str(e) + _reads_task(str(e))
     record = _record_score(experiments, task, number, args.note, True, result, error)
     commit = git_commit(task["_project_dir"], f"experiment {number}: {args.note}")
     if commit:
