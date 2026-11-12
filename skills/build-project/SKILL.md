@@ -42,8 +42,9 @@ combinations?") is far easier to answer than one asked in the abstract.
 
 ## 2. Find out what the machine offers
 
-Follow the `environment` skill: it finds out the compute, the scheduler, the storage and the
-software, and writes them into `PROJECT_MEMORY.md`. What is worth trying depends on it, and
+Follow the `environment` skill. On a machine it has seen before, that is a read of its notes
+and a check of what is free; on a new one, it learns the compute, the scheduler, the storage and
+how to build a working Python environment, and writes it down for this project and the next. What is worth trying depends on it, and
 `mlguy submit` runs `infer.py` wherever you run it, so when the model needs a GPU, run
 `mlguy submit` inside a job that has one.
 

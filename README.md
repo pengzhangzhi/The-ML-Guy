@@ -180,7 +180,7 @@ the commands, and leaves the judgment to the agent.
 | `audit` | Run by a fresh agent: try to break the split and the evaluator before they are frozen |
 | `research` | The loop: the goal, the rubric, the budget, the commands. The approach is the agent's own |
 | `deploy` | Score the test set once, write the report, build a page for the user's problem, record what was learned |
-| `environment` | Find out what the machine offers — compute, scheduler, storage, software — and write it down once for every later step |
+| `environment` | Learn the user's machine — compute, scheduler, storage, where code and environments go, how to build one — prove it with a small job, and write it down once per machine |
 | `writing` | Used by the others for anything the user reads: what they need first, in their words, with the depth kept and the padding cut |
 
 Starting a project by hand:
