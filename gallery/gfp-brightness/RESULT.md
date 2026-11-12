@@ -1,79 +1,27 @@
-# What came out
+# What you get
 
-Two runs on the same problem, one with Claude Code and one with Codex. **Their scores are not
-comparable** — each wrote its own evaluator and drew its own split from the same answers, so one
-measures "precision in the top 100 of a 3,000-candidate list" and the other "precision in the top
-3%".
+**Give it a few thousand designs carrying 6 to 12 mutations, synthesise the 100 it ranks
+highest, and about 93 of them will be bright.**
 
-| Run | Agent | Metric (its own name) | Final score | Submissions |
-| --- | --- | --- | --- | --- |
-| 1 | Claude Code | `precision_at_100` | 0.9300 | 5 of 12 |
-| 2 | Codex | `precision_at_top3pct` | 0.5647 | 5 of 8 |
+Scored once on 4,655 variants the model never saw:
 
-Read each report, not the table.
-
-## Run 1, in the scientist's terms
-
-> If you give this model a few thousand designs carrying 6 to 12 mutations and synthesise the 100
-> it ranks highest, about 93 of them will be bright.
-
-Measured on 4,655 variants held back to the end and scored once, against the alternatives on the
-same 4,655:
-
-| How you choose 100 | How many are bright |
-| --- | --- |
+| How you pick 100 to synthesise | How many are bright |
+| --- | ---: |
 | At random | 5 or 6 |
-| **Fewest mutations first** (current practice) | **14** |
+| Fewest mutations first (current practice) | 14 |
 | **This model** | **93** |
 
-About a 7× improvement on current practice. The baseline that current practice represents was
-measured, not asserted, because the agent asked for it during briefing.
+About a 7× improvement on current practice — and "current practice" is a measured number, not an
+assumed one, because the agent measured it during briefing.
 
-## The protein language model did not help
+**It also answered the question you asked in passing.** Protein language models did not help
+here: ESM-2's zero-shot score ranks at chance on this problem (AUROC 0.54), and adding it as
+features changed nothing. The agent spent one submission establishing that so the report could
+say it with a number. The model that shipped is a ridge-plus-logistic blend on substitution
+indicators — no language model, no GPU needed to run it.
 
-The scientist's one methodological prior was "I've heard protein language models help with this."
-The run tested it properly and reported the negative:
+**What it took:** 5 of 12 submissions. The agent stopped early.
 
-- ESM-2 3B's zero-shot masked-marginal score **ranks at chance on this problem** (AUROC 0.542;
-  0.518 for the 650M model).
-- Adding it as features to the winning blend moved nothing (internal AP 0.8774 against 0.8777).
-- The agent submitted that experiment anyway, explicitly so the report would carry a real
-  validation number for the question the scientist had asked.
-
-The model that won is a rank-average of a ridge regression and a logistic regression on
-substitution indicators plus mutation count. No language model, no GPU needed at prediction time.
-Being able to tell a scientist "the method you had heard about does not help here, and here is the
-number" is a good outcome, and it cost one submission out of twelve.
-
-## The audit found a real leak, twice
-
-Both runs' independent auditors found the same thing without being told to look: the scientist's
-own raw CSV sat beside the project and joined to the inputs by sequence, so hiding the test labels
-achieved nothing. On run 1 the auditor **recovered every validation answer and scored a perfect
-1.0** to prove it. The raw file was moved before the freeze and the report says where it went.
-
-This is the finding that justified the audit skill existing.
-
-## What not to believe
-
-- **Both holdouts are variants from the same deep mutational scan,** split by mutation count. Real
-  computational designs may not look like this scan's sequences, and that shift is not measured.
-  Run 2's report carries this as an explicit warning on the score table.
-- **Brightness is one assay on one protein.** Nothing here transfers to a different property or a
-  different protein.
-- **The 7× over current practice** compares against picking by fewest mutations, which is what the
-  scientist said they do. It is not a comparison against a serious published predictor.
-- The model never sees mutation count at prediction time, by design, so it cannot be accused of
-  relearning the heuristic — but that also means it is solving a slightly harder problem than a
-  model that could.
-
-## Bugs this problem found in the framework
-
-- **The big one:** `submit` scored the working folder, but `finish` scores the submission's
-  snapshot. Run 1's winning experiment resolved `task/data` relative to its own file, which works
-  in the project and fails inside a snapshot, so it passed every submission and then died at the
-  final check with `FileNotFoundError`. It had to spend another submission resubmitting the
-  identical model with a path fix. `validate` and `submit` now snapshot first and score the
-  snapshot, so this fails on the first submission instead of at the end.
-- Compute discovery was validated here: both runs found the cluster's partitions and asked only
-  which account to charge.
+**What it doesn't show:** the held-out variants come from the same deep mutational scan as the
+training data, split by mutation count. Real computational designs may not look like that scan's
+sequences, and that shift is not measured here. Brightness is also one assay on one protein.

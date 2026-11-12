@@ -101,18 +101,16 @@ evaluator, and the same `infer.py` is asked for `--n N --seed S` samples per con
 mechanics are in place and tested on a toy problem; they have not yet been proven on a real
 one. Prediction is what the framework is being hardened for first.
 
-## Gallery: what to say, and what came back
+## Gallery
 
-[`gallery/`](gallery/) holds five problems that have been built end to end — a clinical table,
-single-cell annotation, pathology tiles, protein variant ranking, and a generative protein design
-task — kept as **the request and the conversation**, not as code. Each one has the scientist's own
-words, the questions the agent asked before it would freeze anything, and what came out with what
-not to believe about it.
+[`gallery/`](gallery/) holds five problems built end to end — a clinical table, single-cell
+annotation, pathology tiles, protein variant ranking, and a generative protein design task —
+kept as the conversation rather than the code. Each one shows what the scientist sent, what the
+agent asked back before anything was frozen, and what came out.
 
-It is there because the modelling is the agent's job and your half of the contract is describing
-the problem well enough to build a rubric from. That is the part with no reference material
-anywhere else. `gallery/*/QUESTIONS.md` is the most useful file in each folder: the gap between
-the request and what still had to be asked is the measure of how complete the request was.
+Start there. None of those prompts names a model, a metric or a loss: they say what the data is,
+what the answer is for, and what counts as better than what the lab does today. Writing yours
+the same way is the whole of your half of the job.
 
 ## Project layout
 
