@@ -182,7 +182,7 @@ would probably score better on test, and what to set differently next time.
 
 ```
 project/
-├── task/            STRICT: brief.md, task.toml, data, and evaluate.py if the task has its own
+├── task/            STRICT: brief.md (with the user's approval), task.toml, evaluate.py, audit.md, data
 ├── infer.py         FIXED INTERFACE: --model DIR --input PATH --output FILE
 ├── src/             FREE: any code, any structure
 ├── model/           the model as it stands now
@@ -197,7 +197,8 @@ Until `mlguy finish`, the test labels live in `~/.mlguy/projects/<name>/` (or un
 the brief was approved. A project folder is a git repository; `submit` and `finish` commit to it.
 
 `infer.py` is the only agent-written code with a fixed shape, because both the rubric and the
-project's page call it.
+project's page call it. `task/` is frozen and `src/` is free, so everything that decides what a
+good model means is settled before any model is trained, and nothing about how to build one is.
 
 **The framework does not depend on the form of a task's inputs.** They can be a table, an expression matrix, a
 folder of images or structures; only the project's code has to open them. The framework knows two

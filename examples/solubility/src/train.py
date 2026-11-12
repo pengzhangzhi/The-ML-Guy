@@ -53,7 +53,7 @@ def main() -> None:
     seq, tgt = "sequence", "target"
     alphabet = task["input"]["alphabet"]
     primary = task["metric"]["primary"]
-    report = [primary] + [m for m in task["metric"]["secondary"] if m != primary]
+    report = [primary] + [m for m in ("balanced_accuracy", "mcc", "roc_auc") if m != primary]
 
     train = pd.read_csv(args.task / task["data"]["train"])
     val = pd.read_csv(args.task / task["data"]["validation_inputs"]).merge(
