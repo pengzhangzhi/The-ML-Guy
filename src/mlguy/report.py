@@ -6,7 +6,8 @@ import json
 from pathlib import Path
 
 from mlguy import budget
-from mlguy.project import direction, is_generation, sampling, state_dir, validation_caveat
+from mlguy.project import (direction, is_generation, sampling, state_dir, test_labels_path,
+                           validation_caveat)
 
 
 MAX_COLUMNS = 4  # the experiment table shows the primary metric and a few others; log.jsonl has them all
@@ -121,12 +122,17 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
         "| --- | --- | " + " | ".join("---" for _ in names) + " |",
     ]
     lines += [_row(r, names) for r in records]
+    # The task fixes how many samples a condition gets, so the example has to quote the task's own
+    # numbers: a copied `--n 100` would tell the user to run the model unlike the way it was scored.
+    n, seed = sampling(task, "validation")
     usage = ["cd final", "python infer.py --model model --input my_data --output outputs.csv"
-             + (" --n 100 --seed 0" if is_generation(task) else "")]
+             + (f" --n {n} --seed {seed}" if is_generation(task) else "")]
     lines += [
         "",
         f"Experiment {best['number']} is the result. Its exact code and model are in `final/`, with its "
-        "outputs on the test set and the test labels beside them.",
+        "outputs on the test set beside them"
+        + (", and the test labels, now that the score has been taken." if
+           test_labels_path(task).exists() else "."),
         "",
         "## Budget",
         "",

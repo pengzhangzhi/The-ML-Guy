@@ -47,6 +47,13 @@ groups are where evaluators quietly differ from their description.
 - **Leakage between splits:** the same or near-identical examples in two splits; related rows
   (the same patient, donor, family, sequence cluster, slide) spread across them when the brief
   says new cases will be unrelated.
+- **A grouping borrowed from somewhere else may not group these examples.** Published clusters,
+  folds or family labels are assigned to whatever the people who made them were describing, and
+  the project's examples are often not that thing: a held-out item may be a fragment, a crop, a
+  window or a derived row whose parent sits in another cluster, so holding out by cluster holds
+  out nothing. Check it the blunt way — look for the held-out examples themselves, or their
+  content, inside the training set. One trial's split was grouped by published 30%-identity
+  clusters and 15 of its 192 held-out items were in training verbatim.
 - **Leakage inside the inputs:** columns that encode the answer or the future (a discharge code
   that implies the outcome, a timestamp after the event, an identifier that links a test row to a
   labelled training row).

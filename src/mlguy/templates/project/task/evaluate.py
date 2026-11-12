@@ -8,6 +8,12 @@
 Write {"metrics": {"name": number, ...}} to --result, including task.toml's [metric] primary.
 Refuse outputs that cannot be scored (missing or repeated ids, wrong columns) by exiting with
 an error, rather than scoring them as zero.
+
+Write nothing except --result, and open every path you are given as it was given. This script
+runs with task/ as its working directory, so a relative path it writes to lands in the frozen
+task/ and changes its fingerprint, which stops the next submission from scoring; and --result is
+the only file anything reads back, so a diagnostic written beside it is thrown away. Put
+diagnostics in the metrics, or take an explicit path for them.
 """
 
 from __future__ import annotations

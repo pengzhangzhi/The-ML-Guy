@@ -38,8 +38,8 @@ def split_checks(task: dict, validation: pd.DataFrame | None, test: pd.DataFrame
     """`validation` and `test` are the label tables (id, and target when they carry one);
     `inputs` maps train/validation/test to wherever each split's inputs are stored."""
     found = []
-    if task["task"]["type"] == "generation":
-        return found  # conditions legitimately repeat across splits, and the sample size is set by the task
+    generation = task["task"]["type"] == "generation"
+    noun = "conditions" if generation else "examples"
 
     names = [n for n in ("train", "validation", "test") if inputs.get(n) is not None]
     for i, name_a in enumerate(names):
@@ -55,11 +55,14 @@ def split_checks(task: dict, validation: pd.DataFrame | None, test: pd.DataFrame
 
     for name, part in [("validation", validation), ("test", test)]:
         if part is not None and len(part) < SMALL_N:
-            found.append(f"{name} has only {len(part)} examples, so its score will be noisy; "
+            found.append(f"{name} has only {len(part)} {noun}, so its score will be noisy; "
                          "small differences between submissions will not mean much.")
 
     declared_mismatch = not task["data"].get("validation_matches_test", True)
-    if declared_mismatch or not compare_targets or validation is None or test is None:
+    # A generation task's conditions carry no label to compare, so the distribution checks below
+    # do not apply to them. The ones above do: a condition in two splits is still leakage, and
+    # too few of them is still a noisy score, whatever is sampled for each one.
+    if generation or declared_mismatch or not compare_targets or validation is None or test is None:
         return found  # the difference between validation and test is already on record
 
     target = target_column

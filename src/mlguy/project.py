@@ -178,6 +178,23 @@ def run_infer(run_dir: Path, inputs: Path | None, output: Path, n: int | None = 
         raise SubmissionError(f"{ENTRY_POINT} exited cleanly but wrote no output file")
 
 
+def _held_back_gone(task: dict, what: str, path: Path) -> FileNotFoundError:
+    """A task that holds part of its test set outside the project cannot be scored without it.
+
+    A generation task need not hold anything back: the final check may simply draw fresh samples
+    for the same conditions, and then there is nothing to find. But if the task declared a test
+    split, falling back to that would measure validation and report it as the final score, which
+    is worse than refusing. So the two cases are told apart by what task.toml declares.
+    """
+    return FileNotFoundError(
+        f"task.toml declares data.{what}, so it was moved out of the project at `mlguy init` and "
+        f"kept at {path}. It is not there now. The final check cannot be scored against a test set "
+        f"that is missing, and scoring it against validation instead would report a validation "
+        f"number as the final one. Restore {path.parent}, or point MLGUY_HOME at wherever this "
+        f"project's state was kept."
+    )
+
+
 def _reference(task: dict, split: str) -> Path | None:
     """The half of a split that the evaluator sees and the model does not: ids, and labels."""
     if split == "validation":
@@ -186,8 +203,10 @@ def _reference(task: dict, split: str) -> Path | None:
         path = test_labels_path(task)
         if path.exists():
             return path
-        if is_generation(task):
+        if is_generation(task) and "test_labels" not in task["data"]:
             return _reference(task, "validation")  # no held-out conditions: fresh samples of the same ones
+        if is_generation(task):
+            raise _held_back_gone(task, "test_labels", path)
         raise FileNotFoundError(f"no test labels at {path}; run `mlguy init` on this machine")
     raise ValueError("split must be 'validation' or 'test'")
 
@@ -196,8 +215,10 @@ def _inputs(task: dict, split: str) -> Path | None:
     """The half of a split handed to the model, exactly as the task stores it."""
     if split == "test" and not is_generation(task):
         return data_path(task, "test_inputs")
-    if split == "test" and "test_inputs" in task["data"] and hidden_inputs_path(task).exists():
-        return hidden_inputs_path(task)
+    if split == "test" and "test_inputs" in task["data"]:
+        if hidden_inputs_path(task).exists():
+            return hidden_inputs_path(task)
+        raise _held_back_gone(task, "test_inputs", hidden_inputs_path(task))
     return data_path(task, "validation_inputs")
 
 
@@ -262,6 +283,29 @@ def _evaluator_scores(task: dict, split: str, reference: Path | None, outputs: P
         raise SubmissionError(f"the evaluator reported {primary} = {metrics[primary]}; it must be a finite number")
     return {primary: metrics[primary], **{k: v for k, v in metrics.items() if k != primary}}, \
         int(len(_read_outputs(outputs)))
+
+
+def submission_shape(project_dir: str | Path, split: str, outputs: str | Path) -> str | None:
+    """Whether a file of outputs is shaped the way a submission must be. Returns the complaint, or None.
+
+    `mlguy score` scores whatever file it is given, because its job before the freeze is to find out
+    what the evaluator does with outputs of every kind, including the kinds a submission is refused
+    for. But a file holding one sample per condition where the task fixes twenty is a different
+    measurement from the one every submission will get — the best of twenty scores better than
+    twenty do — and a score read off it will flatter the evaluator. So the check still runs, and
+    what it says is reported beside the number rather than in place of it.
+    """
+    task = load_task(project_dir)
+    if not is_generation(task):
+        return None
+    n, _ = sampling(task, split)
+    reference = _reference(task, split)
+    try:
+        judge.check_generated(_read_outputs(Path(outputs)), n,
+                              read_ids(task, reference) if reference else None)
+    except SubmissionError as e:
+        return str(e)
+    return None
 
 
 def score_split(project_dir: str | Path, split: str, run_dir: str | Path | None = None,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pandas as pd
@@ -108,6 +109,9 @@ def test_generation_loop(generation, capsys):
     assert run(project, "init") == 0
     out = capsys.readouterr().out
     assert "20 per condition on every submission" in out and "50 per condition for the final" in out
+    assert "validation has only 3 conditions" in out and "test has only 3 conditions" in out, \
+        "a generation task's conditions are still counted, and too few of them is still a noisy score"
+    assert "not checked:" in out, "and what was not looked at is said, rather than implied by silence"
     data = project / "task" / "data"
     assert not (data / "test_labels.csv").exists() and not (data / "test_inputs.csv").exists(), \
         "the final conditions stay unseen until finish"
@@ -133,7 +137,8 @@ def test_generation_loop(generation, capsys):
     assert final["metrics"]["conditions_seen"] == 3.0, \
         "the evaluator reaches the held-back conditions through --inputs"
     report = (project / "REPORT.md").read_text()
-    assert "Generates **measurements**" in report and "--n 100" in report
+    assert "Generates **measurements**" in report and "--n 20 --seed 0" in report, \
+        "the usage example quotes the task's own sampling, not a number copied into the template"
     assert run(project, "finish") == 2
 
 
@@ -162,9 +167,39 @@ def test_an_evaluator_can_be_tried_on_a_file(generation, capsys, tmp_path):
     scores = {}
     for name in ("good", "bad"):
         assert run(project, "score", "--outputs", str(tmp_path / f"{name}.csv")) == 0
-        scores[name] = json.loads(capsys.readouterr().out)["metrics"]["distance"]
+        payload = json.loads(capsys.readouterr().out)
+        scores[name] = payload["metrics"]["distance"]
+        # One sample per condition, where the task fixes twenty. It is still scored — that is what
+        # this command is for — but the best of twenty scores better than twenty do, so the number
+        # cannot be read as a submission's.
+        assert "20 samples for each of 3 conditions" in payload["not_shaped_like_a_submission"]
+        assert "not comparable" in payload["warning"]
     assert scores["good"] == 0.0 and scores["bad"] == 4.0
     assert Experiments(project).all() == [], "nothing is recorded"
+
+
+def test_a_lost_test_set_is_refused_rather_than_measured_on_validation(generation, capsys):
+    """A generation task may hold nothing back, and then the final check draws fresh samples for
+    the validation conditions. This one does hold conditions back, and they live outside the
+    project. If they go missing, falling back to validation would report a validation number as
+    the final score, with nothing saying so. Both ways in have to refuse instead."""
+    project = generation
+    assert run(project, "init") == 0
+    assert run(project, "validate") == 0
+    state = project.parent / "state" / "projects" / "toy-generation"
+    (state / "test_labels.csv").unlink()
+    capsys.readouterr()
+
+    assert run(project, "finish") == 2
+    message = capsys.readouterr().err
+    assert "test_labels" in message and "validation number as the final one" in message
+    assert not (state / "test_score.json").exists(), "and no final score is recorded"
+
+    # Losing the state folder and running `init` again is how the test set goes missing in the
+    # first place, so that is refused too, rather than silently re-freezing a project without one.
+    shutil.rmtree(state)
+    assert run(project, "init") == 2
+    assert "neither in the project" in capsys.readouterr().err
 
 
 def test_the_evaluator_is_frozen(generation, capsys):

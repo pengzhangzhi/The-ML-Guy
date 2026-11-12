@@ -109,6 +109,11 @@ metric must be a number; others may be `NaN` when undefined. Set `[metric] prima
 from it to tune against the same measure. Refuse outputs that cannot be scored (missing or
 repeated ids, wrong columns) by exiting with an error; never score them as zero.
 
+**Write nothing but `--result`.** The evaluator runs with `task/` as its working directory, so a
+relative path it writes to lands in the frozen task and breaks its fingerprint, and the next
+submission is refused. Nothing but `--result` is read back either, so a file written beside it is
+discarded: diagnostics belong in the metrics, or behind an explicit path.
+
 **Derive the metric from what they will do with the predictions,** then check it against the
 split. A metric that moves with something other than model quality will mislead the search: when
 the class balance differs between validation and test, plain accuracy measures the base rate as
@@ -122,6 +127,13 @@ model, a classifier, a simulation, a comparison with real data. (Generative task
 experimental; say so if a user asks for one.) A generative task has no labels: its
 `validation_labels` and `test_labels` files list the conditions to sample for, so the framework
 knows how many samples to expect for each, and the conditions themselves stay in the inputs.
+`infer.py` is then called with two more arguments, `--n` and `--seed`, from `[sampling]`, and must
+write `n` rows for every condition carrying that condition's id. Score the whole batch, not its
+best member: the best of twenty samples scores far better than twenty do, so a metric that takes
+a maximum over samples rewards sampling more rather than generating better. The framework refuses
+a submission that holds the wrong number per condition, but `mlguy score` on a file you made by
+hand will score it and say it was not shaped like a submission — so have the evaluator read
+`[sampling] n` and insist on it too, and the number means the same thing wherever it came from.
 
 **If the scoring needs a different environment from the model** — a folding model that will not
 coexist with your training stack, a tool in another language — `evaluate.py` is still the entry
@@ -161,7 +173,9 @@ mlguy new <folder> --name <project-name>
 # task/task.toml from what you have agreed so far; task/evaluate.py as above
 # prepare task/data with a script kept in task/ (task/prepare.py, say), so how the data and
 # split were made is frozen with them. Copy what it needs into task/data, or record in the
-# brief where the raw data lives.
+# brief where the raw data lives. Run it before `init`: task/data is frozen too, so the
+# script cannot be re-run afterwards. Anything you will want to regenerate later — a cache,
+# a derived feature, context the model builds for itself — belongs outside task/.
 ```
 
 **Put the raw source out of reach.** The file the user handed you usually holds every

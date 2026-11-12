@@ -34,6 +34,7 @@ from mlguy.project import (
     load_task,
     score_split,
     state_dir,
+    submission_shape,
     test_labels_path,
     validation_caveat,
 )
@@ -231,8 +232,19 @@ def cmd_init(args: argparse.Namespace) -> int:
         test_frame = pd.read_csv(test_labels_path(task), dtype={id_col: str})
         if not generation and not test_inputs.exists():
             raise CommandError(f"test labels are stored but the test inputs are missing at {test_inputs}")
-    elif not generation:
-        raise CommandError(f"no test labels: expected {test_labels}")
+    elif "test_labels" in data:
+        # Declared, but in neither place. Letting init pass here is how a project ends up with a
+        # confident "final" score measured on validation: the test set is gone and nothing says so.
+        raise CommandError(
+            f"data.test_labels names {data['test_labels']}, but it is neither in the project at "
+            f"{test_labels} nor held back at {test_labels_path(task)}. `mlguy init` moves it out of "
+            f"task/ once; if the state folder has since been deleted or MLGUY_HOME now points "
+            f"somewhere else, the held-back half of the test set is what was lost. Restore "
+            f"{test_labels_path(task).parent}, or set MLGUY_HOME back. "
+            + ("Remove data.test_labels and data.test_inputs only if this task is meant to hold "
+               "nothing back, and the final check should draw fresh samples for the validation "
+               "conditions." if generation else "Otherwise start a new project with a test set.")
+        )
 
     state_dir(task).mkdir(parents=True, exist_ok=True)
     stored = {"train": data_path(task, "train"), "validation": data_path(task, "validation_inputs"),
@@ -268,9 +280,14 @@ def cmd_init(args: argparse.Namespace) -> int:
     skipped = []
     opaque = [name for name, path in stored.items()
               if path is not None and not (path.suffix == ".csv" and path.is_file())]
-    if opaque and not generation:
+    if opaque:
         skipped.append(f"whether the same example appears in two splits, because the {' and '.join(opaque)} "
                        "inputs are not CSV tables the framework can read; check this yourself")
+    if generation:
+        # Say what was not looked at. "nothing raised" after no checks at all reads as a clean bill.
+        skipped.append("whether validation and the final conditions are distributed alike, because a "
+                       "generation task's conditions carry no label to compare. What was checked is "
+                       "that they do not overlap and that there are enough of them")
     if not both_labelled and not generation:
         skipped.append(f"the label distributions of validation and test were not compared, because the "
                        f"labels files have no '{tgt_col}' column (set data.target_column if it has another name)")
@@ -423,7 +440,8 @@ def cmd_finish(args: argparse.Namespace) -> int:
     # The working folder holds whatever was tried last; final/ holds what was scored, and the
     # page and the user run the model from there. The test set is now spent, so its labels go
     # beside the outputs: the report can say what the score means case by case.
-    if test_labels_path(task).exists():
+    labels_beside = test_labels_path(task).exists()
+    if labels_beside:
         shutil.copy2(test_labels_path(task), final_dir / "test_labels.csv")
 
     final_path.parent.mkdir(parents=True, exist_ok=True)
@@ -434,7 +452,8 @@ def cmd_finish(args: argparse.Namespace) -> int:
     label = "final" if is_generation(task) else "test"
     print(f"{label} {primary} = {test_result['metrics'][primary]:.4f}  (n={test_result['n']}, scored once)")
     print(f"report written to {path}")
-    print("final/ holds the scored model, with its test outputs and the test labels beside them")
+    print("final/ holds the scored model, with its test outputs" +
+          (" and the test labels beside them" if labels_beside else " beside it"))
     return 0
 
 
@@ -481,7 +500,15 @@ def cmd_score(args: argparse.Namespace) -> int:
     except SubmissionError as e:
         print(json.dumps({"status": "error", "split": "validation", "error": str(e)}, indent=2))
         return 1
-    print(json.dumps({"status": "ok", **result}, indent=2))
+    # This command scores any file, on purpose: that is how you find out what the evaluator does
+    # with outputs a submission would be refused for. But then the number it prints is not always
+    # the number a submission of the same outputs would earn, and that has to be said here, where
+    # it is read, rather than left for whoever compares the two later.
+    shape = submission_shape(args.project, "validation", args.outputs)
+    extra = {"not_shaped_like_a_submission": shape,
+             "warning": "a submission of these outputs would be refused, not scored, so this number "
+                        "is not comparable with any experiment's"} if shape else {}
+    print(json.dumps({"status": "ok", **result, **extra}, indent=2))
     return 0
 
 
