@@ -44,9 +44,7 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
           best_on_validation: dict | None = None, reason: str | None = None) -> Path:
     """`best` is the submission taken as the result; normally also the best on validation."""
     primary = task["metric"]["primary"]
-    declared = [primary] + [m for m in task["metric"].get("secondary", []) if m != primary]
-    names = [n for n in declared if n in best["metrics"]] or list(best["metrics"].keys())
-    names = names[:MAX_COLUMNS]
+    names = ([primary] + [m for m in best["metrics"] if m != primary])[:MAX_COLUMNS]
     better = "higher" if direction(task) == "maximize" else "lower"
     counted = sum(1 for r in records if r.get("counts_against_budget"))
     limit = task.get("budget", {}).get("max_submissions")
@@ -134,7 +132,7 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
         "## Using the model",
         "",
         "```bash",
-        "mlguy serve                 # this project's page, once app.py has been built",
+        "python app.py               # this project's page, once it has been built",
         *usage,
         "```",
         "",

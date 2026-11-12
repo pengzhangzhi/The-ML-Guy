@@ -75,11 +75,10 @@ class Experiments:
         records = self.all()
         return max((r["number"] for r in records), default=-1) + 1
 
-    def best(self, primary: str, direction: str | None = None) -> dict | None:
+    def best(self, primary: str, direction: str) -> dict | None:
         best = None
         for record in self.submissions():
-            if best is None or judge.is_better(record["metrics"][primary], best["metrics"][primary],
-                                               primary, direction):
+            if best is None or judge.is_better(record["metrics"][primary], best["metrics"][primary], direction):
                 best = record
         return best
 

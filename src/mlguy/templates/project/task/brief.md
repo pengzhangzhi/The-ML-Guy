@@ -27,3 +27,7 @@ built, so every line has to be something they can check.
 - TODO anything inferred rather than stated, especially the direction of the target and what
   to do about duplicate or missing measurements.
 - TODO say here if the validation set asks a different question from the test set.
+
+## Approval
+
+Approved by the user: TODO their words, and the date. `mlguy init` refuses until this is filled in.

@@ -1,214 +1,21 @@
-"""The rubric: predictions + labels + metric -> score.
+"""What the framework itself checks about outputs. The score comes from the task's evaluator.
 
-This module is the only place scores come from. Project code never grades itself.
 A broken submission raises SubmissionError; it is never turned into a score of zero.
-
-An output file has one row per example, in any order, with:
-  id           which example this is, as given in the inputs
-  prediction   the predicted value: the number for regression, the class label for classification
-  score        optional, classification only: the probability of the positive class.
-               Needed by metrics that rank examples, such as roc_auc.
 """
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
-from scipy import stats
 
 
 class SubmissionError(Exception):
-    """The submission could not be scored (crash, bad file, undefined metric)."""
+    """The submission could not be scored (crash, bad file, no usable score)."""
 
 
-# ---------------------------------------------------------------- regression
-
-
-def _spearman(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    if np.ptp(y_pred) == 0:
-        raise SubmissionError("all predictions are identical, so rank correlation is undefined")
-    return float(stats.spearmanr(y_true, y_pred).statistic)
-
-
-def _pearson(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    if np.ptp(y_pred) == 0:
-        raise SubmissionError("all predictions are identical, so correlation is undefined")
-    return float(stats.pearsonr(y_true, y_pred).statistic)
-
-
-def _ndcg(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """NDCG over the full ranking, linear gain.
-
-    Relevance is the true value shifted so the minimum is 0 (targets can be negative).
-    Tied predictions are ordered by input row, so avoid constant predictions.
-    """
-    rel = y_true - y_true.min()
-    discount = 1.0 / np.log2(np.arange(2, len(rel) + 2))
-    order = np.argsort(-y_pred, kind="stable")
-    ideal = float((np.sort(rel)[::-1] * discount).sum())
-    if ideal == 0:
-        raise SubmissionError("all true values are identical, so NDCG is undefined")
-    return float((rel[order] * discount).sum() / ideal)
-
-
-def _rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    return float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
-
-
-def _mae(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    return float(np.mean(np.abs(y_true - y_pred)))
-
-
-# ------------------------------------------------------------ classification
-
-
-def _accuracy(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    return float(np.mean(y_true == y_pred))
-
-
-def _balanced_accuracy(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """Mean of the per-class recalls: the right metric when the classes are uneven."""
-    recalls = [float(np.mean(y_pred[y_true == c] == c)) for c in np.unique(y_true)]
-    return float(np.mean(recalls))
-
-
-def _f1(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """Two classes: F1 of the positive (larger) class. More: the mean F1 over the classes."""
-    from sklearn.metrics import f1_score
-
-    classes = np.unique(y_true)
-    if len(classes) == 2:
-        return float(f1_score(y_true, y_pred, pos_label=classes[-1], average="binary", zero_division=0))
-    return float(f1_score(y_true, y_pred, labels=classes, average="macro", zero_division=0))
-
-
-def _mcc(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """Matthews correlation; the multi-class form reduces to the usual one for two classes."""
-    from sklearn.metrics import matthews_corrcoef
-
-    if len(np.unique(y_pred)) < 2:
-        raise SubmissionError("every prediction is the same class, so the correlation is undefined")
-    return float(matthews_corrcoef(y_true, y_pred))
-
-
-def _roc_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
-    """Two classes only. Mann-Whitney form, so tied scores are handled by rank averaging.
-    `score` is the probability of the larger class label (1 when the labels are 0 and 1)."""
-    classes = np.unique(y_true)
-    if len(classes) > 2:
-        raise SubmissionError(f"roc_auc needs two classes; this task has {len(classes)}")
-    positive = classes[-1]
-    is_positive = y_true == positive
-    n_pos, n_neg = int(is_positive.sum()), int((~is_positive).sum())
-    if n_pos == 0 or n_neg == 0:
-        raise SubmissionError("only one class is present, so the area under the curve is undefined")
-    ranks = stats.rankdata(y_score)
-    return float((ranks[is_positive].sum() - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg))
-
-
-# name -> (function, direction, kind, needs the score column)
-METRICS = {
-    "spearman": (_spearman, "maximize", "regression", False),
-    "pearson": (_pearson, "maximize", "regression", False),
-    "ndcg": (_ndcg, "maximize", "regression", False),
-    "rmse": (_rmse, "minimize", "regression", False),
-    "mae": (_mae, "minimize", "regression", False),
-    "accuracy": (_accuracy, "maximize", "classification", False),
-    "balanced_accuracy": (_balanced_accuracy, "maximize", "classification", False),
-    "f1": (_f1, "maximize", "classification", False),
-    "mcc": (_mcc, "maximize", "classification", False),
-    "roc_auc": (_roc_auc, "maximize", "classification", True),
-}
-
-
-def needs_score(metrics: list[str]) -> list[str]:
-    return [m for m in metrics if m in METRICS and METRICS[m][3]]
-
-
-def _numeric_column(preds: pd.DataFrame, name: str, n_expected: int) -> np.ndarray:
-    values = pd.to_numeric(preds[name], errors="coerce").to_numpy(dtype=float)
-    bad = int((~np.isfinite(values)).sum())
-    if bad:
-        raise SubmissionError(f"{bad} values in the '{name}' column are missing, non-numeric or infinite")
-    return values
-
-
-def check_predictions(preds: pd.DataFrame, ids: list[str],
-                      numeric: bool = True) -> tuple[np.ndarray, np.ndarray | None]:
-    """Match predictions to the expected ids. Returns (predictions, scores) in the order of
-    `ids`, or raises SubmissionError saying what is wrong. Predictions are numbers when
-    `numeric`, and class labels of any kind (numbers or text) otherwise."""
-    for column in ("id", "prediction"):
-        if column not in preds.columns:
-            raise SubmissionError(f"the output file needs 'id' and 'prediction' columns; found {list(preds.columns)}")
-    given = preds["id"].astype(str)
-    if given.duplicated().any():
-        raise SubmissionError(f"{int(given.duplicated().sum())} ids appear more than once in the output file")
-    expected = pd.Index([str(i) for i in ids])
-    missing, extra = expected.difference(given), pd.Index(given).difference(expected)
-    if len(missing) or len(extra):
-        raise SubmissionError(
-            f"expected one prediction for each of {len(expected)} ids; {len(missing)} are missing"
-            + (f" (such as {list(missing[:3])})" if len(missing) else "")
-            + (f", and {len(extra)} are not ids of this split (such as {list(extra[:3])})" if len(extra) else ""))
-    preds = preds.assign(id=given).set_index("id").loc[expected]
-    if numeric:
-        values = _numeric_column(preds, "prediction", len(expected))
-    else:
-        if preds["prediction"].isna().any():
-            raise SubmissionError(f"{int(preds['prediction'].isna().sum())} predictions are missing")
-        values = preds["prediction"].to_numpy()
-    scores = _numeric_column(preds, "score", len(expected)) if "score" in preds.columns else None
-    return values, scores
-
-
-def as_labels(y_true, y_pred) -> tuple[np.ndarray, np.ndarray]:
-    """Class labels in comparable form: numbers when both sides are numeric (so 1 and 1.0 are
-    the same class), text otherwise."""
-    true_num = pd.to_numeric(pd.Series(y_true), errors="coerce")
-    pred_num = pd.to_numeric(pd.Series(y_pred), errors="coerce")
-    if true_num.notna().all() and pred_num.notna().all():
-        return true_num.to_numpy(dtype=float), pred_num.to_numpy(dtype=float)
-    as_text = lambda v: pd.Series(v).astype(str).str.strip().to_numpy()
-    return as_text(y_true), as_text(y_pred)
-
-
-def score(y_true, y_pred, metrics: list[str], y_score=None) -> dict[str, float]:
-    """Compute each named metric. Rows of y_true, y_pred and y_score must be in the same order.
-
-    For classification, a predicted class that is not among the true labels is simply wrong.
-    A prediction that looks like a probability on numeric labels is refused, because it almost
-    always means the probability was written where the label belongs."""
-    unknown = [m for m in metrics if m not in METRICS]
-    if unknown:
-        raise ValueError(f"unknown metrics {unknown}; available: {sorted(METRICS)}")
-
-    if any(METRICS[m][2] == "classification" for m in metrics):
-        y_true, y_pred = as_labels(y_true, y_pred)
-        if y_true.dtype.kind == "f" and np.all(y_true == np.round(y_true)) and np.any(y_pred != np.round(y_pred)):
-            raise SubmissionError(
-                "the 'prediction' column must hold class labels, but it contains fractions. "
-                "Put probabilities in a 'score' column instead.")
-    else:
-        y_true, y_pred = np.asarray(y_true, dtype=float), np.asarray(y_pred, dtype=float)
-
-    results = {}
-    for name in metrics:
-        function, _, _, wants_score = METRICS[name]
-        if wants_score:
-            if y_score is None:
-                raise SubmissionError(f"'{name}' needs a 'score' column holding the positive-class probability")
-            results[name] = function(y_true, y_score)
-        else:
-            results[name] = function(y_true, y_pred)
-    return results
-
-
-def is_better(new: float, old: float | None, metric: str, direction: str | None = None) -> bool:
-    """`direction` is needed only for a metric that comes from a task's own evaluator."""
+def is_better(new: float, old: float | None, direction: str) -> bool:
     if old is None:
         return True
-    return new > old if (direction or METRICS[metric][1]) == "maximize" else new < old
+    return new > old if direction == "maximize" else new < old
 
 
 def check_generated(outputs: pd.DataFrame, n: int, condition_ids: list[str] | None) -> None:

@@ -24,3 +24,7 @@
 - Higher activity means a better variant.
 - Every sequence is unique, so no averaging of duplicates is needed.
 - Validation variants are multi-mutants like the training set, while test variants are single mutants. Validation scores therefore say how well the model fits multi-mutants, which is not the same question the test asks.
+
+## Approval
+
+Approved by the user: worked example, written and approved by the maintainers (2026-11-11)

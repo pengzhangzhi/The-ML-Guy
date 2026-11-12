@@ -24,7 +24,7 @@ validation_note = "The validation set is 58% insoluble, while the test set is a 
 
 [metric]
 primary = "accuracy"                 # what the DeepSol and PEER papers report, so numbers compare
-secondary = ["balanced_accuracy", "mcc", "roc_auc"]
+direction = "maximize"               # task/evaluate.py also reports balanced_accuracy, mcc, roc_auc
 
 [budget]
 max_submissions = 3

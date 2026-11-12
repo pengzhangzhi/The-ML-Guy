@@ -47,6 +47,10 @@ code and model, and tells you the score and the remaining budget. It refuses onc
 spent. A crash or a malformed predictions file is recorded as an error, not as a score of zero,
 but it still uses up a submission, so test your prediction command before you submit.
 
+`mlguy submit` runs `infer.py` on the machine you run it on. If the model needs a GPU or a
+scheduler job to predict, run `mlguy submit` inside such a job (with Slurm, `srun ... mlguy
+submit --note "..."`); `PROJECT_MEMORY.md` says what this machine offers.
+
 Each submission gets one score, on the same validation set every time; that score is the
 result of the run. A small gain on a finite validation set may be luck, so judge it as you
 would any measurement. When two submissions score about the same, prefer the simpler, or the

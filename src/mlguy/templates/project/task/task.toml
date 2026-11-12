@@ -30,23 +30,14 @@ test_labels = "data/test_labels.csv"            # `mlguy init` moves this out of
 validation_matches_test = true
 # validation_note = "Validation is drawn like the training set, the test set is not, so ..."
 
+# The score comes from task/evaluate.py, written for this problem and frozen with the task.
+# `primary` is the name of the metric it reports that the search climbs.
 [metric]
-# regression:     spearman | pearson | ndcg | rmse | mae
-# classification: accuracy | balanced_accuracy | f1 | mcc | roc_auc
-# Check the metric against the split: one that moves with the class balance, such as plain
-# accuracy, will mislead the search when validation and test are balanced differently.
-primary = "spearman"
-secondary = []
+primary = "TODO"
+direction = "maximize"               # or "minimize"
 
-# When no built-in metric fits (always, for generation) the task carries its own evaluator,
-# frozen with everything else in task/. Then `primary` is whatever name it reports.
 # [evaluator]
-# script = "evaluate.py"             # python evaluate.py --outputs F --reference F --split S --result F
-#                                    # writes {"metrics": {"name": number, ...}}
 # timeout_minutes = 60
-# [metric]
-# primary = "TODO"
-# direction = "maximize"             # or "minimize"
 
 # Generation only (experimental): how many samples are drawn each time, so submissions are
 # comparable. The inputs are then the conditions, and the test ones stay unseen until the end.

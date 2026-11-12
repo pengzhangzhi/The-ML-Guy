@@ -3,14 +3,11 @@
     python infer.py --model model --input PATH --output outputs.csv
 
 --input is in whatever form this task stores its inputs (see task/task.toml): a table, a
-matrix, a folder of files. --output is a CSV with one row per example:
+matrix, a folder of files. --output is a CSV with an `id` column naming the example each row
+is for, and whatever else task/evaluate.py reads (by convention `prediction`).
 
-    id           which example this is, as given in the inputs
-    prediction   the predicted number, or the class label for classification
-    score        classification only, optional: the probability of the positive class
-
-The command line and the output columns are fixed, because `mlguy` and the project's page both
-call this file. Everything else about it, and everything in src/, is yours.
+The command line is fixed, because `mlguy` and the project's page both call this file.
+Everything else about it, and everything in src/, is yours.
 """
 
 from __future__ import annotations

@@ -25,8 +25,8 @@ validation_matches_test = false
 validation_note = "Validation rows are multi-mutants, like the training rows, while the test rows are single mutants. A model that ranks multi-mutants better does not necessarily rank single mutants better."
 
 [metric]
-primary = "spearman"
-secondary = ["ndcg"]
+primary = "spearman"           # from task/evaluate.py, which also reports ndcg
+direction = "maximize"
 
 [budget]
 max_submissions = 3

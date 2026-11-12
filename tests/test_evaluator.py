@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from helpers import DATA_TOML, write_splits
+from helpers import DATA_TOML, write_splits, write_task
 from mlguy.cli import main
 from mlguy.records import Experiments
 
@@ -90,7 +90,7 @@ def generation(tmp_path, monkeypatch):
     monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
     project = tmp_path / "gen"
     (project / "task" / "data").mkdir(parents=True)
-    (project / "task" / "task.toml").write_text(GEN_TOML)
+    write_task(project, GEN_TOML)
     (project / "task" / "evaluate.py").write_text(EVALUATE_PY)
     reference = pd.DataFrame({"group": list(TRUE_MEANS), "mean": list(TRUE_MEANS.values())})
     write_splits(project / "task" / "data", pd.DataFrame({"group": ["a", "b", "c"] * 10, "value": [1.0, 5.0, 9.0] * 10}),
@@ -161,15 +161,8 @@ def test_an_evaluator_can_be_tried_on_a_file(generation, capsys, tmp_path):
     assert Experiments(project).all() == [], "nothing is recorded"
 
 
-def test_generation_needs_an_evaluator_and_the_evaluator_is_frozen(generation, capsys):
+def test_the_evaluator_is_frozen(generation, capsys):
     project = generation
-    toml = project / "task" / "task.toml"
-    original = toml.read_text()
-    toml.write_text(original.replace('[evaluator]\nscript = "evaluate.py"\n', ""))
-    assert run(project, "init") == 2
-    assert "needs its own evaluator" in capsys.readouterr().err
-
-    toml.write_text(original)
     run(project, "init")
     run(project, "validate")
     script = project / "task" / "evaluate.py"
@@ -227,7 +220,7 @@ def test_a_prediction_task_can_bring_its_own_metric(tmp_path, monkeypatch, capsy
     monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
     project = tmp_path / "custom"
     (project / "task" / "data").mkdir(parents=True)
-    (project / "task" / "task.toml").write_text(PRED_TOML)
+    write_task(project, PRED_TOML)
     (project / "task" / "evaluate.py").write_text(PRED_EVALUATE)
     frame = pd.DataFrame({"x": [float(i) for i in range(300)]})
     frame["y"] = frame["x"] * 2
@@ -256,7 +249,7 @@ def test_only_the_primary_metric_must_be_a_number(tmp_path, monkeypatch, capsys)
     monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
     project = tmp_path / "custom"
     (project / "task" / "data").mkdir(parents=True)
-    (project / "task" / "task.toml").write_text(PRED_TOML)
+    write_task(project, PRED_TOML)
     (project / "task" / "evaluate.py").write_text(UNDEFINED_SECONDARY)
     frame = pd.DataFrame({"x": [float(i) for i in range(300)]})
     frame["y"] = frame["x"] * 2
@@ -301,7 +294,7 @@ def test_an_evaluator_for_class_labels(tmp_path, monkeypatch, capsys):
     project = tmp_path / "macro"
     (project / "task" / "data").mkdir(parents=True)
     toml = PRED_TOML.replace('primary = "worst_error"\ndirection = "minimize"', 'primary = "macro_recall"\ndirection = "maximize"')
-    (project / "task" / "task.toml").write_text(toml.replace('type = "regression"', 'type = "classification"'))
+    write_task(project, toml.replace('type = "regression"', 'type = "classification"'))
     (project / "task" / "evaluate.py").write_text(MACRO_EVALUATE)
     frame = pd.DataFrame({"x": [float(i % 100) for i in range(300)]})
     frame["y"] = (frame["x"] > 70).map({True: "high", False: "low"})
@@ -323,7 +316,7 @@ def test_finish_can_take_a_simpler_submission_with_a_reason(tmp_path, monkeypatc
     monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
     project = tmp_path / "custom"
     (project / "task" / "data").mkdir(parents=True)
-    (project / "task" / "task.toml").write_text(PRED_TOML)
+    write_task(project, PRED_TOML)
     (project / "task" / "evaluate.py").write_text(PRED_EVALUATE)
     frame = pd.DataFrame({"x": [float(i) for i in range(300)]})
     frame["y"] = frame["x"] * 2
@@ -348,7 +341,7 @@ def test_the_state_location_is_remembered(tmp_path, monkeypatch):
     monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "elsewhere"))
     project = tmp_path / "custom"
     (project / "task" / "data").mkdir(parents=True)
-    (project / "task" / "task.toml").write_text(PRED_TOML)
+    write_task(project, PRED_TOML)
     (project / "task" / "evaluate.py").write_text(PRED_EVALUATE)
     frame = pd.DataFrame({"x": [float(i) for i in range(300)]})
     frame["y"] = frame["x"] * 2

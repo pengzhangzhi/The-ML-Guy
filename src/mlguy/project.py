@@ -5,13 +5,13 @@ Scoring is always the same two steps, whatever the problem:
   1. produce   run the project's one entry point to turn inputs into outputs
                    infer.py --model DIR --input PATH --output FILE
                (generation, experimental, adds --n N --seed S)
-  2. evaluate  turn those outputs into numbers
-               by default:  a built-in metric against held-back labels
-               otherwise:   the task's own evaluator, task/<script>, frozen with the task
+  2. evaluate  turn those outputs into numbers with the task's own evaluator, task/evaluate.py,
+               written for the problem, approved by the user and frozen with the task
+                   evaluate.py --outputs FILE --reference LABELS --split validation|final --result FILE
 
-The inputs are opaque. They can be a table, a matrix, a folder of images or structures: only
-the project's own code reads them. The framework knows two things about an example, its id
-and (for a built-in metric) its label, and matches outputs to labels by id.
+The framework knows no metrics and no input formats. Inputs can be a table, a matrix, a folder
+of images or structures: only the project's own code reads them. What the framework owns is
+which labels the evaluator is given, when, and that the scoring cannot change.
 """
 
 from __future__ import annotations
@@ -135,16 +135,13 @@ def is_generation(task: dict) -> bool:
     return task["task"]["type"] == "generation"
 
 
-def evaluator_script(task: dict) -> Path | None:
-    """The task's own evaluator, or None when a built-in metric against labels is used."""
-    script = task.get("evaluator", {}).get("script")
-    return task["_project_dir"] / "task" / script if script else None
+def evaluator_script(task: dict) -> Path:
+    """The task's evaluator: every task carries its own, frozen with the rest of task/."""
+    return task["_project_dir"] / "task" / task.get("evaluator", {}).get("script", "evaluate.py")
 
 
 def direction(task: dict) -> str:
     """'maximize' or 'minimize' for the primary metric."""
-    if evaluator_script(task) is None:
-        return judge.METRICS[task["metric"]["primary"]][1]
     return task["metric"]["direction"]
 
 
@@ -224,16 +221,6 @@ def _produce(task: dict, split: str, run_dir: Path, reference: Path | None, outp
     judge.check_generated(_read_outputs(output), n, read_ids(task, reference) if reference else None)
 
 
-def _builtin_scores(task: dict, reference: Path, outputs: Path) -> tuple[dict, int]:
-    labels = pd.read_csv(reference, dtype={id_column(task): str})
-    y_true = labels[target_column(task)].to_numpy()
-    y_pred, y_score = judge.check_predictions(_read_outputs(outputs), labels[id_column(task)].tolist(),
-                                              numeric=task["task"]["type"] != "classification")
-    primary = task["metric"]["primary"]
-    names = [primary] + [m for m in task["metric"].get("secondary", []) if m != primary]
-    return judge.score(y_true, y_pred, names, y_score=y_score), int(len(y_true))
-
-
 def _evaluator_scores(task: dict, split: str, reference: Path | None, outputs: Path) -> tuple[dict, int]:
     """One call of the task's evaluator:
 
@@ -248,7 +235,7 @@ def _evaluator_scores(task: dict, split: str, reference: Path | None, outputs: P
            "--split", "final" if split == "test" else "validation", "--result", str(result_file)]
     if reference is not None:
         cmd += ["--reference", str(reference)]
-    timeout = 60 * int(task["evaluator"].get("timeout_minutes", EVALUATOR_TIMEOUT_MIN))
+    timeout = 60 * int(task.get("evaluator", {}).get("timeout_minutes", EVALUATOR_TIMEOUT_MIN))
     try:
         proc = subprocess.run(cmd, cwd=script.parent, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -291,13 +278,10 @@ def score_split(project_dir: str | Path, split: str, run_dir: str | Path | None 
         if keep_outputs is not None:
             keep_outputs.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(produced, keep_outputs)
-        if evaluator_script(task) is not None:
-            scratch = Path(tmp) / "evaluation"
-            scratch.mkdir()
-            staged = scratch / "outputs.csv"
-            staged.symlink_to(produced)
-            metrics, n = _evaluator_scores(task, split, reference, staged)
-        else:
-            metrics, n = _builtin_scores(task, reference, produced)
+        scratch = Path(tmp) / "evaluation"
+        scratch.mkdir()
+        staged = scratch / "outputs.csv"
+        staged.symlink_to(produced)
+        metrics, n = _evaluator_scores(task, split, reference, staged)
 
     return {"split": split, "n": n, "primary": task["metric"]["primary"], "metrics": metrics}

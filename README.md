@@ -9,7 +9,7 @@ The design rule: **be exact about the problem and the scoring, and leave the mod
 | --- | --- |
 | Task: input, output, prediction or generation | Model family and architecture |
 | Data: train, validation and test sets | How the data is read, features and encodings |
-| Metric or evaluator, and its direction | Hyperparameters and training procedure |
+| The evaluator (`task/evaluate.py`) and its direction | Hyperparameters and training procedure |
 | Budget | Code structure, libraries, order of work |
 | The command that runs the model: `infer.py` | What to try next |
 
@@ -34,8 +34,8 @@ The-ML-Guy is a thin layer on top of a coding agent, not a framework that runs o
 ## Status
 
 Early but complete end to end. All four milestones are in place: the project contract, the
-scoring rubric, the hill-climbing loop with its budget and experiment records, the dashboard,
-the three skills, and two worked examples from different problem shapes
+scoring rubric, the hill-climbing loop with its budget and experiment records, the four
+skills, and two worked examples from different problem shapes
 (a variant landscape with a continuous target, and binary classification over unrelated
 proteins of varying length).
 
@@ -49,7 +49,7 @@ deliberately goes looking for them.
 
 ```bash
 uv venv --python 3.11 && source .venv/bin/activate
-uv pip install -e ".[dashboard]"           # numpy, pandas, scikit-learn come with it; add examples,dev for the examples and tests
+uv pip install -e .                        # add ".[examples,dev]" for the examples and tests
 ```
 
 ## What keeps the score honest
@@ -68,34 +68,31 @@ about.
   it over the top score is recorded with a reason.
 - **A failure is an error, never a zero,** and still uses up budget.
 
-## Metrics
+## Scoring
 
-| Regression | Classification |
-| --- | --- |
-| `spearman`, `pearson`, `ndcg`, `rmse`, `mae` | `accuracy`, `balanced_accuracy`, `f1`, `mcc`, `roc_auc` |
-
-The model's output file has one row per example: its `id`, and a `prediction` (the number for
-regression, the class label for classification). Class labels can be numbers or text, and
-there can be any number of classes; `f1` is then averaged over the classes. `roc_auc` needs
-two classes and a `score` column holding the probability of the larger label.
-
-## Metrics of your own
-
-When the real measure of success is not a built-in metric, the task carries its own evaluator:
-a script in `task/`, agreed with the user and frozen like the rest of it.
+The framework has no built-in metrics. What counts as good is specific to each problem, and a
+coding agent can write a correct scorer for it better than any fixed list can anticipate. So
+every task carries its own evaluator, a script in `task/` that the agent writes, a fresh agent
+audits, and the user approves; it is then frozen with the rest of the task.
 
 ```toml
-[evaluator]
-script = "evaluate.py"
-
 [metric]
-primary = "top_decile_recall"
+primary = "recall_at_top20pct"     # a name evaluate.py reports
 direction = "maximize"
 ```
 
-It is called as `python evaluate.py --outputs FILE --reference LABELS --split validation|final
---result FILE` and writes `{"metrics": {...}}`. `mlguy score --outputs FILE` runs the task's scoring on
-any file, to check that it can tell good outputs from bad before the task is frozen.
+It is called as `python task/evaluate.py --outputs FILE --reference LABELS --split
+validation|final --result FILE` and writes `{"metrics": {...}}`. The framework decides which
+labels it is given and when: validation labels on every submission, test labels once, at the
+end. `mlguy score --outputs FILE` runs it on any file, to check that it tells good outputs from
+bad before the task is frozen.
+
+**The audit.** Whoever builds the split and writes the evaluator is about to hill-climb on them,
+so before they are frozen, a fresh agent with no stake in the result tries to break them:
+degenerate outputs that score well, malformed ones that are not refused, leakage between or
+inside the splits, a test set that does not match the intended use. Its report,
+`task/audit.md`, goes to the user with the brief. `mlguy init` also refuses until the brief
+records the user's approval.
 
 **Generation is experimental.** A generative model has no answer key, so it always needs an
 evaluator, and the same `infer.py` is asked for `--n N --seed S` samples per condition. The
@@ -118,10 +115,9 @@ mlguy validate                      # check prediction and scoring work; records
 python src/train.py --approach mutation-ridge
 mlguy submit --note "ridge on substitution indicators instead of full-sequence one-hot"
 mlguy status                        # what has been tried, what is best, what budget is left
-mlguy dashboard                     # the same, in a browser
 
 mlguy finish                        # scores the best submission on test once, writes REPORT.md
-mlguy serve                         # this project's own page (app.py)
+python app.py                       # this project's own page
 ```
 
 `mlguy submit` scores `model/` on validation, keeps a snapshot of the code and model that
@@ -217,7 +213,7 @@ test_labels       = "data/test_labels.csv"       # moved out of the project by `
 
 There is no built-in page and no domain code in the core. The agent writes `app.py` for the
 problem in front of it: the amylase example accepts FASTA and names each variant by its
-mutations; a clinical model would look nothing like it. `mlguy serve` just runs it.
+mutations; a clinical model would look nothing like it.
 
 ## For agents
 
@@ -226,7 +222,8 @@ the commands, and leaves the judgment to the agent.
 
 | Skill | What it covers |
 | --- | --- |
-| `build-project` | Look at the data, ask only what is missing, write the brief, get it approved, scaffold and validate |
+| `build-project` | Learn the machine, look at the data, ask only what is missing, write the split and the evaluator, get them audited and approved, freeze, validate |
+| `audit` | Run by a fresh agent: try to break the split and the evaluator before they are frozen |
 | `research` | The loop: the goal, the rubric, the budget, the commands. The approach is the agent's own |
 | `deploy` | Score the test set once, write the report, build a page for the user's problem, record what was learned |
 

@@ -10,7 +10,7 @@ Needs Python 3.11 or newer.
 ```bash
 git clone https://github.com/pengzhangzhi/The-ML-Guy.git
 cd The-ML-Guy
-pip install -e ".[dashboard]"
+pip install -e .
 mlguy --help          # should list: new, init, validate, submit, finish, status, ...
 ```
 
@@ -18,12 +18,12 @@ With `uv`, which is faster and keeps the environment separate:
 
 ```bash
 uv venv --python 3.11 && source .venv/bin/activate
-uv pip install -e ".[dashboard]"
+uv pip install -e .
 ```
 
-The `dashboard` extra is optional. The core install is only what scoring needs. Each project's
-page, and the libraries its model uses (gradio, scanpy, lightgbm, torch...), are installed by
-the agent when that project needs them.
+The core install is only what running and recording a project needs (numpy, pandas, scipy).
+Each project's evaluator, model and page bring their own libraries (scikit-learn, scanpy,
+lightgbm, torch, gradio...), installed by the agent when that project needs them.
 
 ## 2. Install the skills
 
@@ -46,11 +46,12 @@ the `AGENTS.md` of the project you are working in:
 
 This machine has The-ML-Guy installed. When asked to build a prediction model from data,
 read and follow /absolute/path/to/The-ML-Guy/skills/build-project/SKILL.md, then
-skills/research/SKILL.md, then skills/deploy/SKILL.md.
+skills/research/SKILL.md, then skills/deploy/SKILL.md. When build-project asks for an
+audit, start a separate Codex session (`codex exec`) that follows skills/audit/SKILL.md.
 Run `mlguy --help` for the commands.
 ```
 
-Claude Code is the tested path. Codex should work, but has not been run end to end yet.
+Both have been run end to end on real projects.
 
 ## 3. Check it works
 

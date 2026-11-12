@@ -19,7 +19,6 @@ from scipy import stats
 SMALL_N = 100
 BALANCE_GAP = 0.05
 SHIFT_KS = 0.2
-BASE_RATE_METRICS = ("accuracy", "f1")
 
 
 def _shared_rows(a: Path, b: Path, ignore: set[str]) -> int | None:
@@ -71,9 +70,8 @@ def split_checks(task: dict, validation: pd.DataFrame | None, test: pd.DataFrame
         if gaps[worst] > BALANCE_GAP:
             message = (f"class {worst} is {(validation[target] == worst).mean():.0%} of validation but "
                        f"{(test[target] == worst).mean():.0%} of test.")
-            if task["metric"]["primary"] in BASE_RATE_METRICS:
-                message += (f" '{task['metric']['primary']}' moves with the class balance, so the search "
-                            "would be ranked by the wrong thing; prefer balanced_accuracy or mcc.")
+            message += (" A metric that moves with the class balance, such as plain accuracy, would rank the "
+                        "search by the wrong thing.")
             found.append(message + " Set validation_matches_test = false if this is intended.")
     else:
         shift = float(stats.ks_2samp(validation[target], test[target]).statistic)

@@ -9,8 +9,8 @@ The work is only useful if the scientist can run it and knows what to trust. Two
 between the experiments and that: a report they can read, and a page they can use.
 
 ```bash
-mlguy finish    # runs the final check on the best submission, once, and writes REPORT.md
-mlguy serve     # runs the page you build: app.py
+mlguy finish       # runs the final check on the best submission, once, and writes REPORT.md
+python app.py      # the page you build
 ```
 
 ## The report
@@ -48,7 +48,7 @@ Three things are not:
   model than a prediction, have `infer.py` write it as extra columns.
 - **It says what the model was tested on and what it was not,** in their words, where someone
   using it cold will see it.
-- **`python app.py [--port N] [--share]` starts it,** so `mlguy serve` works.
+- **`python app.py [--port N]` starts it,** so anyone can run it the same way.
 
 Accept input in the form they already have it, and when a row cannot be used, say why in
 their terms. Check it yourself before handing over: start it, feed it real data, and feed it

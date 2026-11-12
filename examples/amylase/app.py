@@ -1,6 +1,6 @@
 """The page for this project: rank amylase variants by predicted stain-removal activity.
 
-    python app.py [--port N] [--share]      (or: mlguy serve)
+    python app.py [--port N] [--share]
 
 Written for this problem, not supplied by the framework. It takes what an enzyme engineer
 has to hand (a FASTA file, a CSV with a `sequence` column, or pasted sequences), names each

@@ -1,6 +1,6 @@
 """The page for this project: will a protein be soluble when expressed in E. coli?
 
-    python app.py [--port N] [--share]      (or: mlguy serve)
+    python app.py [--port N] [--share]
 
 Written for this problem, not supplied by the framework. The user has a list of proteins and
 wants to know which to try first, so the page gives a call and the probability behind it,

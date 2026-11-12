@@ -14,7 +14,7 @@ import pandas as pd
 
 TEMPLATES = Path(__file__).parent / "templates"
 
-from mlguy import budget, checks, judge, report
+from mlguy import budget, checks, report
 from mlguy.judge import SubmissionError
 from mlguy.project import (
     TaskChanged,
@@ -39,12 +39,12 @@ from mlguy.project import (
 )
 from mlguy.records import Experiments, git_commit, hash_task, now, task_manifest
 
-REQUIRED_KEYS = [("name",), ("task", "type"), ("task", "output"), ("data", "train"), ("metric", "primary")]
-# prediction: each split is inputs (any format) plus a table of id and label
+REQUIRED_KEYS = [("name",), ("task", "type"), ("task", "output"), ("data", "train"),
+                 ("metric", "primary"), ("metric", "direction")]
+# prediction: each split is inputs (any format) plus a table of ids and labels
 PREDICTION_KEYS = [("data", "validation_inputs"), ("data", "validation_labels"),
                    ("data", "test_inputs"), ("data", "test_labels")]
-# the task's own evaluator names its metric, so the task must say which way is better
-EVALUATOR_KEYS = [("metric", "direction")]
+APPROVAL = "Approved by the user:"
 
 
 class CommandError(Exception):
@@ -53,11 +53,8 @@ class CommandError(Exception):
 
 def _check_keys(task: dict) -> None:
     missing = []
-    custom = "script" in task.get("evaluator", {})
-    if task.get("task", {}).get("type") == "generation" and not custom:
-        raise CommandError("a generation task needs its own evaluator: set [evaluator] script in task.toml")
     generation = task.get("task", {}).get("type") == "generation"
-    for path in REQUIRED_KEYS + (EVALUATOR_KEYS if custom else []) + ([] if generation else PREDICTION_KEYS):
+    for path in REQUIRED_KEYS + ([] if generation else PREDICTION_KEYS):
         node = task
         for key in path:
             if not isinstance(node, dict) or key not in node:
@@ -66,17 +63,11 @@ def _check_keys(task: dict) -> None:
             node = node[key]
     if missing:
         raise CommandError(f"task.toml is missing: {', '.join(missing)}")
-    primary = task["metric"]["primary"]
-    if custom:
-        if task["metric"]["direction"] not in ("maximize", "minimize"):
-            raise CommandError("metric.direction must be 'maximize' or 'minimize'")
-        if not evaluator_script(task).exists():
-            raise CommandError(f"the evaluator {evaluator_script(task)} does not exist")
-    elif primary not in judge.METRICS:
-        raise CommandError(f"unknown metric '{primary}'; built in: {', '.join(sorted(judge.METRICS))}. "
-                           "For anything else, give the task its own evaluator.")
-    elif judge.METRICS[primary][2] != task["task"]["type"]:
-        raise CommandError(f"'{primary}' is a {judge.METRICS[primary][2]} metric, but the task is {task['task']['type']}")
+    if task["metric"]["direction"] not in ("maximize", "minimize"):
+        raise CommandError("metric.direction must be 'maximize' or 'minimize'")
+    if not evaluator_script(task).exists():
+        raise CommandError(f"no evaluator at {evaluator_script(task)}: every task carries its own "
+                           "(the build-project skill covers writing it)")
     for inputs, labels in (("validation_inputs", "validation_labels"), ("test_inputs", "test_labels")):
         if inputs in task["data"] and labels not in task["data"]:
             raise CommandError(f"task.toml has data.{inputs} but no data.{labels} (the ids to produce outputs for)")
@@ -147,8 +138,10 @@ def cmd_new(args: argparse.Namespace) -> int:
     print("  task/task.toml   the task: fill in every TODO, then agree it with the user")
     print("  task/brief.md    the one page the user approves")
     print("  this folder is a git repository: `validate`, `submit` and `finish` commit to it (not task/data)")
+    print("  task/evaluate.py the scoring, as a stub: write it for the problem; it is frozen with the task")
     print("  infer.py         the one fixed interface, as a stub; src/ is yours")
-    print("next: prepare task/data, write the simplest model that runs, then `mlguy init`")
+    print("next: prepare task/data, write the evaluator and the simplest model that runs, get the brief "
+          "approved, then `mlguy init`")
     return 0
 
 
@@ -157,7 +150,13 @@ def cmd_init(args: argparse.Namespace) -> int:
     _check_keys(task)
     project_dir, data = task["_project_dir"], task["data"]
     id_col, tgt_col = id_column(task), target_column(task)
-    builtin, generation = evaluator_script(task) is None, is_generation(task)
+    generation = is_generation(task)
+    brief = project_dir / "task" / "brief.md"
+    approval = [line for line in (brief.read_text().splitlines() if brief.exists() else [])
+                if line.strip().startswith(APPROVAL)]
+    if not approval or not approval[0].strip()[len(APPROVAL):].strip(" -:*_") or "TODO" in approval[0]:
+        raise CommandError(f"task/brief.md does not record the user's approval. Show them the brief, and "
+                           f"once they approve, add a line '{APPROVAL} <their words, and the date>'.")
 
     owner = state_dir(task) / "project_path.txt"
     if owner.exists() and owner.read_text().strip() != str(project_dir):
@@ -177,7 +176,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     def labels_table(path: Path, name: str) -> pd.DataFrame:
         frame = pd.read_csv(path, dtype={id_col: str})
-        for column in [id_col] + ([tgt_col] if builtin else []):
+        for column in [id_col]:
             if column not in frame.columns:
                 raise CommandError(f"{path.name} has no '{column}' column; found {list(frame.columns)}")
         if frame[id_col].duplicated().any():
@@ -228,12 +227,15 @@ def cmd_init(args: argparse.Namespace) -> int:
         per = " per condition" if validation_frame is not None else ""
         print(f"  sampling: {n}{per} on every submission (seed {seed}); {final_n}{per} for the final "
               f"check (seed {final_seed}" + (", held-out conditions)" if test_frame is not None else ")"))
-    scored_by = "built in" if builtin else f"task/{task['evaluator']['script']}"
+    scored_by = f"task/{evaluator_script(task).name}"
     print(f"  metric {task['metric']['primary']} ({direction(task)}, {scored_by})  |  {budget.describe(task, [])}")
     print(f"  task frozen (hash {digest[:12]})")
     caveat = validation_caveat(task)
     if caveat:
         print(f"  note: {caveat}")
+    if not (project_dir / "task" / "audit.md").exists():
+        print("  note: no task/audit.md, so no fresh agent has tried to break the split and the evaluator "
+              "(the audit skill)")
     for item in found:
         print(f"  check: {item}")
     if found:
@@ -430,30 +432,6 @@ def cmd_score(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_dashboard(args: argparse.Namespace) -> int:
-    page = Path(__file__).parent / "dashboard.py"
-    cmd = [sys.executable, "-m", "streamlit", "run", str(page),
-           "--server.headless", "true", "--server.port", str(args.port), "--", str(Path(args.project).resolve())]
-    try:
-        return subprocess.call(cmd)
-    except FileNotFoundError:
-        raise CommandError("streamlit is not installed; `pip install 'mlguy[dashboard]'`")
-
-
-def cmd_serve(args: argparse.Namespace) -> int:
-    """Run the project's own page. The framework ships none: the agent builds it for the problem."""
-    project_dir = Path(args.project).resolve()
-    if not (project_dir / "app.py").exists():
-        raise CommandError(f"no app.py in {project_dir}: this project's page has not been built yet "
-                           "(the deploy skill covers it)")
-    cmd = [sys.executable, "app.py"]
-    if args.port:
-        cmd += ["--port", str(args.port)]
-    if args.share:
-        cmd += ["--share"]
-    return subprocess.call(cmd, cwd=project_dir)
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="mlguy", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -492,13 +470,6 @@ def main(argv: list[str] | None = None) -> int:
     p = add("score", "run the task's scoring on a file of outputs, to check that it tells good from bad "
                      "before the task is frozen. Records nothing.", cmd_score)
     p.add_argument("--outputs", required=True, help="a file of outputs for the validation examples")
-
-    p = add("dashboard", "watch the experiments in a browser", cmd_dashboard)
-    p.add_argument("--port", type=int, default=8501)
-
-    p = add("serve", "run the project's own page (app.py)", cmd_serve)
-    p.add_argument("--port", type=int, default=None)
-    p.add_argument("--share", action="store_true", help="passed to app.py as --share")
 
     args = parser.parse_args(argv)
     try:

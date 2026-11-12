@@ -1,6 +1,6 @@
 ---
 name: build-project
-description: Turn a scientist's description of a modelling problem (predicting something, or generating something) into a The-ML-Guy project: an approved brief, prepared data, and a baseline that scores. Use when someone wants a model built for their data and no project exists yet.
+description: Turn a scientist's description of a modelling problem (predicting something, or generating something) into a The-ML-Guy project: an approved brief, prepared data, an audited evaluator, and a baseline that scores. Use when someone wants a model built for their data and no project exists yet.
 ---
 
 # Building a project
@@ -29,7 +29,22 @@ waste their attention, and a question phrased around what you saw ("your file ha
 mutants and 3,218 with 2 to 8 mutations — will the variants you want to predict be
 combinations?") is far easier to answer than one asked in the abstract.
 
-## 2. Ask only what is missing
+## 2. Find out what the machine offers
+
+Before planning any modelling, learn the compute you are working with, because it decides what
+is worth trying. This is yours to discover, not the user's to explain: CPUs and memory, GPUs and
+their type, whether there is a job scheduler (Slurm: `sinfo`, `sacctmgr show assoc user=$USER`,
+`squeue`), which partitions and accounts you may use and their limits, and where large files and
+environments should live. Check your own memory and the machine's notes (`CLAUDE.md`,
+`AGENTS.md`) first; someone may have written it down already. Ask the user only what cannot be
+discovered: which account to charge, what they are willing to spend.
+
+Write what you found in `PROJECT_MEMORY.md` under "Compute", and into your own memory if you
+keep one, so the next session does not have to rediscover it. The framework does not manage
+compute: `mlguy submit` runs `infer.py` wherever you run it, so when the model needs a GPU,
+run `mlguy submit` inside a job that has one.
+
+## 3. Ask only what is missing
 
 These are the things only they can tell you. Skip any the data or their first message already
 answers. Ask at most five questions in all, merging where you can, each with the answer you
@@ -44,18 +59,18 @@ would guess.
    whether the model is useful.
 5. Anything odd about the measurements? Noise, failed assays, duplicates, batches, and which
    direction is good.
-6. How much time and compute can this use?
+6. How much time and compute may this use?
 7. Anything you want followed or avoided, and what would be good enough?
 
 If they would rather write than talk, `src/mlguy/templates/proposal.md` in the tool's repository has
 these as headings.
 
-## 3. Choose the split with care
+## 4. Choose the split with care
 
 Build the split so that scoring on it resembles the use they described in question 4. For example, a random
 split is almost always wrong when rows are related to each other — similar sequences, repeat
 measurements on the same subject, cells from one donor: near-duplicates land on both sides
-and every number comes out flattering. 
+and every number comes out flattering.
 
 Once the test set is drawn, do not score anything on it, not even a simple rule for the
 brief. Every number in the brief comes from training or validation data; the test set is
@@ -66,62 +81,88 @@ validation asks an easier or simply different question, the search will optimise
 thing and the final score will disappoint. When the split makes that unavoidable — because a
 published split is being reproduced, or the data only allows one sensible division — say so in
 the brief, and set `validation_matches_test = false` with a `validation_note` in `task.toml`.
-The warning then follows through to the report.
+The warning then follows through to the report. A caveat that is not a mismatch (validation and
+test share patients, say) also goes in `validation_note`; it reaches the report either way.
 
-## 4. Choose a metric that cannot be gamed by the split
+## 5. Write the evaluator
 
-Pick the metric from what they will do with the predictions, then check it against the split
-you just chose. A metric that moves with something other than model quality will mislead the
-search.
-
-The common trap is a class balance that differs between validation and test: plain accuracy
-then measures the base rate as much as the model, and the loop will prefer a model fitted to
-the wrong one. When the balance differs, prefer `balanced_accuracy` or `mcc` over `accuracy`.
-All the classification metrics take any number of classes, with labels as numbers or text,
-except `roc_auc`, which needs exactly two.
-If you keep a base-rate-dependent metric anyway — to stay comparable with published numbers,
-say — record that reason in the brief, because the search will be ranked by it.
-
-## 5. When no built-in metric fits, write the evaluator
-
-The built-in metrics cover one prediction per example scored against a label. When the real
-measure of success is something else, the task carries its own evaluator. (Generative tasks
-always need one. Support for them is experimental; say so if a user asks for one.)
-
-**How good outputs are recognised is the user's knowledge, not yours.** Ask how they would
-judge a batch of outputs by hand, and what they already trust to do it: a folding model, a
-classifier, a simulation, a comparison with real data. Turn that into `task/evaluate.py`,
-describe in the brief what it rewards in plain words, and have them approve it. It is frozen
-with the task.
+Every task carries its own scoring, `task/evaluate.py`, frozen with the task. The framework has
+no built-in metrics: what counts as good is specific to the problem, and you are better placed
+than any fixed list to write it.
 
 ```
 python evaluate.py --outputs FILE --reference LABELS --split validation|final --result FILE
 ```
 
 It reads the model's outputs and the labels file of that split, matched by `id`, and writes
-`{"metrics": {"name": number, ...}}`. The primary metric must be a number; others may be
-`NaN` when undefined. Set
-`[evaluator] script`, and `[metric] primary` and `direction`, in `task.toml`. Training code may
-import from it to tune against the same measure.
+`{"metrics": {"name": number, ...}}`. The primary metric must be a number; others may be `NaN`
+when undefined. Set `[metric] primary` and `direction` in `task.toml`. Training code may import
+from it to tune against the same measure. Refuse outputs that cannot be scored (missing or
+repeated ids, wrong columns) by exiting with an error; never score them as zero.
+
+**Derive the metric from what they will do with the predictions,** then check it against the
+split. A metric that moves with something other than model quality will mislead the search: when
+the class balance differs between validation and test, plain accuracy measures the base rate as
+much as the model, and a balanced measure is the safer choice. If you keep a base-rate-dependent
+metric anyway (to stay comparable with published numbers, say), record why in the brief. Use a
+well-tested library for standard metrics rather than writing them by hand.
+
+**For generation, how good outputs are recognised is the user's knowledge, not yours.** Ask how
+they would judge a batch of outputs by hand, and what they already trust to do it: a folding
+model, a classifier, a simulation, a comparison with real data. (Generative tasks are
+experimental; say so if a user asks for one.)
 
 The search will optimise exactly what this script rewards, so:
 
-- **It must not be winnable by degenerate outputs.** A score for quality alone is maximised by
-  one good sample repeated. Fold validity, diversity and novelty against the training data
-  into the primary number, or refuse outputs that fail them.
-- **Prove it can tell good from bad before freezing it.** Run `mlguy score --outputs FILE` on
-  real held-out data and on something broken (shuffled, random, copied from training). If the
-  scores do not separate, it cannot guide a search.
+- **It must not be winnable by degenerate outputs.** A constant prediction, or one good sample
+  repeated, must not score well. Fold validity, diversity and novelty into the primary number
+  for generation, or refuse outputs that fail them.
+- **Prove it can tell good from bad.** Run `mlguy score --outputs FILE` on something good (the
+  validation labels themselves, where that makes sense) and on something broken (shuffled,
+  constant, random). If the scores do not separate, it cannot guide a search.
 - **It runs on every submission,** so its cost is part of the budget.
 
-## 6. Write the brief and get it approved
+## 6. Draft the project
+
+```bash
+mlguy new <folder> --name <project-name>
+# task/task.toml from what you have agreed so far; task/evaluate.py as above
+# prepare task/data with a script kept in task/ (task/prepare.py, say), so how the data and
+# split were made is frozen with them. Copy what it needs into task/data, or record in the
+# brief where the raw data lives.
+```
+
+Nothing is frozen yet. **The data.** Keep the inputs in whatever form suits them: a table, an
+expression matrix, a folder of images or structures. `mlguy` never reads them; only your code
+does. What it needs is an `id` for every validation and test example, carried by the inputs, and
+a small labels CSV for each of those two splits with `id` and `target`. Training data is yours
+to lay out. A folder of many small files is fine; freezing it takes a little longer.
+
+**The one fixed interface** is `python infer.py --model model --input PATH --output FILE`,
+where `PATH` is a split's inputs exactly as `task.toml` names them, and the output is a CSV
+with `id` and whatever your evaluator reads (by convention `prediction`). `infer.py` only ever
+sees inputs, so the inputs must carry the `id`; the model should ignore it. It also sees a
+whole split at once. Leave out of the validation and test inputs anything that links rows to
+each other, such as a patient or donor number, unless the model will have it in use too: rows
+from the same patient later in the file can give the outcome away.
+
+## 7. Have the rubric audited
+
+You built the split and wrote the evaluator, and you are about to hill-climb on them. Have
+someone without that stake try to break them: a fresh session or subagent that has not seen this
+conversation, following the `audit` skill. Give it only the project folder. It writes
+`task/audit.md`. Fix what it finds, or explain in the brief why it does not matter, and keep
+the audit's summary for the user.
+
+## 8. Write the brief and get it approved
 
 Fill in `task/brief.md`: goal, input, output, data, how it is tested, how it is scored, the
-starting model, the budget, and the assumptions you made rather than were told. Every line in
-their language.
+starting model, the budget, what the audit found, and the assumptions you made rather than were
+told. Every line in their language.
 
-**Show them examples, not descriptions; this is required, not optional.** They cannot judge "held out by similarity" or
-"Spearman correlation", but they can judge what those mean on their own data:
+**Show them examples, not descriptions; this is required, not optional.** They cannot judge
+"held out by similarity" or "Spearman correlation", but they can judge what those mean on their
+own data:
 
 - For the split, show a handful of real test examples, and where it makes sense the training
   examples most like them, and ask: are these the kind of new cases you will have? Where single
@@ -129,38 +170,18 @@ their language.
 - For the score, say what a given value would let them do: "of the 50 this model ranks
   highest, about this many would really be in your top 10%."
 
-Then ask them to approve or correct it. **Do not build anything before they approve.** Drafting
-`task.toml` or the evaluator to show them is fine; nothing is frozen until `mlguy init`. This is
-the one point where a wrong metric or a wrong split is cheap to fix.
+Then ask them to approve or correct it. **Do not freeze or train anything before they approve.**
+When they do, record it in the brief's last section, in their words, with the date:
+`Approved by the user: "..." (date)`. `mlguy init` refuses without that line. This is the one
+point where a wrong metric or a wrong split is cheap to fix.
 
-## 7. Build it
+## 9. Freeze it and prove it runs
 
 ```bash
-mlguy new <folder> --name <project-name>
-# write task/task.toml from the approved brief; prepare task/data with a script kept in
-# task/ (task/prepare.py, say), so how the data and split were made is frozen with them.
-# Copy what it needs into task/data, or record in the brief where the raw data lives.
 # write the simplest model that runs: train it into model/, and make infer.py work
 mlguy init          # checks the task and the split, moves the test labels out, freezes task/
 mlguy validate      # proves infer.py and scoring work; records experiment 0
 ```
-
-**The data.** Keep the inputs in whatever form suits them: a table, an expression matrix, a
-folder of images or structures. `mlguy` never reads them; only your code does. What it needs is
-an `id` for every validation and test example, carried by the inputs, and a small labels CSV
-for each of those two splits with `id` and `target`. Training data is yours to lay out. A
-folder of many small files is fine; freezing it takes a little longer.
-
-**The one fixed interface** is `python infer.py --model model --input PATH --output FILE`,
-where `PATH` is a split's inputs exactly as `task.toml` names them, and the output is a CSV
-with `id` and `prediction` (plus `score`, the positive-class probability, for two-class tasks).
-`infer.py` only ever sees inputs, so the inputs must carry the `id`; the model should ignore it.
-It also sees a whole split at once. Leave out of the validation and test inputs anything that
-links rows to each other, such as a patient or donor number, unless the model will have it in
-use too: rows from the same patient later in the file can give the outcome away.
-
-A caveat about the split that is not a validation/test mismatch (validation and test share
-patients, say) goes in `[data] validation_note`; it is carried into the report either way.
 
 `mlguy init` moves the test labels to `~/.mlguy/projects/<name>/`, outside the project, along
 with the record of the frozen task. Set `MLGUY_HOME` before `init` to keep them somewhere else;
@@ -180,7 +201,7 @@ not count against the budget.
 
 If `mlguy validate` fails, the project is not finished. Fix it before handing over.
 
-## 8. Hand over
+## 10. Hand over
 
 Tell them, in their language: what the model will predict, how it will be judged, what the
 baseline already scores, and what the budget allows. Then go on to the research step unless

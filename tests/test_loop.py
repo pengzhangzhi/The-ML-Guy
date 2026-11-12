@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from helpers import DATA_TOML, write_splits
+from helpers import DATA_TOML, write_splits, write_task
 from mlguy.cli import main
 from mlguy.records import Experiments
 
@@ -31,7 +31,7 @@ length = 8
 """ + DATA_TOML + """
 [metric]
 primary = "spearman"
-secondary = ["ndcg"]
+direction = "maximize"
 
 [budget]
 max_submissions = 2
@@ -69,7 +69,7 @@ def project(tmp_path, monkeypatch):
     monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
     project = tmp_path / "project"
     (project / "task" / "data").mkdir(parents=True)
-    (project / "task" / "task.toml").write_text(TASK_TOML)
+    write_task(project, TASK_TOML)
 
     rng = random.Random(0)
     rows = []
@@ -102,7 +102,7 @@ def test_full_loop(project, capsys):
     # a submission that scores worse
     _write_model(project, -1.0)
     assert run(project, "submit", "--note", "flip the sign") == 0
-    assert experiments.best("spearman")["number"] == 0
+    assert experiments.best("spearman", "maximize")["number"] == 0
 
     # a submission that scores the same as the baseline but is still recorded
     _write_model(project, 2.0)
@@ -129,7 +129,7 @@ def test_broken_submission_is_an_error_not_a_zero(project, capsys):
     record = Experiments(project).all()[-1]
     assert record["status"] == "error" and "metrics" not in record
     assert record["counts_against_budget"] is True
-    assert Experiments(project).best("spearman")["number"] == 0
+    assert Experiments(project).best("spearman", "maximize")["number"] == 0
 
 
 def test_changing_the_task_is_refused(project, capsys):
@@ -166,31 +166,10 @@ def test_status_json_reports_best_and_budget(project, capsys):
     assert status["test_scored"] is None
 
 
-def test_dashboard_renders_without_error(project, monkeypatch):
-    """Run the dashboard script against a stub streamlit, to catch mistakes in the page itself."""
-    from unittest.mock import MagicMock
-
-    run(project, "init")
-    run(project, "validate")
-    _write_model(project, 3.0)
-    run(project, "submit", "--note", "triple the scale")
-
-    stub = MagicMock()
-    stub.columns.side_effect = lambda spec: [MagicMock() for _ in (range(spec) if isinstance(spec, int) else spec)]
-    stub.selectbox.side_effect = lambda label, options, **kw: list(options)[0]
-    monkeypatch.setitem(__import__("sys").modules, "streamlit", stub)
-    monkeypatch.setattr(__import__("sys"), "argv", ["dashboard.py", str(project)])
-    monkeypatch.delitem(__import__("sys").modules, "mlguy.dashboard", raising=False)
-
-    import mlguy.dashboard  # noqa: F401  (importing runs the page)
-
-    assert stub.line_chart.called and stub.dataframe.called
-
-
 def test_new_scaffolds_a_runnable_project(tmp_path):
     target = tmp_path / "fresh"
     assert main(["new", str(target), "--name", "fresh-project"]) == 0
-    for name in ["task/task.toml", "task/brief.md", "infer.py", "PROJECT_MEMORY.md"]:
+    for name in ["task/task.toml", "task/brief.md", "task/evaluate.py", "infer.py", "PROJECT_MEMORY.md"]:
         assert (target / name).exists(), name
     assert "fresh-project" in (target / "task" / "task.toml").read_text()
     assert main(["new", str(target), "--name", "again"]) == 2, "must not overwrite a project"
@@ -228,6 +207,7 @@ output = "response"
 """ + DATA_TOML + """
 [metric]
 primary = "pearson"
+direction = "maximize"
 
 [budget]
 max_submissions = 1
@@ -257,7 +237,7 @@ def test_a_project_with_no_sequences_at_all(tmp_path, monkeypatch):
     monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
     project = tmp_path / "tabular"
     (project / "task" / "data").mkdir(parents=True)
-    (project / "task" / "task.toml").write_text(TABULAR_TOML)
+    write_task(project, TABULAR_TOML)
 
     rng = random.Random(1)
     rows = [{"cell_line": rng.choice("AB"), "dose": rng.random() * 10,
@@ -275,7 +255,7 @@ def test_a_project_with_no_sequences_at_all(tmp_path, monkeypatch):
     hidden = pd.read_csv(project / "task" / "data" / "test_inputs.csv")
     assert list(hidden.columns) == ["id", "cell_line", "dose", "replicate"], "init leaves the inputs alone"
     assert run(project, "validate") == 0
-    assert Experiments(project).best("pearson")["metrics"]["pearson"] > 0.9
+    assert Experiments(project).best("pearson", "maximize")["metrics"]["pearson"] > 0.9
     assert run(project, "finish") == 0
     assert "response" in (project / "REPORT.md").read_text()
 
@@ -284,7 +264,7 @@ def _tabular_project(tmp_path, monkeypatch):
     monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
     project = tmp_path / "tabular"
     (project / "task" / "data").mkdir(parents=True)
-    (project / "task" / "task.toml").write_text(TABULAR_TOML)
+    write_task(project, TABULAR_TOML)
     rng = random.Random(2)
     rows = [{"cell_line": rng.choice("AB"), "dose": rng.random() * 10,
              "replicate": rng.randint(1, 3)} for _ in range(60)]
@@ -297,17 +277,6 @@ def _tabular_project(tmp_path, monkeypatch):
     (project / "model" / "weights.json").write_text(json.dumps({"slope": 1.5}))
     run(project, "init")
     return project
-
-
-def test_serve_runs_the_projects_own_page(tmp_path, monkeypatch, capfd):
-    """The framework ships no page: `serve` runs whatever app.py the agent built."""
-    project = _tabular_project(tmp_path, monkeypatch)
-    assert run(project, "serve") == 2, "no app.py yet, so there is nothing to serve"
-    assert "not been built" in capfd.readouterr().err
-
-    (project / "app.py").write_text("import sys; print('page', *sys.argv[1:])\n")
-    assert run(project, "serve", "--port", "7001", "--share") == 0
-    assert "page --port 7001 --share" in capfd.readouterr().out
 
 
 # ------------------------------------------------------------ the rubric cannot be bypassed
@@ -395,9 +364,9 @@ def test_init_flags_a_split_that_would_mislead(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
     project = tmp_path / "leaky"
     (project / "task" / "data").mkdir(parents=True)
-    (project / "task" / "task.toml").write_text(
+    write_task(project, 
         TASK_TOML.replace('type = "regression"', 'type = "classification"')
-                 .replace('primary = "spearman"', 'primary = "accuracy"').replace('secondary = ["ndcg"]', ""))
+                 .replace('primary = "spearman"', 'primary = "accuracy"'))
     rng = random.Random(3)
     seqs = ["".join(rng.choice("ACDE") for _ in range(8)) for _ in range(400)]
     frame = pd.DataFrame({"sequence": seqs}).drop_duplicates("sequence").reset_index(drop=True)
@@ -412,7 +381,7 @@ def test_init_flags_a_split_that_would_mislead(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "7 rows have identical inputs in train and test" in out
     assert "test has only 67 examples" in out
-    assert "80% of validation but" in out and "balanced_accuracy" in out
+    assert "80% of validation but" in out and "plain accuracy" in out
 
 
 FOLDER_INFER = '''\
@@ -438,7 +407,7 @@ def test_inputs_can_be_anything_the_projects_code_can_read(tmp_path, monkeypatch
                                 'test_labels = "data/test_labels.csv"\n')
     assert "data/validation\"" in toml
     data.mkdir(parents=True)
-    (project / "task" / "task.toml").write_text(toml)
+    write_task(project, toml)
     rng = random.Random(4)
     for split, count in [("train", 20), ("validation", 120), ("test", 120)]:
         (data / split).mkdir()
@@ -455,7 +424,7 @@ def test_inputs_can_be_anything_the_projects_code_can_read(tmp_path, monkeypatch
     assert run(project, "init") == 0
     assert (data / "test").is_dir() and not (data / "test_labels.csv").exists()
     assert run(project, "validate") == 0
-    assert Experiments(project).best("pearson")["metrics"]["pearson"] > 0.99
+    assert Experiments(project).best("pearson", "maximize")["metrics"]["pearson"] > 0.99
     assert run(project, "finish") == 0
 
 
@@ -467,3 +436,14 @@ def test_two_projects_cannot_share_a_name(project, tmp_path, capsys):
     assert run(project, "init") == 0
     assert run(other, "init") == 2
     assert "different name" in capsys.readouterr().err
+
+
+def test_init_needs_the_users_approval_and_an_evaluator(project, capsys):
+    brief = project / "task" / "brief.md"
+    brief.write_text("# Brief\n\nApproved by the user: TODO their words, and the date.\n")
+    assert run(project, "init") == 2
+    assert "does not record the user's approval" in capsys.readouterr().err
+    brief.write_text("# Brief\n\nApproved by the user: \"looks right, go ahead\" (2026-11-11)\n")
+    (project / "task" / "evaluate.py").unlink()
+    assert run(project, "init") == 2
+    assert "no evaluator" in capsys.readouterr().err
