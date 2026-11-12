@@ -39,6 +39,12 @@ environments should live. Check your own memory and the machine's notes (`CLAUDE
 `AGENTS.md`) first; someone may have written it down already. Ask the user only what cannot be
 discovered: which account to charge, what they are willing to spend.
 
+**What a queue can run is not what it will run now.** The partition with the right GPUs may be
+full, and a submission budget spent waiting is worse than a smaller GPU that starts immediately.
+Look at what is idle (`sinfo` by state, `squeue -p <partition>`) before choosing, and look again
+when a job sits pending: a scheduler's own start estimate is usually pessimistic and is no
+substitute for seeing which nodes are free.
+
 Write what you found in `PROJECT_MEMORY.md` under "Compute", and into your own memory if you
 keep one, so the next session does not have to rediscover it. The framework does not manage
 compute: `mlguy submit` runs `infer.py` wherever you run it, so when the model needs a GPU,

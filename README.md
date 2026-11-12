@@ -18,8 +18,9 @@ The design rule: **be exact about the problem and the scoring, and leave the mod
 The-ML-Guy is a thin layer on top of a coding agent, not a framework that runs one.
 
 - **Minimal, but load-bearing.** It supplies only what an agent cannot be trusted or relied on
-  to do for itself: an honest score, a budget that actually stops, state that survives the
-  session, and a page other people can use. Everything else is left alone.
+  to do for itself: an honest score, a count of submissions that actually stops, state that
+  survives the session, and a page other people can use. Everything else is left alone —
+  including the compute, which the framework never sees and so cannot cap.
 - **Maximum room for the agent.** The task, the data, the metric and the budget are fixed. The
   modelling is not: any architecture, any library, any code structure. Autoresearch is only as
   good as the freedom it has, so the tool stays out of it.
@@ -121,8 +122,10 @@ mlguy finish                        # scores the best submission on test once, w
 python app.py                       # this project's own page
 ```
 
-`mlguy submit` scores `model/` on validation, keeps a snapshot of the code and model that
-produced the score, and refuses once the budget is spent. The test set is scored exactly once,
+`mlguy submit` takes a snapshot of the code and the model and scores *that*, so what earned the
+score cannot drift away from it afterwards — and so a model that only works in the working
+folder is caught now rather than at the final check. It refuses once the submissions are spent.
+The test set is scored exactly once,
 by `mlguy finish`, on whichever submission scored best on validation.
 
 The split as published trains on the wild type and variants with 2 to 8 mutations, and tests
@@ -184,6 +187,7 @@ would probably score better on test, and what to set differently next time.
 project/
 ├── task/            STRICT: brief.md (with the user's approval), task.toml, evaluate.py, audit.md, data
 ├── infer.py         FIXED INTERFACE: --model DIR --input PATH --output FILE
+│                    (generation, experimental, adds --n N --seed S and writes n rows per condition)
 ├── src/             FREE: any code, any structure
 ├── model/           the model as it stands now
 ├── experiments/     written only by `mlguy submit`: log.jsonl + a snapshot per submission
@@ -194,7 +198,9 @@ project/
 
 Until `mlguy finish`, the test labels live in `~/.mlguy/projects/<name>/` (or under
 `MLGUY_HOME`), outside the project folder, along with a hash of every file in `task/` taken when
-the brief was approved. A project folder is a git repository; `submit` and `finish` commit to it.
+the brief was approved. A project folder is a git repository; `submit` and `finish` commit to it —
+but not `task/data`, which is usually too large and is fingerprinted rather than committed, so a
+clone needs the data back from wherever the brief says it came from.
 
 `infer.py` is the only agent-written code with a fixed shape, because both the rubric and the
 project's page call it. `task/` is frozen and `src/` is free, so everything that decides what a
@@ -208,7 +214,7 @@ things about an example, its id and its label, and matches outputs to labels by 
 [data]
 train             = "data/train.h5ad"            # anything
 validation_inputs = "data/validation.h5ad"       # anything
-validation_labels = "data/validation_labels.csv" # id, target
+validation_labels = "data/validation_labels.csv" # id, target (generation: the conditions' ids alone)
 test_inputs       = "data/test.h5ad"
 test_labels       = "data/test_labels.csv"       # moved out of the project by `mlguy init`
 ```

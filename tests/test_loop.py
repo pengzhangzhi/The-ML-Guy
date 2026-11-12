@@ -392,6 +392,24 @@ def test_each_submission_is_one_score_set_against_the_best(project, capsys):
     assert "best so far: experiment 0" in out
 
 
+def test_a_scoring_change_mid_project_says_how_to_check_it(project, capsys, monkeypatch):
+    """mlguy cannot tell a change that moved a number from a refactor around it, so the warning
+    has to point at the way to find out — and not at anything that costs a submission."""
+    run(project, "init")
+    run(project, "validate")
+    baseline = Experiments(project).all()[0]
+    capsys.readouterr()
+
+    monkeypatch.setattr("mlguy.cli.scoring_digest", lambda: "0" * 12)
+    assert run(project, "submit", "--note", "after an upgrade") == 0
+    out = capsys.readouterr().out
+    assert "scoring code changed during this project" in out
+    assert "mlguy score --outputs experiments/0000/validation_outputs.csv" in out
+    assert f"spearman={baseline['metrics']['spearman']:.4f}" in out, \
+        "with the number to compare against, so the check is one command and one glance"
+    assert (project / "experiments" / "0000" / "validation_outputs.csv").exists()
+
+
 def test_init_flags_a_split_that_would_mislead(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("MLGUY_HOME", str(tmp_path / "state"))
     project = tmp_path / "leaky"

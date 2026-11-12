@@ -26,6 +26,14 @@ row per example: its `id`, and whatever `task/evaluate.py` reads from it — by 
 needed, extra or wrong, and some refuse outputs they did not expect. `mlguy` and the project's
 page both call `infer.py`, so it must keep working.
 
+A generative task is called with two more arguments, `--n N --seed S` from `[sampling]` in
+`task.toml`, and writes `N` rows for every condition in `--input`, each carrying that condition's
+id. A submission holding a different number per condition is refused, not scored.
+
+`infer.py` is run from a copy of the project holding only `infer.py`, `src/` and `model/` — and
+the user runs the finished model the same way, out of `final/`. Neither has a `task/`, so
+anything the model needs when it predicts belongs in `model/`.
+
 ## What is yours
 
 Everything else: the model, the features, the architecture, the loss, hyperparameters, how you

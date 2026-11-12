@@ -22,7 +22,10 @@ The search will optimise exactly what it rewards. Run it with
 score:
 
 - **Good:** the true labels written as outputs, where that makes sense. It should score at or
-  near the best possible value.
+  near the best possible value. A generative task has no true output, so stand something known
+  to be good in its place: outputs from a published model for this problem, or real examples of
+  the thing being generated. Give it the number of samples per condition the task fixes — the
+  best of many scores better than many do, and `mlguy score` will say so if you do not.
 - **Degenerate:** a constant, the majority class, shuffled labels, random values, training
   labels copied over by any shared key, one good output repeated (for generation). None of
   these should come anywhere near "good".

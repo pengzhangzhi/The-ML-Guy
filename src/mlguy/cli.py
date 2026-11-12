@@ -129,9 +129,20 @@ def _print_scored(record: dict, task: dict, experiments: Experiments,
     scored_by = {r["tool"] for r in experiments.all() if r.get("tool")}
     scoring = {r["scoring"] for r in experiments.all() if r.get("scoring")}
     if len(scoring) > 1:
+        # It cannot tell a change that moved a number from one that refactored around it. What it
+        # can do is say how to find out for this project, for nothing: the outputs of every
+        # submission are saved, and `score` runs them through the current code without spending a
+        # submission or re-running the model.
+        earlier = next((r for r in experiments.submissions() if r.get("scoring") not in (None, record.get("scoring"))),
+                       None)
         print(f"  warning: mlguy's own scoring code changed during this project "
-              f"({', '.join(sorted(scored_by))}); scores from either side of it are not comparable, "
-              f"and `mlguy submit` on the earlier experiments would rescore them")
+              f"({', '.join(sorted(scored_by))}), so scores from either side of it may not be comparable")
+        if earlier:
+            print(f"           to find out, rescore an earlier submission's saved outputs with the code "
+                  f"as it is now:\n"
+                  f"             mlguy score --outputs experiments/{earlier['number']:04d}/validation_outputs.csv\n"
+                  f"           it costs no submission. If it reports {primary}="
+                  f"{earlier['metrics'][primary]:.4f}, what a score means has not changed.")
     elif len(scored_by) > 1:
         print(f"  note: these submissions were scored by more than one mlguy "
               f"({', '.join(sorted(scored_by))}), but its scoring code was the same in each, so the "
