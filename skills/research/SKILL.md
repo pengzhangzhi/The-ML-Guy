@@ -21,10 +21,10 @@ python infer.py --model model --input PATH --output outputs.csv
 ```
 
 `PATH` is a split's inputs, in whatever form the task stores them. The output is a CSV with one
-row per example: its `id` and your `prediction` (plus a `score` column, the probability of the
-positive class, for two-class tasks). Extra columns are allowed and ignored by the scoring,
-so `infer.py` can also give the page what it needs, such as a confidence. `mlguy` and the
-project's page both call it, so it must keep working.
+row per example: its `id`, and whatever `task/evaluate.py` reads from it — by convention a
+`prediction` column. Read the evaluator: it is the only thing that decides whether a column is
+needed, extra or wrong, and some refuse outputs they did not expect. `mlguy` and the project's
+page both call `infer.py`, so it must keep working.
 
 ## What is yours
 

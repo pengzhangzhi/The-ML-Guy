@@ -37,7 +37,7 @@ from mlguy.project import (
     test_labels_path,
     validation_caveat,
 )
-from mlguy.records import Experiments, git_commit, hash_task, now, task_manifest
+from mlguy.records import Experiments, git_commit, hash_task, now, task_manifest, tool_version
 
 REQUIRED_KEYS = [("name",), ("task", "type"), ("task", "output"), ("data", "train"),
                  ("metric", "primary"), ("metric", "direction")]
@@ -91,6 +91,7 @@ def _record_score(experiments: Experiments, task: dict, number: int, note: str,
         "note": note,
         "status": "ok" if result else "error",
         "counts_against_budget": counts,
+        "tool": tool_version(),
     }
     if result:
         record["metrics"] = result["metrics"]
@@ -112,6 +113,10 @@ def _print_scored(record: dict, task: dict, experiments: Experiments,
     if previous_best and previous_best["number"] != record["number"]:
         change = record["metrics"][primary] - previous_best["metrics"][primary]
         print(f"  {change:+.4f} {primary} against experiment {previous_best['number']}, the best before this")
+    scored_by = {r["tool"] for r in experiments.all() if r.get("tool")}
+    if len(scored_by) > 1:
+        print(f"  warning: these submissions were not all scored by the same mlguy "
+              f"({', '.join(sorted(scored_by))}); their scores may not be comparable")
     best = experiments.best(primary, direction(task))
     if best and best["number"] != record["number"]:
         print(f"best so far: experiment {best['number']} with {primary}={best['metrics'][primary]:.4f}")
@@ -140,8 +145,8 @@ def cmd_new(args: argparse.Namespace) -> int:
     print("  this folder is a git repository: `validate`, `submit` and `finish` commit to it (not task/data)")
     print("  task/evaluate.py the scoring, as a stub: write it for the problem; it is frozen with the task")
     print("  infer.py         the one fixed interface, as a stub; src/ is yours")
-    print("next: prepare task/data, write the evaluator and the simplest model that runs, get the brief "
-          "approved, then `mlguy init`")
+    print("next: prepare task/data and write the evaluator, have the rubric audited, and get the brief")
+    print("      approved. Then `mlguy init` freezes it, and a first model earns its score.")
     return 0
 
 

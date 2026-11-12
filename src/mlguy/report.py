@@ -51,6 +51,9 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
     used = f"{counted} of {limit} submissions" if limit else f"{counted} submissions"
     baseline = next((r for r in records if r["number"] == 0 and r["status"] == "ok"), None)
     output = task["task"]["output"].replace("_", " ")
+    for prefix in ("predicted ", "generated ", "designed "):   # task.output often already says it
+        if output.lower().startswith(prefix):
+            output = output[len(prefix):]
     given = task["task"].get("input", "").replace("_", " ")
     final_n, final_seed = sampling(task, "test")
     if is_generation(task):

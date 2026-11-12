@@ -55,6 +55,7 @@ def describe(task: dict, records: list[dict]) -> str:
     if status["spent"]:
         return f"Budget spent: {status['reason']}. Run `mlguy finish`."
     parts = []
+    unenforced = [k for k, v in status["limits"].items() if isinstance(v, dict) and v.get("enforced") is False]
     if "submissions" in status["limits"]:
         s = status["limits"]["submissions"]
         parts.append(f"{s['limit'] - s['used']} of {s['limit']} submissions left")
@@ -64,4 +65,7 @@ def describe(task: dict, records: list[dict]) -> str:
     if "deadline" in status["limits"]:
         remaining = _parse(status["limits"]["deadline"]["at"]) - datetime.now(timezone.utc)
         parts.append(f"deadline in {max(timedelta(0), remaining)}")
-    return "Budget: " + ", ".join(parts) + "."
+    line = "Budget: " + ", ".join(parts) + "."
+    if unenforced:
+        line += f" ({', '.join(sorted(unenforced))} is recorded in task.toml but not enforced: keep it yourself.)"
+    return line

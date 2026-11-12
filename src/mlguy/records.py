@@ -24,6 +24,24 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def tool_version() -> str:
+    """What scored a submission. The task is frozen, but the tool that scores it is not: an
+    upgrade mid-project can change what a score means, so every record says which one it was."""
+    from mlguy import __version__
+
+    root = Path(__file__).resolve().parents[2]
+    try:
+        head = subprocess.run(["git", "-C", str(root), "rev-parse", "--short", "HEAD"],
+                              capture_output=True, text=True, timeout=10)
+        if head.returncode == 0:
+            changed = subprocess.run(["git", "-C", str(root), "status", "--porcelain"],
+                                     capture_output=True, text=True, timeout=10).stdout.strip()
+            return f"{__version__}+{head.stdout.strip()}" + ("-modified" if changed else "")
+    except Exception:
+        pass
+    return __version__
+
+
 IGNORED_IN_TASK = ("__pycache__", ".ipynb_checkpoints", ".DS_Store")
 
 # The task must not change once it is frozen, and that is checked on every submission. Proving
