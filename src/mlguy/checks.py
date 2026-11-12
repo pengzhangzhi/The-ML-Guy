@@ -35,8 +35,8 @@ def _shared_rows(a: Path, b: Path, ignore: set[str]) -> int | None:
 def split_checks(task: dict, validation: pd.DataFrame | None, test: pd.DataFrame | None,
                  inputs: dict[str, Path], id_column: str, target_column: str,
                  compare_targets: bool = True) -> list[str]:
-    """`validation` and `test` are the label tables (id, and target when a built-in metric is
-    used); `inputs` maps train/validation/test to wherever each split's inputs are stored."""
+    """`validation` and `test` are the label tables (id, and target when they carry one);
+    `inputs` maps train/validation/test to wherever each split's inputs are stored."""
     found = []
     if task["task"]["type"] == "generation":
         return found  # conditions legitimately repeat across splits, and the sample size is set by the task

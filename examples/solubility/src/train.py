@@ -20,8 +20,6 @@ from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 
-from mlguy.judge import score
-
 import features
 
 STRENGTHS = [0.01, 0.1, 1.0, 10.0]
@@ -29,9 +27,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def evaluate(model, x, y, metrics: list[str]) -> dict[str, float]:
+    """The same measures task/evaluate.py reports, so tuning here optimises what will be scored."""
+    from sklearn.metrics import accuracy_score, balanced_accuracy_score, matthews_corrcoef, roc_auc_score
+
     positive = max(model.classes_)
     y_score = model.predict_proba(x)[:, list(model.classes_).index(positive)]
-    return score(y, model.predict(x), metrics, y_score=y_score)
+    pred = model.predict(x)
+    known = {"accuracy": lambda: accuracy_score(y, pred),
+             "balanced_accuracy": lambda: balanced_accuracy_score(y, pred),
+             "mcc": lambda: matthews_corrcoef(y, pred),
+             "roc_auc": lambda: roc_auc_score(y, y_score)}
+    return {name: float(known[name]()) for name in metrics if name in known}
 
 
 def main() -> None:
