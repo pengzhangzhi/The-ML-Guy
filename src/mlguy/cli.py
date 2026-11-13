@@ -257,6 +257,10 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     Experiments(project_dir).create()
     digest = _freeze_task(task)
+    # The search's clock starts at the freeze, and a re-freeze before anything is scored restarts it.
+    clock = state_dir(task) / budget.STARTED
+    if not clock.exists() or not Experiments(project_dir).all():
+        clock.write_text(now() + "\n")
     print(f"project '{task['name']}' ready")
     if infer_args(task, "validation"):
         print(f"  {ENTRY_POINT} is called with {' '.join(infer_args(task, 'validation'))} on every submission, "
@@ -537,7 +541,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--note", default="baseline", help="one line on what this model is")
     p.add_argument("--again", action="store_true", help="redo the baseline (only before the first submission)")
 
-    p = add("submit", "score the current model on validation, record it, enforce the budget", cmd_submit)
+    p = add("submit", "score the current model on validation and record it; refused once the budget is spent", cmd_submit)
     p.add_argument("--note", required=True, help="one line on what you changed and why")
 
     p = add("finish", "score the result on the test set once and write the report", cmd_finish)

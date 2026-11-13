@@ -39,7 +39,7 @@ what is free right now.
   node can.
 
 **What a queue can run is not what it will run now.** The partition with the right GPUs may be
-full, and a submission budget spent waiting is worse than a smaller GPU that starts immediately.
+full, and search time spent waiting is worse than a smaller GPU that starts immediately.
 Look at what is idle (`sinfo` by state, `squeue -p <partition>`) before choosing, and look again
 when a job sits pending: a scheduler's own start estimate is usually pessimistic.
 

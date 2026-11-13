@@ -23,12 +23,12 @@ agreed impossible to change, and keeps the record. After that the agent owns all
 modelling and all of the compute.
 
 So the framework's code only ever does two things: it **refuses** (a changed task, a second
-look at the test set, a submission past the budget) and it **records** (the score, the code
+look at the test set, a submission once the search's time is up) and it **records** (the score, the code
 that earned it, what it cost to run). Anything that would be advice lives in a skill instead,
 where the agent can weigh it against the problem in front of it.
 
 - **Minimal, but load-bearing.** It supplies only what an agent cannot be trusted or relied on
-  to do for itself: an honest score, a count of submissions that actually stops, state that
+  to do for itself: an honest score, a time limit that actually stops the search, state that
   survives the session, and a page other people can use. Everything else is left alone —
   including the compute, which the framework never sees and so cannot cap.
 - **Maximum room for the agent.** The task, the data, the metric and the budget are fixed. The
@@ -58,9 +58,11 @@ about.
   validation set. When scores are about the same, the simpler model is preferred, and choosing
   it over the top score is recorded with a reason.
 - **A failure is an error, never a zero,** and still uses up budget.
-- **The budget that is enforced is the number of submissions,** because every look at validation
-  fits the search to it a little more. Time, GPU-hours and money are written in the task and
-  kept by the agent: the framework never sees the compute.
+- **The budget that is enforced is time,** counted from the freeze. Submissions are counted and
+  reported, not capped: the validation reference is in the project, so a cap would not stop the
+  search looking, only stop it recording what it saw. A user who wants a cap can still set one.
+  GPU-hours and money are written in the task and kept by the agent: the framework never sees
+  the compute.
 
 ## Scoring
 

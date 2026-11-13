@@ -47,11 +47,13 @@ mlguy finish                       # when you judge the work is done (--experime
 ```
 
 `mlguy submit` runs your model, scores what it produces, records the experiment with a snapshot of the
-code and model, and tells you the score and the remaining budget. It refuses once the
-submissions are spent. Any other limit in `[budget]` — hours, a deadline, GPU-hours, money — is
-the user's and is yours to keep: `mlguy` shows it to you and prints it in the report, and
-stops nothing. A crash or outputs the evaluator refuses are recorded as an error, not as a score of zero,
-but it still uses up a submission, so test `infer.py` before you submit.
+code and model, and tells you the score, the time left and how many submissions there have
+been. Submit whatever is worth having on the record: submissions are counted and reported, not
+capped, unless the user set `max_submissions`. It refuses once the search's `hours` are up.
+Any other limit in `[budget]` — a deadline, GPU-hours, money — is the user's and is yours to
+keep: `mlguy` shows it to you and prints it in the report, and stops nothing. A crash or outputs
+the evaluator refuses are recorded as an error, not as a score of zero, so test `infer.py`
+before you submit.
 
 `mlguy submit` runs `infer.py` on the machine you run it on. If the model needs a GPU or a
 scheduler job to predict, run `mlguy submit` inside such a job (with Slurm, `srun ... mlguy
