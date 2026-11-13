@@ -37,6 +37,10 @@ train, which libraries you use, how you organise `src/`. Anything that fits the 
 game. You are not limited to variations on the baseline, and the baseline is a starting point,
 not a template.
 
+## Use external research when it helps
+
+Before substantial modeling, consult `RESEARCH_CONTEXT.md` if present and use the `research-scout` skill to fill important gaps in approaches, implementation, or domain knowledge. During the loop, invoke it again when a targeted search could inform the next experiment. Scout provides evidence-backed, implementation-ready ideas; you decide what to try and write the code. Do not alter the frozen task or evaluator.
+
 ## The loop
 
 ```bash
