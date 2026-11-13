@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/mlguy-logo.webp" alt="The ML Guy logo" width="180">
+</p>
+
 # The-ML-Guy
 
 Tell a coding agent what you want a model to do, and get back a trained model, an honest report
@@ -7,6 +11,10 @@ You describe the problem in your own words. The agent asks what it needs to know
 you how the model will be judged, and then builds and improves the model on its own. It works
 with Claude Code or Codex, on your laptop or your cluster, whether or not you know machine
 learning.
+
+<p align="center">
+  <img src="assets/mlguy-overview.webp" alt="You bring your problem and data. The ML Guy runs iterative, automated ML research and delivers a well-developed model." width="100%">
+</p>
 
 ## What it looks like
 
