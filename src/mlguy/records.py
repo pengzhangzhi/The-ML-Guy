@@ -11,6 +11,7 @@ import hashlib
 import json
 import shutil
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -207,7 +208,10 @@ class Experiments:
 
 
 def git_commit(project_dir: Path, message: str) -> str | None:
-    """Commit the project if it is the root of a git work tree. Returns the commit id."""
+    """Commit the project if it is the root of a git work tree. Returns the commit id.
+
+    A failure is said out loud rather than swallowed: the files are still in place, but a history
+    that silently stops at the last submission reads as though `finish` never ran."""
     try:
         top = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
@@ -215,15 +219,18 @@ def git_commit(project_dir: Path, message: str) -> str | None:
         )
         if top.returncode != 0 or Path(top.stdout.strip()) != Path(project_dir).resolve():
             return None
-        subprocess.run(["git", "add", "-A"], cwd=project_dir, capture_output=True, timeout=60)
-        subprocess.run(
-            ["git", "commit", "-m", message, "--allow-empty"],
-            cwd=project_dir, capture_output=True, text=True, timeout=60,
-        )
+        for step in (["git", "add", "-A"], ["git", "commit", "-q", "-m", message, "--allow-empty"]):
+            done = subprocess.run(step, cwd=project_dir, capture_output=True, text=True, timeout=300)
+            if done.returncode != 0:
+                said = (done.stderr or done.stdout).strip().splitlines()
+                raise subprocess.SubprocessError(said[-1] if said else f"{' '.join(step[:2])} failed")
         head = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
             cwd=project_dir, capture_output=True, text=True, timeout=30,
         )
         return head.stdout.strip() or None
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"warning: could not commit to the project's git repository ({e}). The files are in "
+              "place; commit them yourself. A large file the .gitignore does not exclude is the usual "
+              "cause.", file=sys.stderr)
         return None

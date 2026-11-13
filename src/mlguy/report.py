@@ -161,7 +161,7 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
         "## Using the model",
         "",
         "```bash",
-        "python app.py               # this project's page, once it has been built",
+        *(["python app.py               # this project's page"] if (Path(project_dir) / "app.py").exists() else []),
         *usage,
         "```",
         "",

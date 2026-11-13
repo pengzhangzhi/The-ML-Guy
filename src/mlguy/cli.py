@@ -172,8 +172,9 @@ def cmd_new(args: argparse.Namespace) -> int:
 
     toml_path = target / "task" / "task.toml"
     toml_path.write_text(toml_path.read_text().replace("TODO-project-name", args.name))
-    # data is frozen by its hash, not by git, so large inputs do not end up in every clone
-    (target / ".gitignore").write_text("model/\n!final/model/\nwork/\n__pycache__/\ntask/data/\n")
+    # data is frozen by its hash and models are kept as files, not by git: a model of a few GB
+    # makes every commit slow enough to fail, and does not belong in every clone
+    (target / ".gitignore").write_text("model/\nwork/\n__pycache__/\ntask/data/\n")
     subprocess.run(["git", "init", "-q"], cwd=target, capture_output=True)
 
     print(f"created {target}")
