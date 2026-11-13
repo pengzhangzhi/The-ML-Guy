@@ -57,6 +57,10 @@ questions, merged where you can, each with the answer you would guess.
 If they would rather write than talk, `reference/proposal.md` beside this skill has these as
 headings.
 
+## Research relevant evaluation knowledge
+
+Use the `research-scout` skill during setup, before the evaluation is finalized. Start with a focused scan of established task formulations, metrics, splits, baselines, and scientific pitfalls; investigate more only if it could change the proposal. Record actionable, source-backed findings in `RESEARCH_CONTEXT.md`. The scientist still decides what success means; the evaluator is audited and frozen only after approval.
+
 ## 4. Define success
 
 Follow the `evaluation` skill. It turns their answers into the split, the primary metric and
