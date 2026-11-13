@@ -1,0 +1,1492 @@
+<!doctype html>
+<html lang="en" class="on-home">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The ML Guy</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="You know the science. The ML Guy does the ML research: tell a coding agent what you want a model to do, and get back a trained model, an honest report, and a page to use it.">
+<link rel="icon" type="image/webp" href="assets/mlguy-logo.webp">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap">
+<style>
+/* Layout: a tabbed product page. Home is a black cinematic hero (a frozen loss landscape the
+   agent searches) followed by a scroll story anchored on a short abstract; the other tabs sit on
+   a cool white page with a faint aurora drawn from the logo's colours. */
+:root{
+  --bg:#FFFFFF; --bg2:#F4F6F9; --panel:#FFFFFF; --panel2:#F7F9FC;
+  --ink:#14171D; --sub:#5A6270; --faint:#98A0AD; --line:#E8EAF0; --line2:#D9DDE6;
+  --blue:#3B6FE0; --violet:#7656E0; --rose:#D9467A; --gold:#D98A12; --mint:#14A374; --fail:#DB5247;
+  --glass:rgba(255,255,255,.42); --glass-brd:rgba(20,23,29,.10); --glass-hi:rgba(255,255,255,.85); --thumb:rgba(255,255,255,.92);
+  --shadow:0 1px 2px rgba(20,23,29,.06),0 10px 30px rgba(20,23,29,.10);
+  --shadow-lg:0 2px 6px rgba(20,23,29,.10),0 28px 70px rgba(20,23,29,.20);
+  --term-bg:#F5F8FD; --term-bar:#E8EDF5; --term-brd:#D6DDEA; --term-fg:#3B4557; --term-title:#8A93A4;
+  --term-out:#5C6678; --term-dim:#8A93A4; --term-hd:#2A3346; --term-green:#0F9D57; --term-tool:#2C63C9; --term-flag:#C0691C; --term-red:#C8423A;
+  --aur-op:.38;
+  --spec:linear-gradient(96deg,#3D7BFF 0%,#8B6CF0 24%,#E0679A 50%,#F5B03D 76%,#5CCB9F 100%);
+  --sans:"Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0B0E14; --bg2:#11151E; --panel:#131826; --panel2:#1A2130;
+  --ink:#E9EBF2; --sub:#9AA3B2; --faint:#5D6575; --line:#202636; --line2:#2C3447;
+  --blue:#7FA6FF; --violet:#A58FFF; --rose:#F27DA6; --gold:#F5B648; --mint:#4ADFA4; --fail:#FF7B85;
+  --glass:rgba(19,24,38,.40); --glass-brd:rgba(233,235,242,.14); --glass-hi:rgba(255,255,255,.12); --thumb:rgba(255,255,255,.11);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 34px rgba(0,0,0,.45);
+  --shadow-lg:0 2px 6px rgba(0,0,0,.5),0 28px 80px rgba(0,0,0,.6);
+  --term-bg:#0C111E; --term-bar:#11172A; --term-brd:#222C42; --term-fg:#C3CCDD; --term-title:#8492AB;
+  --term-out:#8F9BB2; --term-dim:#6B7690; --term-hd:#D3DBEB; --term-green:#5CE0A3; --term-tool:#7FA8FF; --term-flag:#F0A35E; --term-red:#FF8D8D;
+  --aur-op:.5; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0B0E14; --bg2:#11151E; --panel:#131826; --panel2:#1A2130;
+  --ink:#E9EBF2; --sub:#9AA3B2; --faint:#5D6575; --line:#202636; --line2:#2C3447;
+  --blue:#7FA6FF; --violet:#A58FFF; --rose:#F27DA6; --gold:#F5B648; --mint:#4ADFA4; --fail:#FF7B85;
+  --glass:rgba(19,24,38,.40); --glass-brd:rgba(233,235,242,.14); --glass-hi:rgba(255,255,255,.12); --thumb:rgba(255,255,255,.11);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 34px rgba(0,0,0,.45);
+  --shadow-lg:0 2px 6px rgba(0,0,0,.5),0 28px 80px rgba(0,0,0,.6);
+  --term-bg:#0C111E; --term-bar:#11172A; --term-brd:#222C42; --term-fg:#C3CCDD; --term-title:#8492AB;
+  --term-out:#8F9BB2; --term-dim:#6B7690; --term-hd:#D3DBEB; --term-green:#5CE0A3; --term-tool:#7FA8FF; --term-flag:#F0A35E; --term-red:#FF8D8D;
+  --aur-op:.5; color-scheme:dark}
+/* Home is always the dark film, whatever the theme */
+html.on-home body{
+  --bg:#05060A; --bg2:#11151E; --panel:#131826; --panel2:#1A2130;
+  --ink:#E9EBF2; --sub:#9AA3B2; --faint:#636B7B; --line:#202636; --line2:#2C3447;
+  --blue:#7FA6FF; --violet:#A58FFF; --rose:#F27DA6; --gold:#F5B648; --mint:#4ADFA4; --fail:#FF7B85;
+  --glass:rgba(19,24,38,.40); --glass-brd:rgba(233,235,242,.14); --glass-hi:rgba(255,255,255,.12); --thumb:rgba(255,255,255,.11);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 34px rgba(0,0,0,.45);
+  color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+html{scroll-padding-top:70px}
+body{background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:15.5px; line-height:1.6;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; transition:background-color .4s}
+body::before{content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top,0px); z-index:60; background:var(--bg)}
+a{color:inherit}
+button{font:inherit; color:inherit; background:none; border:none; cursor:pointer; padding:0}
+:focus-visible{outline:2px solid var(--blue); outline-offset:2px; border-radius:4px}
+::selection{background:rgba(139,108,240,.28)}
+img{max-width:100%}
+.wrap{max-width:1180px; margin:0 auto; padding-left:max(24px, env(safe-area-inset-left,0px)); padding-right:max(24px, env(safe-area-inset-right,0px))}
+@media (max-width:600px){.wrap{padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}}
+.eyebrow{font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:.18em; text-transform:uppercase; color:var(--sub); margin:0 0 10px}
+h1,h2,h3{text-wrap:balance}
+h1.big{font-weight:600; font-size:clamp(30px,4.4vw,46px); line-height:1.08; letter-spacing:-.03em; margin:0}
+h2.sec{font-weight:600; font-size:clamp(24px,3vw,32px); line-height:1.15; letter-spacing:-.022em; margin:0}
+.lede{color:var(--sub); max-width:62ch; margin:14px 0 0; font-size:16px}
+code{font-family:var(--mono); font-size:.9em}
+section[hidden]{display:none!important}
+main{position:relative; z-index:1; min-height:70vh}
+.spec-text{background:var(--spec); -webkit-background-clip:text; background-clip:text; color:transparent}
+
+/* ================= masthead ================= */
+.mast{position:sticky; top:env(safe-area-inset-top,0px); z-index:50; pointer-events:none; transition:background-color .3s, backdrop-filter .3s}
+.mast.frost{background:color-mix(in srgb,var(--bg) 72%,transparent); backdrop-filter:blur(14px) saturate(160%); -webkit-backdrop-filter:blur(14px) saturate(160%); border-bottom:1px solid var(--line)}
+.mast-in{max-width:1280px; margin:0 auto; padding:10px max(20px, env(safe-area-inset-right,0px)) 10px max(20px, env(safe-area-inset-left,0px)); display:flex; align-items:center; gap:14px}
+.mast-in > *{pointer-events:auto}
+.wordmark{display:flex; align-items:center; gap:10px; text-decoration:none; font-weight:600; font-size:17px; letter-spacing:-.02em; color:var(--ink); transition:opacity .5s}
+.logo-glass{position:relative; display:inline-flex; width:34px; height:34px; border-radius:50%; flex:none;
+  box-shadow:0 0 0 1px var(--glass-brd), 0 4px 14px rgba(0,0,0,.25)}
+.logo-glass img{width:100%; height:100%; border-radius:50%; display:block}
+.logo-glass::after{content:""; position:absolute; inset:0; border-radius:50%; pointer-events:none;
+  background:radial-gradient(90% 70% at 30% 18%, rgba(255,255,255,.55), rgba(255,255,255,.08) 45%, transparent 62%)}
+html.on-home.hero-in .wordmark{opacity:0; pointer-events:none}
+.nav{position:relative; display:flex; gap:2px; margin-left:auto; padding:4px; border-radius:999px;
+  background:var(--glass); backdrop-filter:blur(12px) saturate(170%); -webkit-backdrop-filter:blur(12px) saturate(170%);
+  border:1px solid var(--glass-brd);
+  box-shadow:inset 0 1px 1px var(--glass-hi), inset 0 -1px 1px rgba(255,255,255,.18), 0 10px 30px rgba(0,0,0,.16)}
+.nav::after{content:""; position:absolute; inset:0; border-radius:999px; pointer-events:none;
+  background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.22) 46%,rgba(255,255,255,.04) 54%,transparent 60%)}
+.nav-thumb{position:absolute; z-index:0; border-radius:999px; background:var(--thumb); border:1px solid var(--glass-brd);
+  box-shadow:inset 0 1px 1px var(--glass-hi), 0 3px 10px rgba(0,0,0,.2);
+  transition:left .45s cubic-bezier(.3,1.35,.35,1), width .45s cubic-bezier(.3,1.35,.35,1); pointer-events:none}
+.nav button{position:relative; z-index:1; padding:7px 15px; border-radius:999px; font-weight:500; font-size:14px; color:var(--sub); transition:color .2s; white-space:nowrap}
+.nav button:hover, .nav button[aria-selected="true"]{color:var(--ink)}
+.nav .t-short{display:none}
+.icobtn{width:38px; height:38px; border-radius:999px; display:flex; align-items:center; justify-content:center; color:var(--sub); flex:none; text-decoration:none;
+  background:var(--glass); backdrop-filter:blur(12px) saturate(160%); -webkit-backdrop-filter:blur(12px) saturate(160%);
+  border:1px solid var(--glass-brd); box-shadow:inset 0 1px 1px var(--glass-hi), 0 6px 18px rgba(0,0,0,.12)}
+.icobtn:hover{color:var(--ink)}
+.icobtn svg{width:17px; height:17px}
+@media (max-width:760px){
+  .wordmark span.wm{display:none}
+  .nav button{padding:7px 11px; font-size:13.5px}
+  .nav .t-full{display:none} .nav .t-short{display:inline}
+  .mast-in{gap:8px}
+  .icobtn.gh{display:none}
+}
+
+/* ================= aurora (non-home tabs) ================= */
+.aurora{position:fixed; inset:-30vh 0; z-index:0; overflow:hidden; pointer-events:none; opacity:var(--aur-op); transition:opacity .6s}
+html.on-home .aurora{opacity:0}
+.aurora i{position:absolute; border-radius:50%; will-change:transform}
+.aurora i:nth-child(1){width:62vmax; height:62vmax; left:-20vmax; top:-22vmax; background:radial-gradient(circle,#3D7BFF 0%,transparent 62%); animation:ad1 9s ease-in-out infinite alternate}
+.aurora i:nth-child(2){width:54vmax; height:54vmax; right:-18vmax; top:-8vmax; background:radial-gradient(circle,#E0679A 0%,transparent 62%); animation:ad2 7.5s ease-in-out infinite alternate}
+.aurora i:nth-child(3){width:58vmax; height:58vmax; left:10vmax; bottom:-34vmax; background:radial-gradient(circle,#5CCB9F 0%,transparent 62%); animation:ad3 10s ease-in-out infinite alternate}
+.aurora i:nth-child(4){width:44vmax; height:44vmax; right:0; bottom:-18vmax; background:radial-gradient(circle,#F5B03D 0%,transparent 62%); animation:ad1 8s ease-in-out infinite alternate-reverse; opacity:.7}
+@keyframes ad1{from{transform:translate3d(0,0,0) scale(.85)} to{transform:translate3d(22vmax,12vmax,0) scale(1.25)}}
+@keyframes ad2{from{transform:translate3d(0,0,0) scale(1.2)} to{transform:translate3d(-20vmax,16vmax,0) scale(.78)}}
+@keyframes ad3{from{transform:translate3d(0,0,0) scale(.9)} to{transform:translate3d(18vmax,-16vmax,0) scale(1.25)}}
+@media (prefers-reduced-motion:reduce){.aurora i{animation:none}}
+
+/* ================= HOME hero ================= */
+#tab-home{position:relative}
+.hero{position:relative; isolation:isolate; overflow:hidden; height:100svh; min-height:600px; max-height:1100px; margin-top:calc(-1 * var(--mast-h,58px));
+  background:#000; color:#fff}
+.hero canvas{position:absolute; inset:0; width:100%; height:100%; z-index:-1; display:block}
+.hero::after{content:""; position:absolute; left:0; right:0; bottom:0; height:140px; pointer-events:none; background:linear-gradient(180deg,transparent,#05060A)}
+.h-chip{position:absolute; left:50%; top:calc(var(--mast-h,58px) + clamp(10px,2.4vh,26px)); transform:translateX(-50%); z-index:2;
+  display:inline-flex; align-items:center; gap:9px; padding:6px 14px 6px 7px; border-radius:999px; font-size:13.5px; white-space:nowrap;
+  color:#C9CDD6; text-decoration:none; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.13);
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); transition:border-color .2s, color .2s; cursor:pointer}
+.h-chip b{font-weight:600; font-size:11.5px; letter-spacing:.04em; color:#0B0C10; background:var(--spec); border-radius:999px; padding:2px 9px}
+.h-chip i{font-style:normal; transition:transform .2s}
+.h-chip:hover{color:#fff; border-color:rgba(255,255,255,.35)} .h-chip:hover i{transform:translateX(3px)}
+.h-copy{position:absolute; left:0; right:0; bottom:0; z-index:2; display:flex; flex-direction:column; align-items:center; text-align:center;
+  padding:0 max(18px, env(safe-area-inset-right,0px)) clamp(36px,7.5vh,86px) max(18px, env(safe-area-inset-left,0px))}
+.h-title{font-weight:600; margin:0; font-size:clamp(46px,7vw,112px); line-height:.98; letter-spacing:-.04em; color:#fff}
+.h-claim{margin:clamp(12px,1.9vh,20px) auto 0; max-width:26em; font-size:clamp(17px,1.6vw,22px); line-height:1.36; font-weight:400; color:#A9AFBA; letter-spacing:-.012em; text-wrap:balance}
+.h-claim b{color:#fff; font-weight:500}
+.h-actions{display:flex; flex-wrap:wrap; gap:12px 22px; align-items:center; justify-content:center; margin-top:clamp(20px,3.2vh,34px)}
+.h-btn{display:inline-flex; align-items:center; padding:12px 28px; border-radius:999px; font-size:16px; font-weight:600; color:#05060A; background:#F4F5F7; text-decoration:none; cursor:pointer;
+  transition:transform .2s, box-shadow .2s; box-shadow:0 10px 34px rgba(139,108,240,.30)}
+.h-btn:hover{transform:translateY(-2px); box-shadow:0 14px 40px rgba(139,108,240,.46)}
+.h-ghost{display:inline-flex; align-items:center; gap:9px; padding:11px 22px 11px 16px; border-radius:999px; font-size:16px; font-weight:500; color:#fff;
+  background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.22); cursor:pointer; transition:border-color .2s, background .2s}
+.h-ghost svg{width:15px; height:15px}
+.h-ghost:hover{border-color:rgba(255,255,255,.5); background:rgba(255,255,255,.08)}
+.h-link{font-size:16px; font-weight:500; text-decoration:none; cursor:pointer; color:transparent; background:var(--spec); -webkit-background-clip:text; background-clip:text}
+.h-link i{font-style:normal; display:inline-block; transition:transform .2s; color:#F5B03D}
+.h-link:hover i{transform:translateX(4px)}
+.pill-cmd{display:inline-flex; align-items:center; gap:10px; max-width:100%; font:13px var(--mono); color:#8D93A0; padding:7px 8px 7px 14px; border-radius:999px;
+  background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.11)}
+.h-copy .pill-cmd{margin-top:clamp(14px,2.2vh,22px)}
+.pill-cmd code{font:inherit; color:#E6E8EC; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
+.cp{font:11.5px var(--mono); color:#8D93A0; background:transparent; border:1px solid rgba(255,255,255,.14); border-radius:999px; padding:3px 11px; cursor:pointer; transition:color .15s, border-color .15s; flex:none}
+.cp:hover{color:#fff; border-color:rgba(255,255,255,.4)} .cp.done{color:#5CCB9F; border-color:#5CCB9F}
+.h-e{transition:opacity .9s cubic-bezier(.22,.9,.28,1), transform .9s cubic-bezier(.22,.9,.28,1), filter .9s}
+.hero.intro:not(.ready) .h-e{opacity:0; transform:translateY(18px); filter:blur(10px)}
+.hero.intro:not(.ready) .h-chip{opacity:0; filter:blur(8px)}
+.hero.ready .h-claim{transition-delay:.12s} .hero.ready .h-actions{transition-delay:.24s} .hero.ready .pill-cmd{transition-delay:.34s} .hero.ready .h-chip{transition-delay:.42s}
+.h-legend{position:absolute; right:max(22px, env(safe-area-inset-right,0px)); top:50%; transform:translateY(-50%); z-index:2; display:grid; gap:9px; font:11px/1.3 var(--mono); color:#7D8494; letter-spacing:.04em}
+.h-legend span{display:flex; align-items:center; gap:8px}
+.h-legend i{width:8px; height:8px; border-radius:50%; flex:none}
+@media (max-width:980px){.h-legend{display:none}}
+@media (max-width:720px){.h-actions{gap:10px 14px} .h-btn,.h-ghost{font-size:15px} .h-link{flex-basis:100%} .pill-cmd{font-size:12px}}
+@media (prefers-reduced-motion:reduce){.h-e,.h-chip{transition:none!important; filter:none!important}}
+
+/* ================= HOME story ================= */
+.story{position:relative; height:960vh}
+.story-stage{position:sticky; top:0; height:100vh; display:grid; grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr); gap:clamp(26px,4.5vw,72px);
+  align-items:center; max-width:1180px; margin:0 auto; padding:0 24px; overflow:hidden; transition:grid-template-columns .6s cubic-bezier(.4,0,.2,1)}
+.abs-spine .eyebrow{color:var(--faint); margin:0 0 16px}
+.abs{font-size:clamp(18px,1.55vw,25px); line-height:1.62; margin:0; letter-spacing:-.016em; text-wrap:pretty}
+.cl{color:var(--sub); opacity:.3; transition:opacity .45s, color .45s}
+.cl.on{opacity:1; color:var(--ink)}
+.cl .k{font-weight:600; color:inherit; transition:color .45s, background .45s}
+.cl.on .k{color:var(--kc,var(--ink))}
+.cl .k.pill{border-radius:6px; padding:0 .22em}
+.cl.on .k.pill{color:#0B0C10; background:var(--kc)}
+.cl.on .k.grad{background:var(--spec); -webkit-background-clip:text; background-clip:text; color:transparent}
+.cl .ksk{position:relative; font-weight:600}
+.cl .ksk::after{content:""; position:absolute; left:0; top:52%; width:0; height:2px; background:var(--fail); transition:width .5s}
+.cl.on .ksk::after{width:100%}
+.story-stage.released{grid-template-columns:minmax(0,1fr) minmax(0,.0001fr)}
+.story-stage.released .abs-spine{max-width:780px; margin:0 auto}
+.story-stage.released .abs{font-size:clamp(19px,1.75vw,27px)}
+.story-stage.released .panel-stage{opacity:0; transition:opacity .35s}
+.story-stage.released .cl{opacity:1; color:var(--ink)}
+.story-stage.released .cl .k{color:var(--ink)}
+.story-stage.released .cl .k.pill{background:none; color:var(--ink); padding:0}
+.story-stage.released .cl .k.grad{-webkit-text-fill-color:var(--ink); color:var(--ink)}
+.panel-stage{position:relative; height:min(74vh,580px)}
+.vpanel{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px;
+  opacity:0; transform:translateY(12px) scale(.99); transition:opacity .5s, transform .5s; pointer-events:none}
+.vpanel.on{opacity:1; transform:none; pointer-events:auto}
+.vp-viz{position:relative; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center}
+.vp-title{font-family:var(--mono); font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); font-weight:500; margin:0}
+.vp-cap{font-size:14.5px; color:var(--sub); line-height:1.55; text-align:center; max-width:42ch; margin:0; text-wrap:balance}
+.vp-cap b{color:var(--ink); font-weight:600}
+.vp-cta{display:inline-flex; align-items:center; gap:8px; font-size:14px; font-weight:600; color:#0B0C10; border-radius:11px; padding:10px 18px; text-decoration:none; cursor:pointer;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--hc) 86%,white 14%),var(--hc)); border:1px solid color-mix(in srgb,var(--hc) 60%,white 10%);
+  box-shadow:inset 0 1.5px 0 rgba(255,255,255,.5), 0 12px 26px color-mix(in srgb,var(--hc) 30%,transparent); transition:transform .2s, gap .2s}
+.vp-cta:hover{transform:translateY(-2px); gap:12px}
+.glassy{background:var(--glass); -webkit-backdrop-filter:blur(13px) saturate(180%); backdrop-filter:blur(13px) saturate(180%); border:1px solid var(--glass-brd);
+  box-shadow:inset 0 1px 1px var(--glass-hi), inset 0 -1px 2px rgba(255,255,255,.08), 0 8px 22px rgba(0,0,0,.25)}
+/* act 0: the self-graded loop */
+.cyc{width:min(580px,90vw); display:flex; flex-direction:column; align-items:center; gap:18px}
+.cyc-flow{display:flex; align-items:center; gap:clamp(8px,2vw,18px); flex-wrap:wrap; justify-content:center}
+.cyc-arrow{color:var(--faint); font-family:var(--mono); font-size:13px}
+.cyc-node{font-family:var(--mono); font-size:13px; color:var(--sub); padding:9px 14px; border-radius:11px; opacity:0; transform:translateY(10px) scale(.92); transition:opacity .4s, transform .4s, color .4s, border-color .4s}
+.cyc.in .cyc-node{opacity:1; transform:none}
+.cyc.in .cyc-node:nth-child(3){transition-delay:.1s} .cyc.in .cyc-node:nth-child(5){transition-delay:.2s} .cyc.in .cyc-node:nth-child(7){transition-delay:.3s}
+.cyc-res{font-weight:600; color:var(--mint)!important; border-color:color-mix(in srgb,var(--mint) 60%,transparent)!important; position:relative}
+.cyc-res s{text-decoration:none; position:relative}
+.cyc-res s::after{content:""; position:absolute; left:-3px; right:-3px; top:52%; height:2px; background:var(--fail); transform:scaleX(0); transform-origin:left; transition:transform .45s}
+.cyc.state-fail .cyc-res{color:var(--fail)!important; border-color:var(--fail)!important; animation:shake .4s}
+.cyc.state-fail .cyc-res s::after{transform:scaleX(1)}
+@keyframes shake{25%{transform:translateX(-4px)} 75%{transform:translateX(4px)}}
+.cyc-rail{width:100%; height:3px; border-radius:3px; background:var(--line); overflow:hidden}
+.cyc-sweep{display:block; height:100%; width:100%; transform-origin:left; transform:scaleX(var(--p,0)); background:linear-gradient(90deg,var(--mint),var(--gold),var(--fail))}
+.cyc-q{font-family:var(--mono); font-size:12.5px; color:var(--fail); opacity:0; transform:translateY(6px); transition:.5s}
+.cyc.state-fail .cyc-q{opacity:1; transform:none}
+/* act 1: sentence -> metric */
+.s2m{width:min(560px,92vw); display:grid; gap:16px; justify-items:center}
+.s2m-q{font-size:17px; line-height:1.5; padding:16px 20px; border-radius:16px 16px 16px 4px; max-width:420px; justify-self:start; color:var(--ink)}
+.s2m-q small{display:block; margin-top:8px; font:11px var(--mono); color:var(--faint); letter-spacing:.06em}
+.s2m-line{width:2px; height:calc(var(--p,0) * 46px + 6px); background:linear-gradient(var(--gold),var(--blue)); border-radius:2px}
+.s2m-code{justify-self:end; font:13px/1.7 var(--mono); padding:14px 18px; border-radius:14px; color:var(--sub); text-align:left;
+  opacity:clamp(0, calc((var(--p,0) - .35) * 3), 1); transform:translateY(calc((1 - clamp(0, calc((var(--p,0) - .35) * 3), 1)) * 14px))}
+.s2m-code .k{color:var(--blue)} .s2m-code .s{color:var(--mint)} .s2m-code .c{color:var(--faint)}
+.s2m-code b{color:var(--ink); font-weight:600}
+/* act 2: four parts fold into a frozen task */
+.build{width:min(560px,92vw); height:300px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:26px; position:relative}
+.bd-field{position:relative; width:220px; height:190px}
+.bd-p{position:absolute; left:50%; top:50%; padding:7px 10px; border-radius:9px; font:11.5px var(--mono); white-space:nowrap; color:var(--ink);
+  --k:clamp(0, calc((.62 - var(--p,0)) * 1.7), 1);
+  transform:translate(-50%,-50%) translate(calc(var(--x) * var(--k)),calc(var(--y) * var(--k))) rotate(calc(var(--r) * var(--k))) scale(calc(.55 + var(--k) * .45));
+  opacity:clamp(0, calc(var(--p,0) * 3), 1)}
+.bd-p i{display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--c); margin-right:7px}
+.bd-box{position:absolute; left:50%; top:50%; width:132px; height:132px; margin:-66px 0 0 -66px; border-radius:18px; display:grid; place-items:center; text-align:center;
+  background:linear-gradient(155deg,#3D7BFF,#8B6CF0); box-shadow:0 18px 50px rgba(61,123,255,.38);
+  opacity:clamp(0, calc((var(--p,0) - .5) * 5), 1); transform:scale(calc(.7 + clamp(0, calc((var(--p,0) - .5) * 5), 1) * .3))}
+.bd-box b{font:600 15px var(--mono); color:#fff; display:block}
+.bd-box svg{width:26px; height:26px; margin:0 auto 6px; display:block}
+.bd-box small{font:10px var(--mono); color:rgba(255,255,255,.75); display:block; margin-top:5px; opacity:clamp(0, calc((var(--p,0) - .7) * 6), 1)}
+.bd-steps{display:flex; gap:clamp(14px,3vw,26px)}
+.bd-steps span{font:12px var(--mono); color:var(--sub); position:relative; opacity:clamp(.3, calc((var(--p,0) - .72) * 6), 1)}
+.bd-steps span::before{content:""; position:absolute; left:-10px; top:50%; width:5px; height:5px; border-radius:50%; background:var(--blue); transform:translateY(-50%); opacity:clamp(0, calc((var(--p,0) - .76) * 6), 1)}
+/* act 3: vs today */
+.vt{width:min(520px,92vw); display:grid; gap:18px}
+.vt-row{display:grid; gap:6px}
+.vt-h{display:flex; justify-content:space-between; align-items:baseline; gap:12px; font-size:13px}
+.vt-h b{font-weight:600} .vt-h span{color:var(--faint); font:11px var(--mono)}
+.vt-bar{display:grid; grid-template-columns:72px minmax(0,1fr) 48px; align-items:center; gap:10px; font-size:12px}
+.vt-bar .l{color:var(--sub); text-align:right; font-family:var(--mono); font-size:11px}
+.vt-bar .t{height:14px; border-radius:5px; background:var(--bg2); overflow:hidden; position:relative}
+.vt-bar .t i{position:absolute; inset:0 auto 0 0; width:0; border-radius:5px; background:var(--bc); transition:width .9s cubic-bezier(.22,.9,.28,1)}
+.vt-bar .v{font:12px var(--mono); font-variant-numeric:tabular-nums; color:var(--ink); text-align:right}
+.vt-bar.today .t i{background:color-mix(in srgb,var(--sub) 45%,transparent)} .vt-bar.today .v{color:var(--sub)}
+/* act 4: report deck */
+.deck{width:100%; display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.fnd{padding:12px 14px; border-radius:12px; min-width:0; opacity:0; transform:translateY(16px) rotate(-4deg) scale(.94)}
+.vpanel.on .fnd{animation:deckIn .5s cubic-bezier(.34,1.3,.5,1) forwards}
+.vpanel.on .fnd:nth-child(2){animation-delay:.07s} .vpanel.on .fnd:nth-child(3){animation-delay:.14s} .vpanel.on .fnd:nth-child(4){animation-delay:.21s} .vpanel.on .fnd:nth-child(5){animation-delay:.28s} .vpanel.on .fnd:nth-child(6){animation-delay:.35s}
+@keyframes deckIn{to{opacity:1; transform:none}}
+.fnd-top{display:flex; align-items:center; gap:7px; margin-bottom:5px}
+.fnd-top i{width:6px; height:6px; border-radius:50%; flex:none}
+.fnd-top .m{font:10px var(--mono); color:var(--sub); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; letter-spacing:.03em}
+.fnd p{font-size:12px; line-height:1.45; color:var(--ink); margin:0}
+/* act 5: the page */
+.appwin{width:min(470px,92vw); border-radius:14px; overflow:hidden}
+.appwin .ab{display:flex; align-items:center; gap:8px; padding:9px 12px; border-bottom:1px solid var(--glass-brd); font:11px var(--mono); color:var(--faint)}
+.appwin .ab i{width:9px; height:9px; border-radius:50%; background:var(--line2)}
+.appwin .ab span{margin-left:6px}
+.appwin .ap{padding:16px; display:grid; gap:11px}
+.appwin .in{font:11.5px/1.6 var(--mono); color:var(--sub); padding:10px 12px; border-radius:9px; background:rgba(255,255,255,.03); border:1px dashed var(--line2)}
+.appwin .go{justify-self:start; font-size:12px; font-weight:600; color:#0B0C10; background:var(--mint); padding:6px 14px; border-radius:8px}
+.appwin .rk{display:grid; grid-template-columns:22px minmax(0,1fr) 90px; gap:10px; align-items:center; font:11.5px var(--mono); color:var(--ink); opacity:0; transform:translateX(-8px)}
+.vpanel.on .appwin .rk{animation:rkIn .45s ease forwards}
+.vpanel.on .appwin .rk:nth-of-type(2){animation-delay:.12s} .vpanel.on .appwin .rk:nth-of-type(3){animation-delay:.24s} .vpanel.on .appwin .rk:nth-of-type(4){animation-delay:.36s}
+@keyframes rkIn{to{opacity:1; transform:none}}
+.appwin .rk span:first-child{color:var(--faint)}
+.appwin .rk em{height:8px; border-radius:4px; background:linear-gradient(90deg,var(--mint),var(--gold)); width:var(--w); font-style:normal}
+.appwin .note{font:10.5px var(--mono); color:var(--faint); text-align:center}
+/* act 6: strict / free */
+.sf{width:min(540px,92vw); display:grid; grid-template-columns:1fr 1fr; gap:14px}
+.sf > div{padding:16px 18px; border-radius:14px; display:grid; gap:9px; align-content:start}
+.sf h4{margin:0 0 2px; font:500 11px var(--mono); letter-spacing:.14em; text-transform:uppercase}
+.sf .s h4{color:var(--blue)} .sf .f h4{color:var(--gold)}
+.sf p{margin:0; font-size:13px; color:var(--ink); display:flex; gap:9px; align-items:baseline; opacity:0; transform:translateY(8px); transition:opacity .4s, transform .4s}
+.vpanel.on .sf p{opacity:1; transform:none}
+.sf p::before{content:""; width:7px; height:7px; flex:none; border-radius:2px; background:var(--blue); transform:translateY(-1px)}
+.sf .f p::before{background:none; border:1.5px solid var(--gold); border-radius:50%}
+/* close */
+.home-close{max-width:900px; margin:0 auto; min-height:64vh; display:grid; place-items:center; align-content:center; text-align:center; padding:70px 20px 96px; gap:26px}
+.close-logo{width:116px; height:116px; border-radius:50%; box-shadow:0 0 0 1px rgba(255,255,255,.12), 0 0 80px rgba(139,108,240,.35), 0 0 160px rgba(245,176,61,.18); animation:bob 6s ease-in-out infinite alternate}
+@keyframes bob{from{transform:translateY(0) rotate(-3deg)} to{transform:translateY(-8px) rotate(3deg)}}
+.close-line{font-size:clamp(28px,4.2vw,48px); line-height:1.12; letter-spacing:-.035em; font-weight:600; margin:0; text-wrap:balance}
+.home-actions{display:flex; flex-wrap:wrap; gap:12px; justify-content:center}
+.btn-primary{display:inline-flex; align-items:center; gap:8px; padding:12px 24px; border-radius:999px; font-weight:600; font-size:15px; text-decoration:none; cursor:pointer; color:#fff;
+  background:linear-gradient(180deg,#5B8CFF,#3D6BEA); border:1px solid #5B86F0; box-shadow:inset 0 1.5px 0 rgba(255,255,255,.45), 0 10px 26px rgba(61,123,255,.34); transition:transform .2s}
+.btn-primary:hover{transform:translateY(-2px)}
+.btn-ghost{display:inline-flex; align-items:center; gap:8px; padding:12px 22px; border-radius:999px; font-weight:500; font-size:15px; text-decoration:none; cursor:pointer; color:var(--ink); transition:transform .2s}
+.btn-ghost:hover{transform:translateY(-2px)}
+.btn-ghost svg{width:16px; height:16px}
+/* mobile / reduced motion: unpinned */
+.story.flat{height:auto!important}
+.story.flat .story-stage{position:static; height:auto; grid-template-columns:minmax(0,1fr); gap:34px; overflow:visible; padding:56px 16px 32px}
+.story.flat .panel-stage{height:auto; display:flex; flex-direction:column; gap:48px; min-width:0}
+.story.flat .vpanel{position:static; opacity:1; transform:none; pointer-events:auto; min-width:0}
+.story.flat .vpanel[data-viz="loop"], .story.flat .vpanel[data-viz="build"]{display:none}
+.story.flat .cl{opacity:1; color:var(--ink)}
+.story.flat .cl .k:not(.pill){color:var(--kc,var(--ink))}
+.story.flat .cl .k.pill{color:#0B0C10; background:var(--kc)}
+.story.flat .fnd, .story.flat .appwin .rk, .story.flat .sf p{opacity:1; transform:none; animation:none}
+@media (max-width:600px){.deck{grid-template-columns:1fr} .sf{grid-template-columns:1fr}}
+
+/* ================= shared tab chrome ================= */
+.tabpage{padding:44px 0 96px}
+.tab-in{animation:tabIn .6s cubic-bezier(.22,.9,.28,1) both}
+@keyframes tabIn{from{opacity:.0; transform:translateY(14px)} to{opacity:1; transform:none}}
+@media (prefers-reduced-motion:reduce){.tab-in{animation:none}}
+.tab-head{max-width:760px; margin:0 0 34px}
+.tab-head.center{text-align:center; margin-left:auto; margin-right:auto}
+.tab-head.center .lede{margin-left:auto; margin-right:auto}
+
+/* ================= EXAMPLES ================= */
+.egrid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px}
+@media (max-width:980px){.egrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:620px){.egrid{grid-template-columns:minmax(0,1fr)}}
+.ecard{position:relative; text-align:left; display:flex; flex-direction:column; gap:12px; padding:20px 20px 16px; border-radius:18px; cursor:pointer; min-width:0;
+  background:var(--glass); border:1px solid var(--glass-brd); backdrop-filter:blur(12px) saturate(160%); -webkit-backdrop-filter:blur(12px) saturate(160%);
+  box-shadow:inset 0 1px 1px var(--glass-hi), 0 8px 26px rgba(0,0,0,.08); transition:transform .25s cubic-bezier(.22,.9,.28,1), box-shadow .25s, border-color .25s}
+.ecard:hover{transform:translateY(-3px); box-shadow:inset 0 1px 1px var(--glass-hi), 0 18px 40px rgba(0,0,0,.14); border-color:color-mix(in srgb,var(--cc) 40%,var(--glass-brd))}
+.ecard .dom{display:flex; align-items:center; gap:8px; font:11px var(--mono); color:var(--sub); letter-spacing:.03em; white-space:nowrap; min-width:0}
+.ecard .dom > span:not(.sz){overflow:hidden; text-overflow:ellipsis}
+.ecard .dom i{width:8px; height:8px; border-radius:50%; background:var(--cc); flex:none}
+.ecard .dom span.sz{margin-left:auto; color:var(--faint)}
+.ecard h3{margin:0; font-size:18px; font-weight:600; letter-spacing:-.015em; line-height:1.25}
+.ecard .rq{margin:0; color:var(--sub); font-size:13.5px; line-height:1.5; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden}
+.ecard .res{margin-top:auto; padding-top:12px; border-top:1px solid var(--line); display:grid; gap:4px}
+.ecard .res b{font-size:26px; font-weight:600; letter-spacing:-.03em; color:var(--cc); font-variant-numeric:tabular-nums; line-height:1.1}
+.ecard .res b small{font-size:.5em; color:var(--sub); font-weight:500; letter-spacing:0}
+.ecard .res span{font-size:12.5px; color:var(--sub); line-height:1.4}
+.ecard .ft{display:flex; align-items:center; gap:10px; font:11px var(--mono); color:var(--faint)}
+.ecard .ft .go{margin-left:auto; color:var(--cc); font-family:var(--sans); font-weight:600; font-size:13px}
+.pips{display:inline-flex; gap:3px}
+.pips i{width:9px; height:9px; border-radius:2.5px; border:1.5px solid var(--cc,var(--gold)); display:block}
+.pips i.on{background:var(--cc,var(--gold))}
+.ecard.yours{border-style:dashed; cursor:default; background:transparent; box-shadow:none; backdrop-filter:none; -webkit-backdrop-filter:none}
+.ecard.yours:hover{transform:none}
+.ecard.yours ol{margin:0; padding-left:18px; color:var(--sub); font-size:13.5px; display:grid; gap:6px}
+.ecard.yours ol b{color:var(--ink); font-weight:600}
+/* numbers */
+.figs{display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr); gap:34px 48px; margin-top:64px; align-items:start}
+@media (max-width:860px){.figs{grid-template-columns:minmax(0,1fr)}}
+.fig h3{font-size:17px; font-weight:600; letter-spacing:-.01em; margin:0 0 3px}
+.fig p.one{font-size:13px; color:var(--sub); margin:0 0 16px}
+.prow{display:grid; grid-template-columns:118px minmax(0,1fr); gap:12px; align-items:center; margin:0 0 12px}
+.prow .pn{font-size:12.5px; text-align:right; color:var(--ink); line-height:1.25}
+.prow .pn small{display:block; color:var(--faint); font:10.5px var(--mono)}
+.pbars{display:grid; gap:4px}
+.pb{display:grid; grid-template-columns:minmax(0,1fr) 54px; gap:8px; align-items:center}
+.pb .t{height:12px; border-radius:4px; background:var(--bg2); overflow:hidden; position:relative}
+.pb .t i{position:absolute; inset:0 auto 0 0; width:0; border-radius:4px; background:var(--cc); transition:width 1.1s cubic-bezier(.22,.9,.28,1)}
+.pb.today .t i{background:color-mix(in srgb,var(--sub) 40%,transparent)}
+.pb .v{font:11.5px var(--mono); font-variant-numeric:tabular-nums; color:var(--ink)}
+.pb.today .v{color:var(--sub)}
+.fig-legend{display:flex; gap:16px; font:11px var(--mono); color:var(--sub); margin:2px 0 14px 130px}
+.fig-legend span{display:inline-flex; align-items:center; gap:6px}
+.fig-legend i{width:10px; height:10px; border-radius:3px}
+@media (max-width:520px){.prow{grid-template-columns:minmax(0,1fr)} .prow .pn{text-align:left} .fig-legend{margin-left:0}}
+.brow{display:grid; grid-template-columns:118px minmax(0,1fr) 60px; gap:12px; align-items:center; margin:0 0 11px; font-size:12.5px}
+.brow .pn{text-align:right}
+.brow .v{font:11.5px var(--mono); color:var(--sub); font-variant-numeric:tabular-nums}
+@media (max-width:520px){.brow{grid-template-columns:minmax(0,1fr) 60px} .brow .pn{grid-column:1/-1; text-align:left}}
+/* dossier */
+.dos-back{position:fixed; inset:0; z-index:80; background:color-mix(in srgb,#05060A 45%,transparent); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); opacity:0; transition:opacity .3s; pointer-events:none}
+.dos-back.open{opacity:1; pointer-events:auto}
+.dossier{position:fixed; z-index:81; top:0; right:0; bottom:0; width:min(720px,100%); background:var(--panel); border-left:1px solid var(--line); box-shadow:var(--shadow-lg);
+  transform:translateX(102%); transition:transform .45s cubic-bezier(.22,.9,.28,1); display:flex; flex-direction:column; padding-top:env(safe-area-inset-top,0px)}
+.dossier.open{transform:none}
+.dos-head{display:flex; align-items:center; gap:12px; padding:14px max(20px, env(safe-area-inset-right,0px)) 14px 22px; border-bottom:1px solid var(--line); background:var(--bg2)}
+.dos-head .dom{display:flex; align-items:center; gap:8px; font:11.5px var(--mono); color:var(--sub)}
+.dos-head .dom i{width:8px; height:8px; border-radius:50%; background:var(--cc)}
+.dos-x{margin-left:auto; width:34px; height:34px; border-radius:10px; font-size:20px; color:var(--sub)}
+.dos-x:hover{background:var(--panel); color:var(--ink)}
+.dos-body{overflow-y:auto; padding:26px max(22px, env(safe-area-inset-right,0px)) 40px 26px; display:grid; gap:28px; align-content:start}
+.dos-body h2{margin:0; font-size:28px; letter-spacing:-.025em; line-height:1.15; font-weight:600}
+.dos-body .who{font-size:13px; color:var(--sub); margin-top:6px}
+.dos-sec h4{margin:0 0 12px; font:500 11px var(--mono); letter-spacing:.16em; text-transform:uppercase; color:var(--cc)}
+.quote{margin:0; padding:14px 18px; border-radius:4px 16px 16px 16px; background:var(--bg2); border:1px solid var(--line); font-size:15px; line-height:1.6; color:var(--ink)}
+.qa{display:grid; gap:16px}
+.qa .q{font-weight:600; font-size:14.5px; display:flex; gap:10px}
+.qa .q::before{content:"agent"; font:500 10px/1.9 var(--mono); color:var(--cc); letter-spacing:.08em; text-transform:uppercase; flex:none; width:44px}
+.qa .a{margin:6px 0 0 54px; font-size:14px; color:var(--sub); line-height:1.55}
+.qa .a::before{content:"“"} .qa .a::after{content:"”"}
+.qa .so{margin:6px 0 0 54px; font-size:13px; color:var(--ink); padding:6px 10px; border-radius:8px; background:color-mix(in srgb,var(--cc) 9%,transparent); border-left:2px solid var(--cc)}
+.headline{font-size:20px; font-weight:600; letter-spacing:-.015em; line-height:1.3; margin:0 0 6px}
+.ctitle{font-size:12.5px; color:var(--sub); margin:0 0 14px}
+.take{margin:16px 0 0; padding:12px 14px; border-left:3px solid var(--cc); border-radius:0 10px 10px 0; background:color-mix(in srgb,var(--cc) 8%,transparent); font-size:14px; line-height:1.55}
+.took{display:flex; align-items:center; gap:12px; flex-wrap:wrap; font-size:13px; color:var(--sub)}
+.dos-link{display:inline-flex; align-items:center; gap:8px; font-weight:600; font-size:14px; color:var(--cc); text-decoration:none}
+.dos-link:hover{text-decoration:underline}
+
+/* ================= HOW IT WORKS ================= */
+.phases{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:14px; position:relative}
+@media (max-width:980px){.phases{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.phases{grid-template-columns:minmax(0,1fr)}}
+.ph{padding:18px 18px 16px; border-radius:16px; display:grid; gap:8px; align-content:start; min-width:0}
+.ph .who{font:10.5px var(--mono); letter-spacing:.12em; text-transform:uppercase; color:var(--faint)}
+.ph h3{margin:0; font-size:26px; font-weight:600; letter-spacing:-.03em; color:var(--pc)}
+.ph p{margin:0; font-size:13.5px; color:var(--sub); line-height:1.5}
+.ph code{justify-self:start; font-size:11.5px; color:var(--ink); background:var(--bg2); border:1px solid var(--line); padding:3px 8px; border-radius:6px}
+.ph.frozen{box-shadow:inset 0 1px 1px var(--glass-hi), 0 0 0 1.5px color-mix(in srgb,var(--blue) 55%,transparent), 0 10px 30px rgba(61,123,255,.16)}
+.anat{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px}
+@media (max-width:980px){.anat{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.anat{grid-template-columns:minmax(0,1fr)}}
+.xcard{padding:18px; border-radius:16px; border-top:3px solid var(--bc); min-width:0}
+.xcard .fn{font:600 13px var(--mono); color:var(--bc)}
+.xcard b{display:block; font-size:15.5px; margin:6px 0 10px; letter-spacing:-.01em; line-height:1.3}
+.xcard ul{margin:0; padding:0; list-style:none; display:grid; gap:7px}
+.xcard li{position:relative; padding-left:16px; font-size:13px; color:var(--sub); line-height:1.45}
+.xcard li::before{content:""; position:absolute; left:1px; top:7px; width:6px; height:6px; border-radius:50%; background:color-mix(in srgb,var(--bc) 60%,transparent)}
+.anat-note{margin:18px 0 0; text-align:center; font-size:15px; color:var(--sub)}
+.anat-note b{color:var(--ink); font-weight:600}
+.hsec{margin-top:84px}
+.overview{margin-top:20px; border-radius:18px; overflow:hidden; background:#fff; border:1px solid var(--line); box-shadow:var(--shadow)}
+.overview img{display:block; width:100%; height:auto}
+/* walkthroughs */
+.hiw-choose{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:24px}
+@media (max-width:720px){.hiw-choose{grid-template-columns:1fr}}
+.hiw-card{position:relative; text-align:left; padding:22px 22px 18px; border-radius:18px; cursor:pointer; transition:transform .25s cubic-bezier(.22,.9,.28,1), box-shadow .25s}
+.hiw-card:hover{transform:translateY(-3px)}
+.hiw-card .hc-ico{display:inline-flex; width:40px; height:40px; border-radius:12px; align-items:center; justify-content:center; background:color-mix(in srgb,var(--hc) 14%,transparent); margin-bottom:12px}
+.hiw-card .hc-ico svg{width:21px; height:21px; stroke:var(--hc); fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round}
+.hiw-card b{display:block; font-size:17.5px; letter-spacing:-.015em; color:var(--ink)}
+.hiw-card p{color:var(--sub); font-size:13.5px; margin:6px 0 12px; line-height:1.5}
+.hiw-card .hc-meta{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--faint)}
+.hiw-card .hc-go{margin-left:auto; color:var(--hc); font-weight:600; font-size:13px}
+.hiw-card[aria-pressed="true"]{box-shadow:inset 0 1px 1px var(--glass-hi), 0 0 0 2px var(--hc), 0 14px 34px rgba(0,0,0,.12)}
+.hiw-player{margin-top:20px; border:1px solid var(--line); border-radius:20px; background:var(--panel); overflow:hidden; box-shadow:var(--shadow)}
+.hiw-head{display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--line); background:var(--bg2)}
+.hiw-head .ht{font-weight:600; font-size:14px; letter-spacing:-.01em}
+.hiw-head .src{margin-left:auto; font:11.5px var(--mono); color:var(--faint); text-decoration:none}
+.hiw-head .src:hover{color:var(--ink)}
+.hiw-main{display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr); height:560px}
+.hiw-stage{position:relative; padding:26px; border-right:1px solid var(--line); display:flex; align-items:center; justify-content:center; overflow:hidden;
+  background:radial-gradient(120% 90% at 30% 10%,color-mix(in srgb,var(--pc) 8%,transparent),transparent 60%)}
+.hiw-copy{padding:28px 26px; display:flex; flex-direction:column; overflow-y:auto}
+.hiw-copy > :first-child{margin-top:auto} .hiw-copy > :last-child{margin-bottom:auto}
+.hiw-k{font:500 11px var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--pc); margin:0 0 10px}
+.hiw-copy h3{font-size:22px; letter-spacing:-.02em; margin:0 0 10px; line-height:1.2}
+.hiw-copy .hb{color:var(--sub); font-size:14.5px; line-height:1.62; margin:0}
+.hiw-copy .hb b{color:var(--ink); font-weight:600}
+.hiw-take{margin:16px 0 0; padding:10px 14px; border-left:3px solid var(--pc); border-radius:0 10px 10px 0; background:color-mix(in srgb,var(--pc) 8%,transparent); font-size:13.5px; font-weight:500; color:var(--ink); line-height:1.5}
+.hiw-foot{display:flex; align-items:center; gap:14px; padding:12px 16px; border-top:1px solid var(--line)}
+.hn{padding:8px 18px; border-radius:999px; font-size:13.5px; font-weight:600; border:1px solid var(--line2); color:var(--ink)}
+.hn.pri{background:var(--ink); color:var(--bg); border-color:var(--ink)}
+.hn:disabled{opacity:.35; cursor:default}
+.hiw-dots{margin:0 auto; display:flex; gap:7px}
+.hiw-dots button{width:8px; height:8px; border-radius:50%; background:var(--line2); transition:all .25s}
+.hiw-dots button.on{background:var(--pc); transform:scale(1.3)}
+@media (max-width:820px){.hiw-main{grid-template-columns:minmax(0,1fr); height:auto} .hiw-stage{border-right:0; border-bottom:1px solid var(--line); min-height:320px} .hiw-copy > :first-child{margin-top:0}}
+/* stage blocks */
+.hz{animation:hzin .55s cubic-bezier(.22,.9,.28,1) both; animation-delay:calc(var(--i,0) * 110ms)}
+@keyframes hzin{from{opacity:0; transform:translateY(12px)} to{opacity:1; transform:none}}
+@media (prefers-reduced-motion:reduce){.hz{animation:none}}
+.hviz{width:100%; max-width:470px; display:grid; gap:12px}
+.bub{max-width:88%; padding:12px 15px; font-size:13.5px; line-height:1.55; border-radius:14px; background:var(--bg2); border:1px solid var(--line); color:var(--ink)}
+.bub.you{justify-self:end; border-radius:14px 14px 4px 14px; background:color-mix(in srgb,var(--pc) 9%,var(--panel)); border-color:color-mix(in srgb,var(--pc) 28%,transparent)}
+.bub.agent{justify-self:start; border-radius:14px 14px 14px 4px}
+.bub small{display:block; font:10px var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--faint); margin-bottom:4px}
+.wbar{display:grid; grid-template-columns:120px minmax(0,1fr) 34px; gap:10px; align-items:center; font-size:12.5px}
+.wbar .l{text-align:right; color:var(--sub); font-family:var(--mono); font-size:11.5px}
+.wbar .t{height:14px; border-radius:5px; background:var(--bg2); overflow:hidden}
+.wbar .t i{display:block; height:100%; border-radius:5px; background:var(--pc); width:var(--w); animation:grow 1s cubic-bezier(.22,.9,.28,1) both}
+.wbar .t i.dim{background:color-mix(in srgb,var(--sub) 40%,transparent)}
+.wbar .t i.bad{background:var(--fail)}
+.wbar .v{font:11.5px var(--mono); color:var(--ink)}
+@keyframes grow{from{width:0}}
+.pairs{display:grid; gap:10px}
+.pair{display:flex; align-items:center; justify-content:center; gap:12px; font:12.5px var(--mono)}
+.pair span{padding:7px 12px; border-radius:9px; background:var(--bg2); border:1px solid var(--line2)}
+.pair i{font-style:normal; color:var(--pc)}
+.lockbox{display:grid; gap:10px; padding:20px; border-radius:16px; border:1.5px solid color-mix(in srgb,var(--blue) 55%,transparent); background:color-mix(in srgb,var(--blue) 6%,transparent)}
+.lockbox .lh{display:flex; align-items:center; gap:10px; font:600 13px var(--mono); color:var(--blue)}
+.lockbox .lh svg{width:18px; height:18px}
+.lockbox .li{display:grid; grid-template-columns:110px minmax(0,1fr); gap:10px; font-size:13px; padding-top:9px; border-top:1px solid var(--line)}
+.lockbox .li span:first-child{font:11.5px var(--mono); color:var(--faint)}
+.mini-term{font:12px/1.75 var(--mono); background:var(--term-bg); border:1px solid var(--term-brd); color:var(--term-fg); border-radius:12px; padding:13px 15px; white-space:pre-wrap; overflow-wrap:anywhere}
+.mini-term .p{color:var(--term-green); font-weight:600}
+.mini-term .d{color:var(--term-dim)}
+.tiles{display:grid; grid-template-columns:repeat(6,1fr); gap:5px; width:100%; max-width:400px}
+.tiles canvas{width:100%; aspect-ratio:1; border-radius:5px; display:block}
+.tiles canvas.odd{outline:2px dashed var(--rose); outline-offset:2px}
+.stat2{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+.stat2 div{padding:14px; border-radius:12px; background:var(--bg2); border:1px solid var(--line); display:grid; gap:2px}
+.stat2 b{font-size:26px; font-weight:600; letter-spacing:-.03em; font-variant-numeric:tabular-nums}
+.stat2 span{font-size:12px; color:var(--sub); line-height:1.35}
+.capt{font:11px var(--mono); color:var(--faint); text-align:center}
+
+/* ================= USAGE ================= */
+.usewrap{max-width:940px; margin:0 auto}
+.install{display:inline-flex; align-items:center; gap:11px; margin-top:22px; max-width:100%; background:var(--term-bg); border:1px solid var(--term-brd); border-radius:12px; padding:9px 10px 9px 14px; font:13px var(--mono); box-shadow:var(--shadow)}
+.install .d{color:var(--term-green)} .install code{color:var(--term-fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
+.install .cp{color:var(--term-title); border-color:var(--term-brd)} .install .cp:hover{color:var(--ink); border-color:var(--sub)}
+.steps{display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin:34px 0 14px}
+.step{font:11.5px var(--mono); color:var(--sub); background:var(--panel); border:1px solid var(--line2); border-radius:20px; padding:4px 12px; transition:all .15s}
+.step:hover{color:var(--ink); border-color:var(--sub)}
+.step.on{color:var(--term-bg); background:var(--term-green); border-color:var(--term-green); font-weight:600}
+.term{background:var(--term-bg); border:1px solid var(--term-brd); border-radius:16px; overflow:hidden; box-shadow:var(--shadow-lg)}
+.term-bar{display:flex; align-items:center; gap:12px; padding:11px 15px; background:var(--term-bar); border-bottom:1px solid var(--term-brd)}
+.term-dots{display:flex; gap:7px} .term-dots i{width:12px; height:12px; border-radius:50%}
+.term-dots i:nth-child(1){background:#ff5f57} .term-dots i:nth-child(2){background:#febc2e} .term-dots i:nth-child(3){background:#28c840}
+.term-title{font:12.5px var(--mono); color:var(--term-title); flex:1; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.term-replay{font:12px var(--mono); color:var(--term-title); border:1px solid var(--term-brd); border-radius:7px; padding:4px 10px}
+.term-replay:hover{color:var(--ink); border-color:var(--sub)}
+.term-body{font:12.5px/1.72 var(--mono); color:var(--term-fg); padding:16px 18px; height:420px; overflow:hidden auto; overscroll-behavior:contain}
+.tline{white-space:pre-wrap; overflow-wrap:anywhere; margin-top:3px}
+.tline + .tline.cmd{margin-top:14px}
+.tline .pr{color:var(--term-green); font-weight:600; margin-right:7px}
+.tline .tool{color:var(--term-tool)} .tline .flag{color:var(--term-flag)}
+.tline.c{color:var(--term-dim); font-style:italic}
+.out{white-space:pre-wrap; overflow-wrap:anywhere; color:var(--term-out)}
+.out.ok{color:var(--term-green)} .out.hd{color:var(--term-hd)} .out.dim{color:var(--term-dim)} .out.no{color:var(--term-red)}
+.cursor{display:inline-block; width:8px; height:15px; background:var(--term-green); vertical-align:-2px; margin-left:1px; animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+.term-note{font-size:12.5px; color:var(--faint); text-align:center; margin:12px 0 0}
+.use-cols{display:grid; grid-template-columns:1fr 1fr; gap:20px; margin:40px 0 10px}
+@media (max-width:720px){.use-cols{grid-template-columns:1fr} .term-body{font-size:11px; padding:13px; height:380px}}
+.ucard{background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:20px 22px; min-width:0}
+.ucard h3{margin:0 0 4px; font-size:16px; font-weight:600}
+.ucard .one{margin:0 0 12px; color:var(--sub); font-size:13px}
+.ucard pre{margin:0 0 10px; font:11.5px/1.7 var(--mono); color:var(--ink); background:var(--bg2); border:1px solid var(--line); border-radius:10px; padding:12px 14px; overflow-x:auto; white-space:pre}
+.ucard pre .c{color:var(--faint)}
+.ucard .sm{font-size:12.5px; color:var(--sub); margin:0}
+.ufeat{list-style:none; margin:0; padding:0}
+.ufeat li{font-size:13px; color:var(--sub); padding:9px 0; border-top:1px solid var(--line); line-height:1.5}
+.ufeat li:first-child{border-top:none; padding-top:0}
+.ufeat li b{color:var(--ink); font:600 12px var(--mono); margin-right:8px}
+.use-h2{font-size:19px; font-weight:600; margin:40px 0 10px; letter-spacing:-.01em}
+.cref{display:grid; grid-template-columns:330px minmax(0,1fr); gap:18px; align-items:baseline; padding:11px 0; border-top:1px solid var(--line)}
+.cref:first-child{border-top:none}
+.cref code{font-size:12.5px; color:var(--ink)} .cref code em{font-style:normal; color:var(--sub)}
+.cref span{font-size:13px; color:var(--sub)}
+@media (max-width:720px){.cref{grid-template-columns:1fr; gap:2px}}
+.know{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin-top:12px}
+@media (max-width:820px){.know{grid-template-columns:1fr}}
+.know div{padding:18px; border-radius:16px; display:grid; gap:6px; align-content:start}
+.know b{font-size:15px; font-weight:600}
+.know p{margin:0; font-size:13.5px; color:var(--sub); line-height:1.55}
+.links{display:flex; flex-wrap:wrap; gap:10px; margin-top:14px}
+.links a{display:inline-flex; align-items:center; gap:8px; text-decoration:none; border:1px solid var(--line2); border-radius:10px; padding:9px 16px; font-size:14px; font-weight:500; background:var(--panel); transition:all .15s}
+.links a:hover{border-color:var(--sub); transform:translateY(-1px)}
+
+footer{position:relative; z-index:1; border-top:1px solid var(--line)}
+.foot-in{max-width:1180px; margin:0 auto; padding:22px max(24px, env(safe-area-inset-right,0px)) 26px max(24px, env(safe-area-inset-left,0px)); display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; font-size:13px; color:var(--faint)}
+.foot-in .sp{flex:1}
+.foot-in a{color:var(--sub); text-decoration:none} .foot-in a:hover{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<header class="mast" id="mast">
+  <div class="mast-in">
+    <a class="wordmark" href="#home" data-goto="home" aria-label="The ML Guy, home">
+      <span class="logo-glass"><img src="assets/mlguy-logo.webp" alt=""></span><span class="wm">The ML Guy</span>
+    </a>
+    <nav class="nav" role="tablist" aria-label="Sections">
+      <span class="nav-thumb" id="navThumb"></span>
+      <button role="tab" data-tab="home" aria-selected="true">Home</button>
+      <button role="tab" data-tab="examples" aria-selected="false">Examples</button>
+      <button role="tab" data-tab="how" aria-selected="false"><span class="t-full">How it works</span><span class="t-short">How</span></button>
+      <button role="tab" data-tab="usage" aria-selected="false">Usage</button>
+    </nav>
+    <a class="icobtn gh" href="https://github.com/pengzhangzhi/The-ML-Guy" aria-label="GitHub repository" title="GitHub">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+    </a>
+    <button class="icobtn" id="themeBtn" type="button" aria-label="Toggle light and dark" title="Toggle theme">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+  </div>
+</header>
+<div class="aurora" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+
+<main>
+<!-- ================= HOME ================= -->
+<section id="tab-home">
+  <div class="hero intro" id="hero">
+    <canvas id="hcv" aria-hidden="true"></canvas>
+    <a class="h-chip" data-goto="examples"><b>Real runs</b><span>Five problems, built end to end</span><i>&rsaquo;</i></a>
+    <div class="h-legend" aria-hidden="true">
+      <span><i style="background:#9AA3B2"></i>your data</span>
+      <span><i style="background:var(--spec)"></i>the frozen scoring</span>
+      <span><i style="background:#F5B03D"></i>the agent searching</span>
+      <span><i style="background:transparent; border:1px dashed #9AA3B2"></i>test set, held back</span>
+    </div>
+    <div class="h-copy">
+      <h1 class="h-title h-e">The ML Guy</h1>
+      <p class="h-claim h-e">You know the science. <b>It does the ML research,</b> and it cannot grade its own homework.</p>
+      <div class="h-actions h-e">
+        <a class="h-btn" data-goto="usage">Get started</a>
+        <button class="h-ghost" type="button" data-walk="agent"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4 2.6v10.8a.6.6 0 0 0 .9.5l8.6-5.4a.6.6 0 0 0 0-1L4.9 2.1a.6.6 0 0 0-.9.5z"/></svg>Watch a real run</button>
+        <a class="h-link" data-goto="examples">See the five problems <i>&rsaquo;</i></a>
+      </div>
+      <div class="pill-cmd h-e"><span>$</span><code>git clone https://github.com/pengzhangzhi/The-ML-Guy</code><button class="cp" type="button" data-copy="git clone https://github.com/pengzhangzhi/The-ML-Guy.git && cd The-ML-Guy && pip install -e .">copy</button></div>
+    </div>
+  </div>
+
+  <!-- The abstract is the spine: scroll moves a read-head through it, and each clause pulls in its own vignette. -->
+  <div class="story" id="story">
+    <div class="story-stage" id="stage">
+      <div class="abs-spine">
+        <p class="eyebrow">In short</p>
+        <p class="abs">
+          <span class="cl" data-i="0"><b class="k" style="--kc:var(--blue)">Coding agents</b> can now build a whole model on their own, but they also choose how it is <span class="ksk">graded</span>.</span>
+          <span class="cl" data-i="1">A scientist knows what better means, like <b class="k" style="--kc:var(--gold)">the patients a team can call</b> or <b class="k" style="--kc:var(--mint)">the hundred designs a lab can make</b>, but not always how to turn it into a score.</span>
+          <span class="cl" data-i="2">So <b>The ML Guy</b> asks first, agrees the scoring with you, has <b class="k" style="--kc:var(--rose)">a second agent try to break it</b>, and then <b class="k" style="--kc:var(--blue)">freezes</b> it.</span>
+          <span class="cl" data-i="3">As <b class="k pill" style="--kc:var(--gold)">a model</b>, it beats what you do today: <b class="k" style="--kc:var(--gold)">93 bright designs</b> in a hundred, where picking by hand found 14.</span>
+          <span class="cl" data-i="4">As <b class="k pill" style="--kc:var(--rose)">a report</b>, it argues against itself, and <b class="k" style="--kc:var(--rose)">says where the model is weak</b>.</span>
+          <span class="cl" data-i="5">As <b class="k pill" style="--kc:var(--mint)">a page</b>, it fits <b class="k" style="--kc:var(--mint)">how you will use it</b>.</span>
+          <span class="cl" data-i="6"><b class="k grad">Be exact about the problem, and leave the modelling open</b>: any model, any library, on your own machine.</span>
+        </p>
+      </div>
+      <div class="panel-stage">
+        <div class="vpanel" data-i="0" data-viz="loop">
+          <p class="vp-title">When the builder grades itself</p>
+          <div class="vp-viz cyc" id="cyc">
+            <div class="cyc-flow">
+              <span class="cyc-node glassy">train</span><span class="cyc-arrow">→</span>
+              <span class="cyc-node glassy">pick the metric</span><span class="cyc-arrow">→</span>
+              <span class="cyc-node glassy">grade itself</span><span class="cyc-arrow">→</span>
+              <span class="cyc-node glassy cyc-res"><s>0.99 ✓</s></span>
+            </div>
+            <div class="cyc-rail"><i class="cyc-sweep"></i></div>
+            <span class="cyc-q">tested on what? scored how? looked at how often?</span>
+          </div>
+          <p class="vp-cap">A score is only as good as the test behind it, and an agent that climbs a score will find <b>every way to raise it</b>.</p>
+        </div>
+        <div class="vpanel" data-i="1" data-viz="s2m">
+          <p class="vp-title">From a sentence to a score</p>
+          <div class="vp-viz s2m">
+            <div class="s2m-q glassy">“Roughly the riskiest 1 in 5 discharges. What matters is how many of the people who really come back are in that group.”<small>A HOSPITALIST, ASKED HOW MANY PATIENTS THE TEAM CAN CALL</small></div>
+            <i class="s2m-line"></i>
+            <div class="s2m-code glassy"><span class="c"># task/task.toml</span><br><span class="k">[metric]</span><br>primary = <span class="s">"recall_at_top20pct"</span><br>direction = <span class="s">"maximize"</span></div>
+          </div>
+          <p class="vp-cap">Each question comes with a proposed answer, so most replies are a yes. <b>The answer becomes the metric.</b></p>
+        </div>
+        <div class="vpanel" data-i="2" data-viz="build">
+          <p class="vp-title">Agreed, audited, frozen</p>
+          <div class="vp-viz build">
+            <div class="bd-field">
+              <span class="bd-p glassy" style="--x:-130px;--y:-62px;--r:-9deg;--c:var(--gold)"><i></i>brief.md</span>
+              <span class="bd-p glassy" style="--x:128px;--y:-50px;--r:8deg;--c:var(--blue)"><i></i>evaluate.py</span>
+              <span class="bd-p glassy" style="--x:-112px;--y:64px;--r:7deg;--c:var(--mint)"><i></i>train · val · test</span>
+              <span class="bd-p glassy" style="--x:118px;--y:70px;--r:-6deg;--c:var(--rose)"><i></i>audit.md</span>
+            </div>
+            <div class="bd-box"><div><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg><b>task/</b><small>hash 054f1a143b56</small></div></div>
+            <div class="bd-steps"><span>ask</span><span>agree</span><span>audit</span><span>freeze</span></div>
+          </div>
+          <p class="vp-cap">The task is hashed when you approve. A changed task is refused, and <b>the test set moves out of the project</b> until the end.</p>
+        </div>
+        <div class="vpanel" data-i="3" data-viz="vt">
+          <p class="vp-title">Better than what you do today</p>
+          <div class="vp-viz vt" id="vt"></div>
+          <a class="vp-cta" data-goto="examples" style="--hc:#F5B03D">See all five problems →</a>
+        </div>
+        <div class="vpanel" data-i="4" data-viz="deck">
+          <p class="vp-title">Lines from the reports</p>
+          <div class="vp-viz"><div class="deck" id="deck"></div></div>
+          <a class="vp-cta" data-goto="examples" style="--hc:#E0679A">Read the conversations →</a>
+        </div>
+        <div class="vpanel" data-i="5" data-viz="app">
+          <div class="vp-viz">
+            <div class="appwin glassy">
+              <div class="ab"><i></i><i></i><i></i><span>app.py · a GFP project's page</span></div>
+              <div class="ap">
+                <div class="in">&gt;design_017<br>MSKGEELFTGVVPILVELDGDVNGHKFSV…<br>&gt;design_018 …</div>
+                <span class="go">Rank designs</span>
+                <div class="rk"><span>1</span><span>S65T · F64L · Q80R</span><em style="--w:92%"></em></div>
+                <div class="rk"><span>2</span><span>S65T · V163A</span><em style="--w:84%"></em></div>
+                <div class="rk"><span>3</span><span>F64L · S72A · M153T</span><em style="--w:77%"></em></div>
+                <div class="rk"><span>4</span><span>Q80R · N149K</span><em style="--w:69%"></em></div>
+                <span class="note">illustration · each project's page is written for its problem</span>
+              </div>
+            </div>
+          </div>
+          <p class="vp-cap">The agent writes <b>app.py</b> for your problem: a protein page names each variant by its mutations; a clinical one looks nothing like it.</p>
+          <a class="vp-cta" data-goto="usage" style="--hc:#5CCB9F">Get started →</a>
+        </div>
+        <div class="vpanel" data-i="6" data-viz="sf">
+          <p class="vp-title">The one rule</p>
+          <div class="vp-viz">
+            <div class="sf">
+              <div class="s glassy"><h4>Fixed when you approve</h4><p>What the model is given and returns</p><p>Train, validation and test sets</p><p>The evaluator and its direction</p><p>The budget</p><p>The command that runs the model</p></div>
+              <div class="f glassy"><h4>The agent's call</h4><p>Model family and architecture</p><p>Features and encodings</p><p>Hyperparameters and training</p><p>Code, libraries, structure</p><p>What to try next</p></div>
+            </div>
+          </div>
+          <p class="vp-cap">The framework only <b>refuses</b> and <b>records</b>. Everything that would be advice lives in a skill the agent can weigh.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="home-close">
+    <img class="close-logo" src="assets/mlguy-logo.webp" alt="The ML Guy logo: a cartoon programmer at a laptop beside books labelled ML, DL and AI">
+    <p class="close-line">You know the science.<br><span class="spec-text">It does the ML research.</span></p>
+    <div class="home-actions">
+      <a class="btn-primary" data-goto="usage">Get started →</a>
+      <a class="btn-ghost glassy" data-goto="how">How it works</a>
+    </div>
+  </div>
+</section>
+
+<!-- ================= EXAMPLES ================= -->
+<section id="tab-examples" class="wrap tabpage" hidden>
+  <div class="tab-head">
+    <p class="eyebrow">Examples</p>
+    <h1 class="big">Five real problems, kept as the conversation.</h1>
+    <p class="lede">Each one has the request a scientist sent, the questions the agent asked back before anything froze, and what came out. Every result was scored once, on data held back from the start.</p>
+  </div>
+  <div class="egrid" id="egrid"></div>
+
+  <div class="figs">
+    <div class="fig">
+      <h3>Better than what they do today</h3>
+      <p class="one">Where the request named a current practice, the agent measured it and held itself to beating it.</p>
+      <div class="fig-legend"><span><i style="background:var(--blue)"></i>this model</span><span><i style="background:color-mix(in srgb,var(--sub) 40%,transparent)"></i>today</span></div>
+      <div id="figToday"></div>
+    </div>
+    <div class="fig">
+      <h3>None used its whole budget</h3>
+      <p class="one">Filled squares are submissions used. Most stopped early, saying why.</p>
+      <div id="figBudget"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= HOW IT WORKS ================= -->
+<section id="tab-how" class="wrap tabpage" hidden>
+  <div class="tab-head">
+    <p class="eyebrow">How it works</p>
+    <h1 class="big">One conversation, then it works alone.</h1>
+    <p class="lede">Everything that decides what a good model means is settled with you before any model is trained. Nothing about how to build one is.</p>
+  </div>
+  <div class="phases">
+    <div class="ph glassy" style="--pc:var(--gold)"><span class="who">with you</span><h3>Ask.</h3><p>It learns your machine, opens your data, and asks only what is missing.</p></div>
+    <div class="ph glassy" style="--pc:var(--mint)"><span class="who">with you</span><h3>Agree.</h3><p>What better means becomes a metric on a split, checked to tell good from bad.</p><code>mlguy score</code></div>
+    <div class="ph glassy" style="--pc:var(--rose)"><span class="who">a second agent</span><h3>Audit.</h3><p>A fresh agent with no stake hunts for leaks and outputs that score well while solving nothing.</p></div>
+    <div class="ph glassy frozen" style="--pc:var(--blue)"><span class="who">you approve</span><h3>Freeze.</h3><p>The task is hashed and the test set moves out of reach.</p><code>mlguy init</code></div>
+    <div class="ph glassy" style="--pc:var(--violet)"><span class="who">on its own</span><h3>Search.</h3><p>Any model, any library. Every try is scored and recorded, then the test set is scored once.</p><code>mlguy submit · finish</code></div>
+  </div>
+
+  <div class="hsec">
+    <p class="eyebrow">Anatomy of a project</p>
+    <h2 class="sec">Strict about the problem. Free about the model.</h2>
+    <div class="anat" style="margin-top:24px">
+      <div class="xcard glassy" style="--bc:var(--blue)"><span class="fn">task/</span><b>First, the problem is pinned down</b><ul><li>brief.md in your words, with your approval</li><li>the data and how it was split</li><li>evaluate.py, written for this problem</li><li>audit.md, from the agent that tried to break it</li></ul></div>
+      <div class="xcard glassy" style="--bc:var(--violet)"><span class="fn">infer.py</span><b>One fixed way to run the model</b><ul><li>--model, --input, --output</li><li>the scoring and your page both call it</li><li>it may not read anything in task/</li></ul></div>
+      <div class="xcard glassy" style="--bc:var(--gold)"><span class="fn">src/ · model/</span><b>Everything else is the agent's</b><ul><li>any architecture, any library</li><li>any code structure</li><li>what to try next, and when to stop</li></ul></div>
+      <div class="xcard glassy" style="--bc:var(--mint)"><span class="fn">experiments/ · final/</span><b>And a record nobody edits by hand</b><ul><li>every score, with a snapshot of its code</li><li>the exact model that was scored</li><li>REPORT.md and app.py at the end</li></ul></div>
+    </div>
+    <p class="anat-note">Until the end, the test split lives in <code>~/.mlguy/projects/&lt;name&gt;/</code>, <b>outside the project folder.</b></p>
+  </div>
+
+  <div class="hsec" id="walks">
+    <p class="eyebrow">Watch it actually happen</p>
+    <h2 class="sec">Two walkthroughs, from two real projects</h2>
+    <p class="lede" style="font-size:14.5px">Every quote below is from the gallery: what the scientist wrote, what the agent asked, and what came back. Where a picture stands in for something, it says so.</p>
+    <div class="hiw-choose">
+      <button class="hiw-card glassy" type="button" data-wt="task" style="--hc:var(--rose)" aria-pressed="false">
+        <span class="hc-ico"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg></span>
+        <b>A request becomes a frozen task</b>
+        <p>A pathologist's H&amp;E tiles: the missing slide ids, the classes that matter, and the violet tiles that decided the project.</p>
+        <span class="hc-meta">7 steps · pathology-tiles<span class="hc-go">Walk through →</span></span>
+      </button>
+      <button class="hiw-card glassy" type="button" data-wt="agent" style="--hc:var(--violet)" aria-pressed="false">
+        <span class="hc-ico"><svg viewBox="0 0 24 24"><path d="M4 18 9 11l4 4 7-10"/><circle cx="20" cy="5" r="1.6"/></svg></span>
+        <b>The agent at work</b>
+        <p>A soluble ProteinMPNN: the hole it found in the metric, the comparator it found itself, and the best model it refused.</p>
+        <span class="hc-meta">7 steps · proteinmpnn-solubility<span class="hc-go">Walk through →</span></span>
+      </button>
+    </div>
+    <div class="hiw-player" id="player">
+      <div class="hiw-head"><span class="ht" id="hTitle"></span><a class="src" id="hSrc" href="#">source ↗</a></div>
+      <div class="hiw-main">
+        <div class="hiw-stage" id="hStage"></div>
+        <div class="hiw-copy" id="hCopy" aria-live="polite"></div>
+      </div>
+      <div class="hiw-foot">
+        <button class="hn" id="hPrev" type="button">← Back</button>
+        <div class="hiw-dots" id="hDots"></div>
+        <button class="hn pri" id="hNext" type="button">Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="hsec">
+    <p class="eyebrow">The picture</p>
+    <h2 class="sec">You bring the problem and the data.</h2>
+    <div class="overview"><img src="assets/mlguy-overview.webp" alt="You, the scientist, bring your problem and your data. The ML Guy explores ideas, trains and evaluates, improves and iterates. You get a well-developed model, a thorough evaluation, and a simple app to use."></div>
+  </div>
+</section>
+
+<!-- ================= USAGE ================= -->
+<section id="tab-usage" class="wrap tabpage" hidden>
+  <div class="usewrap">
+    <div class="tab-head center">
+      <p class="eyebrow">Usage</p>
+      <h1 class="big">From a sentence to a scored model, in one conversation.</h1>
+      <p class="lede">You talk to Claude Code or Codex. The agent runs <code>mlguy</code>. Python 3.11 or newer.</p>
+      <div class="install"><span class="d">$</span><code>git clone https://github.com/pengzhangzhi/The-ML-Guy.git &amp;&amp; cd The-ML-Guy &amp;&amp; pip install -e .</code><button class="cp" type="button" data-copy="git clone https://github.com/pengzhangzhi/The-ML-Guy.git && cd The-ML-Guy && pip install -e .">copy</button></div>
+    </div>
+    <div class="steps" id="tSteps"></div>
+    <div class="term">
+      <div class="term-bar"><span class="term-dots"><i></i><i></i><i></i></span><span class="term-title">~/tumour-triage — zsh</span><button class="term-replay" id="tReplay" type="button">↻ replay</button></div>
+      <div class="term-body" id="tBody"></div>
+    </div>
+    <p class="term-note">Real output, from a small project on a public dataset (Wisconsin breast cancer, via scikit-learn). Only the paths are shortened.</p>
+
+    <div class="use-cols">
+      <div class="ucard">
+        <h3>Give your agent the skills</h3>
+        <p class="one">The skills tell the agent how to run a project. The tool keeps it honest.</p>
+<pre><span class="c"># Claude Code, for every project on this machine</span>
+cp -r skills/* ~/.claude/skills/</pre>
+        <p class="sm">Codex reads <code>AGENTS.md</code> instead: point it at the skills, as <a href="https://github.com/pengzhangzhi/The-ML-Guy/blob/main/INSTALL.md" style="color:var(--blue)">INSTALL.md</a> shows. Then open your agent next to your data and describe the problem.</p>
+      </div>
+      <div class="ucard">
+        <h3>Make it yours</h3>
+        <ul class="ufeat">
+          <li><b>agent</b>Claude Code or Codex; the contract is a command line and files on disk</li>
+          <li><b>compute</b>it learns your GPUs, Slurm and storage once, and asks which account to charge</li>
+          <li><b>budget</b>submissions are capped; other limits you set are kept by the agent and printed in the report</li>
+          <li><b>MLGUY_HOME</b>where the held-back test split and the task's hash live</li>
+          <li><b>--experiment</b>ship a simpler model than the top score, with <code>--reason</code> in the report</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2 class="use-h2">Every command</h2>
+    <div id="cref"></div>
+
+    <h2 class="use-h2">Good to know</h2>
+    <div class="know">
+      <div class="glassy"><b>It is early.</b><p>It has been run end to end by Claude Code and Codex on the five problems in the gallery.</p></div>
+      <div class="glassy"><b>There is no sandbox.</b><p>The agent runs with your permissions. The test data is protected against accidents, not against an agent that goes looking for it.</p></div>
+      <div class="glassy"><b>Compute is yours.</b><p>The framework never sees the compute, so it records GPU-hours and money but cannot cap them.</p></div>
+    </div>
+
+    <h2 class="use-h2">Read more</h2>
+    <div class="links">
+      <a href="https://github.com/pengzhangzhi/The-ML-Guy">Code ↗</a>
+      <a href="https://github.com/pengzhangzhi/The-ML-Guy/tree/main/gallery">Gallery ↗</a>
+      <a href="https://github.com/pengzhangzhi/The-ML-Guy/blob/main/DESIGN.md">Design ↗</a>
+      <a href="https://github.com/pengzhangzhi/The-ML-Guy/blob/main/INSTALL.md">Install guide ↗</a>
+      <a href="https://github.com/pengzhangzhi/The-ML-Guy/tree/main/skills">Skills ↗</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<div class="dos-back" id="dosBack"></div>
+<aside class="dossier" id="dossier" aria-hidden="true" aria-label="Example details">
+  <div class="dos-head"><span class="dom" id="dDom"></span><button class="dos-x" id="dX" type="button" aria-label="Close">×</button></div>
+  <div class="dos-body" id="dBody"></div>
+</aside>
+
+<footer>
+  <div class="foot-in">
+    <span>The ML Guy · 2026</span><span>·</span><span>be exact about the problem, leave the modelling open</span>
+    <span class="sp"></span>
+    <a href="https://github.com/pengzhangzhi/The-ML-Guy">GitHub</a><span>MIT licence</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+"use strict";
+var root = document.documentElement;
+var GH = "https://github.com/pengzhangzhi/The-ML-Guy/blob/main/gallery/";
+var REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function $(s, el){ return (el || document).querySelector(s); }
+function $$(s, el){ return Array.prototype.slice.call((el || document).querySelectorAll(s)); }
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+/* ---------------- examples data (from gallery/*.md) ---------------- */
+var CASES = [
+  { id:"readmission", short:"Readmission", c:"#3D7BFF", dom:"Clinical table", size:"100k encounters", title:"30-day readmission at discharge", file:"diabetes-readmission.md",
+    who:"A hospitalist working on care transitions",
+    req:"Our care-coordination team can only call a fraction of the patients we discharge, and right now they pick by gut feel plus whoever has been in a lot recently. I want a model that flags, at discharge, which patients are likely to come back within 30 days, so the team knows who to call. Whatever you build needs to beat what we do today, which is roughly “call the people with the most prior admissions”.",
+    big:"+98", bigSmall:"patients", res:"more 30-day returns found than the current rule, for the same 3,889 calls",
+    qa:[
+      {q:"How many patients can the team actually call?", a:"Roughly the riskiest 1 in 5 discharges. What matters is how many of the people who really come back are in that group.", so:"That answer is the metric: recall among the top 20% by predicted risk."},
+      {q:"What will the model see in use, and how should the data be split?", a:"Future discharges, and many of them are people we've seen before. Keep each patient on one side of the split, and use the latest encounters as the test."},
+      {q:"Which encounters should be excluded, and what counts as readmitted?", a:"Leave out deaths and hospice, and transfers to another acute hospital. Keep the patients who left against medical advice; they're exactly who we'd call."},
+      {q:"Which fields may the model use?", a:"Leave race out. Age, sex and insurance are fine."}
+    ],
+    head:"A call list that finds 13% more returning patients than current practice, for the same number of calls.",
+    ctitle:"30-day returns found at a call capacity of 3,889, scored once on 19,443 later discharges",
+    bars:[["This model",820,"820 · 38.8%",1],["Prior-admissions rule",722,"722 · 34.2%",0]], max:820,
+    note:"The report states the comparison in patients found per call rather than as a metric, because that is the decision the team actually makes.",
+    used:4, budget:10, cost:"CPU only, minutes per attempt. The agent stopped early, judging that more attempts would be fitting noise." },
+  { id:"gfp", short:"GFP brightness", c:"#14A374", dom:"Protein variants", size:"54k variants", title:"Which GFP designs will still be bright", file:"gfp-brightness.md",
+    who:"A protein engineer",
+    req:"We design new GFP variants computationally, a few thousand candidates at a time, and we can only afford to synthesise and test about a hundred of them. Right now we pick by fewest mutations, which is not much of a strategy. Our designs usually carry more mutations than most of what was measured, so I don't want a model that only works close to the parent.",
+    big:"93", bigSmall:"of 100", res:"top picks are bright, against 14 when picking by fewest mutations",
+    qa:[
+      {q:"Is splitting by mutation count right?", a:"Yes. Our designs usually carry 6 to 12 mutations, so judging on that range matches what we do."},
+      {q:"How many candidates do you make, and how many can you test?", a:"A few thousand designed, about a hundred synthesised. So score it on roughly the top hundred of a list that size.", so:"Precision in the top 100 of a ~3,000-candidate list."},
+      {q:"What counts as still bright?", a:"Close to the parent. The parent is about 3.7, and below about 2.5 the protein is effectively dark. Set the line near 3.5."},
+      {q:"The agent measured the bar before agreeing to it.", a:"I hadn't thought about the fact that trying a dozen models and reporting the best inflates the number. Holding yourself to 0.16 before calling anything a win is the right instinct.", so:"Current practice scores 0.095; a skill-less rule tried twelve times reaches 0.144. It held itself to 0.16."}
+    ],
+    head:"Give it a few thousand designs carrying 6 to 12 mutations, synthesise the 100 it ranks highest, and about 93 will be bright.",
+    ctitle:"Bright variants among 100 picked, scored once on 4,655 variants the model never saw",
+    bars:[["This model",93,"93",1],["Fewest mutations first",14,"14",0],["At random",5.5,"5–6",0]], max:100,
+    note:"It also answered the question asked in passing. Protein language models did not help: ESM-2's zero-shot score ranks at chance here (AUROC 0.54). What shipped is a ridge-plus-logistic blend, with no GPU needed to run it.",
+    used:5, budget:12, cost:"The agent stopped early." },
+  { id:"mpnn", short:"Soluble design", c:"#7656E0", dom:"Protein design · generative", size:"869k structures", title:"ProteinMPNN for soluble designs", file:"proteinmpnn-solubility.md",
+    who:"A protein designer",
+    req:"Current ProteinMPNN tends to design insoluble protein sequences that aggregate or are unable to express. I wanna develop a version of ProteinMPNN that can design soluble proteins; given the same backbone, it should put fewer water-hating residues on the surface, while folding into the backbone we asked for. Use the H200 GPUs on the cluster.",
+    big:"7.3", bigSmall:"vs 14.9", res:"water-hating surface residues per design, and 98.6% still fold",
+    qa:[
+      {q:"Which residues count as water-hating?", a:"The big oily side chains: F, I, L, M, V, W. Alanine I don't worry about, it's small and natural proteins are full of it on the surface."},
+      {q:"What counts as still folding into the backbone?", a:"TM-score 0.8 is the right line, and I prefer it to RMSD. A design that fails the fold earns nothing."},
+      {q:"Then the agent pushed back.", a:"You've caught me contradicting myself. Counting it closes the hole. Switch the headline to AFILMVWY, and keep my six beside it.", so:"Leaving alanine out let a model swap every exposed F for A and satisfy the metric without changing anything real."},
+      {q:"Budget?", a:"About 12 GPU-hours, on the free queue."}
+    ],
+    head:"A ProteinMPNN that puts half as many water-hating residues on the outside of a design, and still folds.",
+    ctitle:"Water-hating surface residues per design (fewer is better), 126 unseen backbones × 8 designs",
+    bars:[["This model",7.3,"7.3",1],["Natural proteins, same backbones",14.9,"14.9",0]], max:14.9,
+    note:"It refused its own best model. One experiment scored higher by stripping the surface far outside anything natural: surface charge at 56% against nature's 36%. The agent took the moderate model instead, with the reason written into the report.",
+    used:4, budget:6, cost:"About 12 GPU-hours on one A100." },
+  { id:"pancreas", short:"Islet cell types", c:"#D98A12", dom:"Single-cell atlas", size:"16k cells", title:"Islet cell types on an unseen platform", file:"pancreas-cell-types.md",
+    who:"An islet biology lab",
+    req:"Every time we sequence a new pancreas sample we annotate the cell types by hand, which is slow and inconsistent between people. I'd like a model that does it automatically. The types we struggle with most are delta, gamma and epsilon. They're rare, and they're the ones we actually care about getting right.",
+    big:"0.94", bigSmall:"macro F1", res:"across 13 cell types, on a droplet study it never saw",
+    qa:[
+      {q:"Your own samples are droplet-based. Should the test be too?", a:"Yes. We run 10x Chromium 3' v3. Testing on a study from a different platform than ours would flatter the number.", so:"Trained on the five plate-based studies, tested on the one droplet study."},
+      {q:"Should every cell type count equally, or should common ones dominate?", a:"Every type equally. Delta, gamma and epsilon are the ones we struggle to annotate by hand.", so:"A macro average, so epsilon's 14 test cells weigh as much as alpha's 520."},
+      {q:"May the model say “none of these”?", a:"Always picking a known type is fine, as long as there's a confidence so we can review the uncertain cells."}
+    ],
+    head:"A classifier that annotates 13 islet cell types on a platform it has never seen, getting the rare types right as often as the common ones.",
+    ctitle:"Scored once on 3,237 cells from a held-back droplet study",
+    bars:[["Macro-averaged F1",0.94,"0.94",1],["Cells labelled correctly",0.95,"95%",1]], max:1,
+    note:"Every cell also gets a confidence, so the uncertain ones can be pulled for manual review instead of being silently wrong.",
+    used:2, budget:8, cost:"CPU only, about a minute per attempt. Stopped early." },
+  { id:"pathology", short:"H&E tiles", c:"#D9467A", dom:"Pathology images", size:"100k H&E tiles", title:"Tissue type from H&E tiles", file:"pathology-tiles.md",
+    who:"A pathologist working on colorectal cancer",
+    req:"We want to map tissue composition across whole slides from new patients. The first thing we're after is the tumour-to-stroma ratio. New slides will come through the same pipeline, same lab, same scanner, same colour normalisation, just new patients. Around 90% correct would make me happy.",
+    big:"93%", bigSmall:"", res:"of tissue calls right on tiles from later patients, with the bias spelled out",
+    qa:[
+      {q:"Do you have patient or slide identifiers for these tiles?", a:"No, sorry, not any more. A random split of the 7K set is acceptable as long as you say the number is a bit optimistic.", so:"The weakness went into the brief and the report rather than being papered over."},
+      {q:"Which classes matter most?", a:"Tumour and stroma, because the first thing we want is the tumour–stroma ratio. Background only needs to be filtered out.", so:"Tumour and stroma weighted double."},
+      {q:"Which confusions do you already expect?", a:"Debris vs mucus, and debris vs necrotic tumour. Stroma vs smooth muscle can be hard at low resolution."},
+      {q:"The agent came back with a picture of odd violet tiles.", a:"The violet is the colour normalisation misbehaving on some necrotic areas. It happens from time to time, so new slides can have it too. Keep them as they are.", so:"That answer turned out to decide the project."}
+    ],
+    head:"A tile classifier that gets 93% of tissue calls right on patients it never trained on, and a report that tells you where it is biased.",
+    ctitle:"Share of tiles found, scored once on 3,587 tiles from the later collection",
+    bars:[["All tiles",93,"93%",1],["Six other classes",93,"93–100%",1],["Stroma",60,"60%",2]], max:100,
+    note:"Because stroma is under-called, the tumour–stroma ratio reads low: a true 30% comes out around 21%. The report says to use it for ranking slides, not as a number. Adding stain and colour jitter, straight out of the conversation about the violet tiles, moved the score from 0.80 to 0.88.",
+    used:5, budget:8, cost:"CPU only." }
+];
+function byId(id){ for (var i=0;i<CASES.length;i++) if (CASES[i].id===id) return CASES[i]; return CASES[0]; }
+function pips(used, total, color){
+  var s = '<span class="pips" style="--cc:'+color+'" aria-label="'+used+' of '+total+' submissions used">';
+  for (var i=0;i<total;i++) s += '<i'+(i<used?' class="on"':'')+'></i>';
+  return s + '</span>';
+}
+
+/* ---------------- theme ---------------- */
+(function(){
+  var saved = null; try { saved = localStorage.getItem("mlguy-theme"); } catch(e){}
+  if (saved === "light" || saved === "dark") root.setAttribute("data-theme", saved);
+  $("#themeBtn").addEventListener("click", function(){
+    var cur = root.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    var nx = cur === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", nx);
+    try { localStorage.setItem("mlguy-theme", nx); } catch(e){}
+  });
+})();
+
+/* ---------------- copy buttons ---------------- */
+$$("[data-copy]").forEach(function(b){
+  b.addEventListener("click", function(){
+    var txt = b.getAttribute("data-copy");
+    function ok(){ b.textContent = "copied"; b.classList.add("done"); setTimeout(function(){ b.textContent = "copy"; b.classList.remove("done"); }, 1400); }
+    function sel(){ var c = b.parentNode.querySelector("code"); var r = document.createRange(); r.selectNodeContents(c); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+    try { navigator.clipboard.writeText(txt).then(ok, sel); } catch(e){ sel(); }
+  });
+});
+
+/* ---------------- tabs + nav thumb ---------------- */
+var TABS = ["home","examples","how","usage"];
+var navBtns = $$(".nav button"), thumb = $("#navThumb"), mast = $("#mast");
+function placeThumb(){
+  var on = $(".nav button[aria-selected='true']"); if (!on) return;
+  thumb.style.left = on.offsetLeft + "px"; thumb.style.width = on.offsetWidth + "px";
+  thumb.style.top = on.offsetTop + "px"; thumb.style.height = on.offsetHeight + "px";
+}
+var current = null, onShow = {};
+function show(tab, opts){
+  if (TABS.indexOf(tab) < 0) tab = "home";
+  opts = opts || {};
+  var changed = tab !== current; current = tab;
+  TABS.forEach(function(t){
+    var sec = $("#tab-" + t); sec.hidden = t !== tab;
+    if (t === tab && changed && t !== "home"){ sec.classList.remove("tab-in"); void sec.offsetWidth; sec.classList.add("tab-in"); }
+  });
+  navBtns.forEach(function(b){ b.setAttribute("aria-selected", b.dataset.tab === tab ? "true" : "false"); });
+  root.classList.toggle("on-home", tab === "home");
+  placeThumb();
+  if (changed && !opts.keepScroll) window.scrollTo(0, 0);
+  if (location.hash.replace("#","") !== tab){ try { history.replaceState(null, "", "#" + tab); } catch(e){ location.hash = tab; } }
+  if (onShow[tab]) onShow[tab](opts);
+  frost();
+}
+navBtns.forEach(function(b){ b.addEventListener("click", function(){ show(b.dataset.tab); }); });
+document.addEventListener("click", function(e){
+  var g = e.target.closest("[data-goto]");
+  if (g){ e.preventDefault(); show(g.getAttribute("data-goto")); return; }
+  var w = e.target.closest("[data-walk]");
+  if (w){ e.preventDefault(); show("how", {walk: w.getAttribute("data-walk")}); }
+});
+addEventListener("hashchange", function(){ var h = location.hash.replace("#",""); if (h && h !== current) show(h); });
+addEventListener("resize", placeThumb);
+function frost(){ mast.classList.toggle("frost", current === "home" ? !root.classList.contains("hero-in") : scrollY > 8); }
+addEventListener("scroll", frost, {passive:true});
+function setMast(){ root.style.setProperty("--mast-h", mast.offsetHeight + "px"); }
+setMast(); addEventListener("resize", setMast);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ placeThumb(); setMast(); });
+
+/* ---------------- hero: a frozen landscape the agent searches ---------------- */
+(function(){
+  var hero = $("#hero"), cv = $("#hcv"), ctx = cv.getContext("2d");
+  var GS = [[61,123,255],[139,108,240],[224,103,154],[245,176,61],[92,203,159]];
+  function L(a,b,k){ return a + (b-a)*k; }
+  function C(x){ return x < 0 ? 0 : x > 1 ? 1 : x; }
+  function sm(k){ k = C(k); return k*k*k*(k*(6*k-15)+10); }
+  function ec(k){ k = C(k); return 1 - Math.pow(1-k, 3); }
+  function gcol(u){ u = C(u); var x = u*(GS.length-1), i = Math.min(Math.floor(x), GS.length-2), f = x-i; return [0,1,2].map(function(j){ return L(GS[i][j], GS[i+1][j], f); }); }
+  function rgba(c,a){ return "rgba("+(c[0]|0)+","+(c[1]|0)+","+(c[2]|0)+","+a+")"; }
+  function rng(seed){ return function(){ seed|=0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed>>>15, 1|seed); t = t + Math.imul(t ^ t>>>7, 61|t) ^ t; return ((t ^ t>>>14)>>>0)/4294967296; }; }
+  function glow(x,y,r,col,a){ if (a <= .003) return; var g = ctx.createRadialGradient(x,y,0,x,y,r); g.addColorStop(0, rgba(col,a)); g.addColorStop(.35, rgba(col,a*.3)); g.addColorStop(1, rgba(col,0)); ctx.fillStyle = g; ctx.fillRect(x-r,y-r,2*r,2*r); }
+
+  // the scoring, as a landscape: basins are good models, the deepest one is the best
+  var BAS = [[-.48,.32,.30,-.80],[.46,-.30,.24,-1.15],[.12,.58,.17,-.50],[-.22,-.56,.20,-.62],[.70,.45,.16,-.40]];
+  function f(x,y){
+    var z = .26*(x*x + y*y) + .1*Math.sin(3.1*x + .4)*Math.cos(2.6*y - .3);
+    for (var i=0;i<BAS.length;i++){ var b = BAS[i], dx = x-b[0], dy = y-b[1]; z += b[3]*Math.exp(-(dx*dx+dy*dy)/(2*b[2]*b[2])); }
+    return z;
+  }
+  function grad(x,y){ var h = .002; return [(f(x+h,y)-f(x-h,y))/(2*h), (f(x,y+h)-f(x,y-h))/(2*h)]; }
+  var N = 46, pts = [], zmin = 1e9, zmax = -1e9, r0 = rng(11);
+  for (var i=0;i<N;i++) for (var j=0;j<N;j++){
+    var x = -1 + 2*i/(N-1), y = -1 + 2*j/(N-1), z = f(x,y);
+    zmin = Math.min(zmin, z); zmax = Math.max(zmax, z);
+    var th = r0()*6.283, ph = Math.acos(2*r0()-1), rr = 1.25 + r0()*.9;
+    pts.push({x:x, y:y, z:z, sx:rr*Math.sin(ph)*Math.cos(th), sy:rr*Math.cos(ph)*.8, sz:rr*Math.sin(ph)*Math.sin(th), d:Math.hypot(x,y), jit:r0()});
+  }
+  pts.forEach(function(p){ p.u = (p.z - zmin)/(zmax - zmin); });
+  // the test set: held back in a ring, lit once at the end
+  var ring = [], r1 = rng(29);
+  for (var k=0;k<420;k++){
+    var a = r1()*6.283, th2 = r1()*6.283, ph2 = Math.acos(2*r1()-1), rr2 = 1.2 + r1()*1;
+    ring.push({a:a, rad:1.55 + r1()*.22, h:(r1()-.5)*.06, sx:rr2*Math.sin(ph2)*Math.cos(th2), sy:rr2*Math.cos(ph2)*.8, sz:rr2*Math.sin(ph2)*Math.sin(th2), jit:r1()});
+  }
+  // the agent's tries: descents from random starts
+  function descent(seed){
+    var r = rng(seed), x = (r()*2-1)*.92, y = (r()*2-1)*.92, vx = 0, vy = 0, path = [[x,y]];
+    for (var s=0;s<90;s++){ var g = grad(x,y); vx = .82*vx - .016*g[0]; vy = .82*vy - .016*g[1]; x = clamp(x+vx,-1,1); y = clamp(y+vy,-1,1); path.push([x,y]); if (Math.hypot(vx,vy) < .0009 && s > 20) break; }
+    return {path:path, hue:r(), end:path[path.length-1]};
+  }
+  var best = (function(){ var b = BAS[1]; var x=b[0], y=b[1]; for (var s=0;s<200;s++){ var g = grad(x,y); x -= .02*g[0]; y -= .02*g[1]; } return [x,y]; })();
+
+  var MORPH0 = .5, MORPH1 = 2.6, FREEZE = 2.7, SEARCH = 3.4, FINAL = 8.2, REST = 9.6;
+  var tries = [];
+  (function(){ var r = rng(77), t = SEARCH; for (var n=0;n<400;n++){ tries.push({b:t, dur:1.15 + r()*.5, d:descent(1000+n)}); t += t < FINAL ? .32 + r()*.18 : 1.1 + r()*.9; } })();
+
+  var W = 1, H = 1, dpr = 1, CX = 0, CY = 0, R = 200, t = 0, last = 0, raf = 0, visible = true;
+  var PITCH = .62, HS = .36;
+  function project(x, y, z, yaw){
+    var X = x*R, Z = y*R, Y = -z*R*HS;
+    var c = Math.cos(yaw), s = Math.sin(yaw), x1 = c*X - s*Z, z1 = s*X + c*Z;
+    var cp = Math.cos(PITCH), sp = Math.sin(PITCH), y2 = cp*Y - sp*z1, z2 = sp*Y + cp*z1;
+    var fz = 2400/(2400 - z2); return [CX + x1*fz, CY + y2*fz, fz, z2];
+  }
+  function yawAt(t){ return -.95 + .05*t; }
+  function size(){
+    var r = hero.getBoundingClientRect(); if (!r.width) return;
+    dpr = Math.min(2, devicePixelRatio || 1); W = r.width; H = r.height;
+    cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr);
+    var copy = $(".h-copy", hero).getBoundingClientRect().top - r.top, chip = $(".h-chip", hero).getBoundingClientRect().bottom - r.top;
+    var room = Math.max(140, copy - chip);
+    R = Math.min(room*.5, W*(W < 720 ? .3 : .22));
+    CX = W/2; CY = chip + room*.54;
+    draw(t);
+  }
+  function draw(t){
+    ctx.setTransform(dpr,0,0,dpr,0,0); ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+    ctx.fillStyle = "#000"; ctx.fillRect(0,0,W,H);
+    var bg = ctx.createRadialGradient(CX, CY, 0, CX, CY, Math.max(W,H)*.7); bg.addColorStop(0,"#0D0F1A"); bg.addColorStop(1,"#000");
+    ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+    var yaw = yawAt(t), list = [];
+    var fz = C((t - FREEZE)/.8), sweepX = -1.25 + 2.5*fz;
+    for (var i=0;i<pts.length;i++){
+      var p = pts[i], m = sm((t - MORPH0 - .55*p.d - .25*p.jit)/1.1);
+      var x = L(p.sx, p.x, m), y = L(p.sz, p.y, m), z = L(p.sy, p.z, m);
+      var q = project(x, y, z, yaw + (1-m)*.8);
+      list.push([q[3], q[0], q[1], q[2], 0, p, m]);
+    }
+    var lit = t > FINAL ? Math.exp(-(t - FINAL)/1.6) : 0, after = t > FINAL ? 1 : 0;
+    for (var k=0;k<ring.length;k++){
+      var g = ring[k], m2 = sm((t - MORPH0 - .5 - .4*g.jit)/1.3), ang = g.a + .03*t;
+      var rx = Math.cos(ang)*g.rad, ry = Math.sin(ang)*g.rad;
+      var q2 = project(L(g.sx, rx, m2), L(g.sz, ry, m2), L(g.sy, g.h - .35, m2), yaw + (1-m2)*.8);
+      list.push([q2[3], q2[0], q2[1], q2[2], 1, g, m2]);
+    }
+    list.sort(function(a,b){ return a[0] - b[0]; });
+    for (var n=0;n<list.length;n++){
+      var e = list[n], depth = C((e[0]/R + 1.4)/2.8), col, al, rad;
+      if (e[4] === 0){
+        var P = e[5], mm = e[6];
+        col = gcol(1 - P.u).map(function(v){ return L(205, v, mm); });
+        al = L(.35, L(.28, 1, depth), mm); rad = L(1.1, 2.3, depth)*e[3]*(R/220);
+        if (fz > 0 && fz < 1){ var dd = Math.abs(P.x - sweepX); if (dd < .12){ var w = 1 - dd/.12; col = col.map(function(v){ return L(v,255,w*.8); }); al = Math.min(1, al + .5*w); rad *= 1 + .5*w; } }
+      } else {
+        var G = e[5], m3 = e[6];
+        col = after ? gcol(((G.a/6.283) + .03*t) % 1).map(function(v){ return L(v, 255, .2 + .5*lit); }) : [190,196,210];
+        al = L(.35, after ? .5 + .45*lit : .22, m3)*L(.5, 1, depth); rad = L(1, 1.5, depth)*e[3]*(R/240)*(1 + .6*lit);
+      }
+      ctx.globalAlpha = Math.min(1, al); ctx.fillStyle = rgba(col, 1);
+      ctx.beginPath(); ctx.arc(e[1], e[2], Math.max(.6, rad), 0, 6.283); ctx.fill();
+    }
+    // the lock: one wave across the surface as it freezes
+    if (t > FREEZE + .75 && t < FREEZE + 1.7){
+      var kk = (t - FREEZE - .75)/.95, o = project(0, 0, (zmin+zmax)/2, yaw);
+      ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = .28*(1-kk)*(1-kk);
+      ctx.strokeStyle = "rgba(127,166,255,1)"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(o[0], o[1], R*(1.1 + 1.4*ec(kk)), R*(1.1 + 1.4*ec(kk))*Math.sin(PITCH)*.9, 0, 0, 6.283); ctx.stroke(); ctx.restore();
+    }
+    // the final check: the held-back ring lights once
+    if (t > FINAL && t < FINAL + 1.3){
+      var k2 = (t - FINAL)/1.3, o2 = project(0, 0, -.35, yaw);
+      ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = .35*(1-k2);
+      var lg = ctx.createLinearGradient(o2[0]-R*2, 0, o2[0]+R*2, 0); GS.forEach(function(c,i){ lg.addColorStop(i/(GS.length-1), rgba(c,1)); });
+      ctx.strokeStyle = lg; ctx.lineWidth = 2*(1-k2) + .5;
+      ctx.beginPath(); ctx.ellipse(o2[0], o2[1], R*1.65*(1 + .25*ec(k2)), R*1.65*(1 + .25*ec(k2))*Math.sin(PITCH)*.95, 0, 0, 6.283); ctx.stroke(); ctx.restore();
+    }
+    // the agent's tries
+    ctx.save(); ctx.globalCompositeOperation = "lighter";
+    for (var u=0;u<tries.length;u++){
+      var T = tries[u]; if (T.b > t) break;
+      var age = (t - T.b)/T.dur; if (age > 2.2) continue;
+      var path = T.d.path, col2 = gcol(.55 + .45*T.d.hue);
+      var kk0 = C(age), head = kk0*kk0*(3 - 2*kk0)*(path.length - 1);
+      if (age <= 1){
+        for (var s=14;s>=0;s--){
+          var idx = Math.max(0, head - s*1.6), i0 = Math.floor(idx), fr = idx - i0, a0 = path[i0], a1 = path[Math.min(i0+1, path.length-1)];
+          var px = L(a0[0], a1[0], fr), py = L(a0[1], a1[1], fr), qq = project(px, py, f(px,py) + .03, yaw);
+          ctx.globalAlpha = (1 - s/15)*.7; ctx.fillStyle = rgba(col2.map(function(v){ return L(v,255,.25); }), 1);
+          ctx.beginPath(); ctx.arc(qq[0], qq[1], 2.4*(1 - s/18)*(R/220), 0, 6.283); ctx.fill();
+        }
+        var hp = path[Math.min(path.length-1, Math.round(head))], hq = project(hp[0], hp[1], f(hp[0],hp[1]) + .03, yaw);
+        ctx.globalAlpha = 1; glow(hq[0], hq[1], 18*(R/220), [255,255,255], .7);
+      } else {
+        var e2 = T.d.end, eq = project(e2[0], e2[1], f(e2[0],e2[1]) + .03, yaw), kk2 = (age - 1)/1.2;
+        ctx.globalAlpha = 1; glow(eq[0], eq[1], (8 + 30*ec(kk2))*(R/220), col2, .8*(1 - kk2));
+      }
+    }
+    // the best basin, once the search has found it
+    if (t > SEARCH + 1.5){
+      var bq = project(best[0], best[1], f(best[0],best[1]) + .03, yaw), pulse = 1 + .15*Math.sin(t*2.4), ba = C((t - SEARCH - 1.5)/1.5);
+      ctx.globalAlpha = 1; glow(bq[0], bq[1], 34*pulse*(R/220), [245,176,61], .55*ba); glow(bq[0], bq[1], 9*(R/220), [255,255,255], .9*ba);
+    }
+    ctx.restore();
+    var vg = ctx.createRadialGradient(W/2, H/2, H*.35, W/2, H/2, H*1.05); vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(0,0,0,.6)");
+    ctx.globalAlpha = 1; ctx.fillStyle = vg; ctx.fillRect(0,0,W,H);
+    var fin = C(t/.5); if (fin < 1){ ctx.fillStyle = "rgba(0,0,0,"+(1-fin)+")"; ctx.fillRect(0,0,W,H); }
+  }
+  var seen = false; try { seen = !!sessionStorage.getItem("mlguy-intro"); } catch(e){}
+  if (REDUCE || seen){ t = REST; hero.classList.add("ready"); }
+  setTimeout(function(){ hero.classList.add("ready"); try { sessionStorage.setItem("mlguy-intro","1"); } catch(e){} }, 900);
+  function frame(now){
+    raf = 0; if (!visible || current !== "home") { last = 0; return; }
+    if (last && t >= REST && now - last < 32){ raf = requestAnimationFrame(frame); return; }
+    var dt = last ? Math.min(.05, (now - last)/1000) : 0; last = now; t += dt; draw(t);
+    raf = requestAnimationFrame(frame);
+  }
+  function kick(){ if (!REDUCE && !raf && visible && current === "home") raf = requestAnimationFrame(frame); }
+  new IntersectionObserver(function(es){ visible = es[0].isIntersecting; root.classList.toggle("hero-in", visible); frost(); kick(); }).observe(hero);
+  if (window.ResizeObserver) new ResizeObserver(size).observe(hero); else addEventListener("resize", size);
+  onShow.home = function(){ size(); kick(); if (storyRefresh) storyRefresh(); };
+  size(); kick();
+})();
+
+/* ---------------- story vignettes ---------------- */
+var storyRefresh = null;
+(function(){
+  // vs today
+  var vt = $("#vt"), rows = [
+    ["Brighter GFP designs","bright, of 100 picked",[["model",93,"93","#5CCB9F"],["by hand",14,"14"]],100],
+    ["Hospital readmission","returns found, 3,889 calls",[["model",820,"820","#7FA6FF"],["today",722,"722"]],820],
+    ["Soluble protein design","greasy surface residues, fewer is better",[["model",7.3,"7.3","#A58FFF"],["natural",14.9,"14.9"]],14.9]
+  ];
+  vt.innerHTML = rows.map(function(r){
+    return '<div class="vt-row"><div class="vt-h"><b>'+r[0]+'</b><span>'+r[1]+'</span></div>' + r[2].map(function(b){
+      return '<div class="vt-bar'+(b[3]?'':' today')+'" style="--bc:'+(b[3]||'')+'"><span class="l">'+b[0]+'</span><span class="t"><i data-w="'+(b[1]/r[3]*100).toFixed(1)+'"></i></span><span class="v">'+b[2]+'</span></div>';
+    }).join('') + '</div>';
+  }).join('');
+  // report deck: real lines from the gallery
+  var F = [
+    ["#E0679A","pathology-tiles","Stroma is under-called, so the tumour–stroma ratio reads low: a true 30% comes out around 21%."],
+    ["#A58FFF","proteinmpnn-solubility","Refused its own best model: it scored higher by pushing surface charge to 56%, against nature's 36%."],
+    ["#5CCB9F","gfp-brightness","Protein language models did not help here: ESM-2's zero-shot score ranks at chance (AUROC 0.54)."],
+    ["#7FA6FF","diabetes-readmission","Stopped at 4 of 10 submissions: more attempts would be fitting noise."],
+    ["#E0679A","pathology-tiles","Without slide ids the split cannot fully separate patients, so the number is a bit optimistic."],
+    ["#F5B648","pancreas-cell-types","Every cell gets a confidence, so the uncertain ones can be reviewed instead of silently wrong."]
+  ];
+  $("#deck").innerHTML = F.map(function(x){ return '<div class="fnd glassy"><div class="fnd-top"><i style="background:'+x[0]+'"></i><span class="m">'+x[1]+' · REPORT.md</span></div><p>'+esc(x[2])+'</p></div>'; }).join('');
+
+  var story = $("#story"), stage = $("#stage"), clauses = $$(".cl", story), panels = $$(".vpanel", story), N = panels.length, REL = .14;
+  var WT = panels.map(function(_, i){ return i === N-1 ? 2.2 : 1; }), TOT = WT.reduce(function(a,b){ return a+b; }, 0), CUM = [], acc = 0;
+  WT.forEach(function(w){ acc += w/TOT; CUM.push(acc); });
+  var cyc = $("#cyc");
+  function setPanel(p, on, lp){
+    p.classList.toggle("on", on); p.style.setProperty("--p", on ? lp.toFixed(3) : "0");
+    var v = p.dataset.viz;
+    if (v === "loop"){ cyc.classList.toggle("in", on); cyc.classList.toggle("state-fail", on && lp > .55); }
+    if (v === "vt") $$("i[data-w]", p).forEach(function(i, k){ i.style.transitionDelay = (k*80) + "ms"; i.style.width = on ? i.dataset.w + "%" : "0"; });
+  }
+  var flat = REDUCE || matchMedia("(max-width:900px)").matches;
+  if (flat){
+    story.classList.add("flat");
+    clauses.forEach(function(c){ c.classList.add("on"); });
+    panels.forEach(function(p){ setPanel(p, true, 1); });
+    return;
+  }
+  var pend = false;
+  function frame(){
+    pend = false; if (current !== "home") return;
+    var r = story.getBoundingClientRect(), Hh = story.offsetHeight - innerHeight, prog = Hh > 0 ? clamp(-r.top/Hh, 0, 1) : 0;
+    if (prog >= 1 - REL){ stage.classList.add("released"); clauses.forEach(function(c){ c.classList.remove("on"); }); panels.forEach(function(p){ setPanel(p, false, 0); }); return; }
+    stage.classList.remove("released");
+    var q = prog/(1 - REL), idx = N-1, lp = 1;
+    for (var i=0;i<N;i++){ var hi = CUM[i], lo = i ? CUM[i-1] : 0; if (q < hi || i === N-1){ idx = i; lp = clamp((q - lo)/((hi - lo) || 1), 0, 1); break; } }
+    clauses.forEach(function(c, i){ c.classList.toggle("on", i === idx); });
+    panels.forEach(function(p, i){ setPanel(p, i === idx, lp); });
+  }
+  addEventListener("scroll", function(){ if (pend) return; pend = true; requestAnimationFrame(frame); }, {passive:true});
+  addEventListener("resize", function(){ requestAnimationFrame(frame); });
+  storyRefresh = function(){ requestAnimationFrame(frame); };
+  frame();
+})();
+
+/* ---------------- examples ---------------- */
+(function(){
+  var grid = $("#egrid");
+  grid.innerHTML = CASES.map(function(c){
+    return '<button class="ecard" type="button" data-case="'+c.id+'" style="--cc:'+c.c+'">' +
+      '<span class="dom"><i></i>'+esc(c.dom)+'<span class="sz">'+esc(c.size)+'</span></span>' +
+      '<h3>'+esc(c.title)+'</h3><p class="rq">“'+esc(c.req)+'”</p>' +
+      '<span class="res"><b>'+esc(c.big)+(c.bigSmall?' <small>'+esc(c.bigSmall)+'</small>':'')+'</b><span>'+esc(c.res)+'</span></span>' +
+      '<span class="ft">'+pips(c.used, c.budget, c.c)+'<span>'+c.used+' of '+c.budget+'</span><span class="go">Open →</span></span></button>';
+  }).join('') +
+  '<div class="ecard yours" style="--cc:var(--gold)"><span class="dom"><i></i>Your problem</span><h3>Writing yours</h3>' +
+  '<p class="rq" style="-webkit-line-clamp:unset">Use the words you think in. Most of these name no model, metric or loss. A good request says:</p>' +
+  '<ol><li><b>what the data is</b></li><li><b>what the answer will be used for</b></li><li><b>what counts as better</b> than what you do today</li></ol></div>';
+  grid.addEventListener("click", function(e){ var b = e.target.closest("[data-case]"); if (b) openDossier(b.dataset.case); });
+
+  // figures
+  var today = [["gfp","Brighter GFP designs","bright of 100",93,14,"93","14",100],["readmission","Hospital readmission","returns found",820,722,"820","722",900],["mpnn","Soluble design","greasy residues ↓",7.3,14.9,"7.3","14.9",15]];
+  $("#figToday").innerHTML = today.map(function(r){ var c = byId(r[0]).c;
+    return '<div class="prow" style="--cc:'+c+'"><span class="pn">'+r[1]+'<small>'+r[2]+'</small></span><div class="pbars">' +
+      '<div class="pb"><span class="t"><i data-w="'+(r[3]/r[7]*100).toFixed(1)+'"></i></span><span class="v">'+r[5]+'</span></div>' +
+      '<div class="pb today"><span class="t"><i data-w="'+(r[4]/r[7]*100).toFixed(1)+'"></i></span><span class="v">'+r[6]+'</span></div></div></div>';
+  }).join('');
+  $("#figBudget").innerHTML = CASES.map(function(c){
+    return '<div class="brow"><span class="pn">'+esc(c.short)+'</span>'+pips(c.used, c.budget, c.c)+'<span class="v">'+c.used+' / '+c.budget+'</span></div>';
+  }).join('');
+  onShow.examples = function(){ requestAnimationFrame(function(){ $$("#figToday i[data-w]").forEach(function(i, k){ i.style.width = "0"; i.style.transitionDelay = (k*90)+"ms"; requestAnimationFrame(function(){ i.style.width = i.dataset.w + "%"; }); }); }); };
+
+  var back = $("#dosBack"), dos = $("#dossier"), body = $("#dBody"), lastFocus = null;
+  function openDossier(id){
+    var c = byId(id); lastFocus = document.activeElement;
+    dos.style.setProperty("--cc", c.c);
+    $("#dDom").innerHTML = '<i></i>'+esc(c.dom)+' · '+esc(c.size);
+    var mx = c.max;
+    body.innerHTML =
+      '<div><h2>'+esc(c.title)+'</h2><p class="who">'+esc(c.who)+'</p></div>' +
+      '<div class="dos-sec"><h4>The request</h4><p class="quote">'+esc(c.req)+'</p></div>' +
+      '<div class="dos-sec"><h4>Before anything froze</h4><div class="qa">' + c.qa.map(function(x){
+        return '<div><p class="q" style="margin:0">'+esc(x.q)+'</p><p class="a">'+esc(x.a)+'</p>'+(x.so?'<p class="so">'+esc(x.so)+'</p>':'')+'</div>'; }).join('') + '</div></div>' +
+      '<div class="dos-sec"><h4>What came out</h4><p class="headline">'+esc(c.head)+'</p><p class="ctitle">'+esc(c.ctitle)+'</p><div style="display:grid;gap:9px">' +
+        c.bars.map(function(b){ return '<div class="wbar" style="--pc:'+c.c+'"><span class="l">'+esc(b[0])+'</span><span class="t"><i class="'+(b[3]===0?'dim':b[3]===2?'bad':'')+'" style="--w:'+(b[1]/mx*100).toFixed(1)+'%"></i></span><span class="v">'+esc(b[2])+'</span></div>'; }).join('') +
+      '</div><p class="take">'+esc(c.note)+'</p></div>' +
+      '<div class="dos-sec"><h4>What it took</h4><div class="took">'+pips(c.used, c.budget, c.c)+'<span>'+c.used+' of '+c.budget+' submissions. '+esc(c.cost)+'</span></div></div>' +
+      '<a class="dos-link" href="'+GH+c.file+'">Read the full conversation on GitHub →</a>';
+    body.scrollTop = 0;
+    dos.classList.add("open"); back.classList.add("open"); dos.setAttribute("aria-hidden","false");
+    $(".wbar .l", body); setTimeout(function(){ $("#dX").focus(); }, 50);
+  }
+  function close(){ dos.classList.remove("open"); back.classList.remove("open"); dos.setAttribute("aria-hidden","true"); if (lastFocus) lastFocus.focus(); }
+  $("#dX").addEventListener("click", close); back.addEventListener("click", close);
+  addEventListener("keydown", function(e){ if (e.key === "Escape" && dos.classList.contains("open")) close(); });
+})();
+
+/* ---------------- walkthroughs ---------------- */
+(function(){
+  function bub(who, text, i){ return '<div class="bub '+who+' hz" style="--i:'+(i||0)+'"><small>'+(who==="you"?"the scientist":"the agent")+'</small>'+text+'</div>'; }
+  function wbars(rows){ return rows.map(function(r, i){ return '<div class="wbar hz" style="--i:'+i+'"><span class="l">'+r[0]+'</span><span class="t"><i class="'+(r[3]||'')+'" style="--w:'+r[1]+'%"></i></span><span class="v">'+r[2]+'</span></div>'; }).join(''); }
+  function lock(title, rows){ return '<div class="lockbox hz"><div class="lh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg>'+title+'</div>' + rows.map(function(r){ return '<div class="li"><span>'+r[0]+'</span><span>'+r[1]+'</span></div>'; }).join('') + '</div>'; }
+  var WALKS = {
+    task: { title:"A request becomes a frozen task", pc:"var(--rose)", file:"pathology-tiles.md", steps:[
+      { k:"The request", h:"A pathologist wants the tumour–stroma ratio", b:"Small H&amp;E tiles, sorted into nine tissue types: a big set from the biobank, and a smaller one <b>collected later from other patients</b>. New slides will come through the same pipeline.",
+        take:"No model, metric or loss is named. What is named is the use: new patients, same pipeline.",
+        st:function(){ return '<div class="hviz">'+bub("you","We want to map tissue composition across whole slides from new patients. The first thing we're after is the tumour-to-stroma ratio. Around 90% correct would make me happy.",0)+bub("agent","Before I build anything: a few questions, each with a proposed answer.",1)+'</div>'; } },
+      { k:"Question 1", h:"Do you have patient or slide identifiers?", b:"Tiles cut from one slide are near-duplicates. Without slide ids, a random split puts pieces of the same slide on both sides, and the score looks better than it is.",
+        take:"The weakness went into the brief and the report rather than being papered over.",
+        st:function(){ return '<div class="hviz">'+bub("agent","Do you have patient or slide identifiers for these tiles?",0)+bub("you","No, sorry, not any more. A random split of the 7K set is acceptable as long as you say the number is a bit optimistic.",1)+'</div>'; } },
+      { k:"Question 2", h:"Which classes matter most?", b:"Tumour and stroma decide the ratio, so they count double. Background only needs filtering out. <b>Not a flat accuracy, not a flat macro average.</b>",
+        take:"The metric became an F1 that weights tumour and stroma twice.",
+        st:function(){ return '<div class="hviz" style="--pc:var(--rose)">'+wbars([["TUM tumour",100,"×2"],["STR stroma",100,"×2"],["NORM, LYM, MUS…",50,"×1"],["ADI, DEB, MUC",50,"×1"],["BACK",50,"×1","dim"]])+'<p class="capt hz" style="--i:5">weights in the frozen metric</p></div>'; } },
+      { k:"Question 3", h:"Which confusions do you already expect?", b:"Asked before training, so that afterwards the report can tell <b>which errors are the model's fault and which are the problem's</b>.",
+        st:function(){ return '<div class="hviz pairs">'+[["DEB debris","MUC mucus"],["DEB debris","TUM necrotic"],["STR stroma","MUS muscle"]].map(function(p, i){ return '<div class="pair hz" style="--i:'+i+'"><span>'+p[0]+'</span><i>⇄</i><span>'+p[1]+'</span></div>'; }).join('')+'<p class="capt hz" style="--i:3">the confusions the pathologist expected</p></div>'; } },
+      { k:"The picture", h:"The agent came back with a sheet of tiles", b:"It rendered sample tiles and asked about some <b>oddly violet debris tiles</b> it had noticed.",
+        take:"That answer turned out to decide the project.",
+        st:function(){ return '<div class="hviz"><div class="tiles hz" id="tilesheet"></div><p class="capt hz" style="--i:1">illustration of a tile sheet · dashed: the violet tiles</p>'+bub("you","Yes, those look like what our pipeline gives. The violet is the colour normalisation misbehaving on some necrotic areas. It happens from time to time, so new slides can have it too. Keep them as they are.",2)+'</div>'; }, after:drawTiles },
+      { k:"Approval", h:"Approved, and frozen", b:"The brief is in the pathologist's words, with their approval. A fresh agent has tried to break the split and the evaluator. <code>mlguy init</code> hashes <code>task/</code> and moves the test tiles out of the project.",
+        st:function(){ return '<div class="hviz">'+lock("task/ frozen",[["test set","3,587 tiles from the later collection"],["metric","F1, tumour and stroma counted double"],["known weakness","no slide ids: a bit optimistic"],["budget","8 attempts"]])+'</div>'; } },
+      { k:"What came out", h:"93% right, and where it is biased", b:"Adding stain and colour jitter, straight out of the violet-tile answer, moved the score from <b>0.80 to 0.88</b>. Nothing after that helped: a bigger model didn't, an ensemble barely did.",
+        take:"Stroma is under-called, so the ratio reads low: a true 30% comes out around 21%. The report says to rank slides with it, not to quote it.",
+        st:function(){ return '<div class="hviz" style="--pc:var(--rose)">'+wbars([["all tiles",93,"93%"],["six classes",93,"93–100%"],["stroma",60,"60%","bad"]])+'<p class="capt hz" style="--i:3">share of tiles found · 3,587 tiles, scored once · 5 of 8 submissions</p></div>'; } }
+    ]},
+    agent: { title:"The agent at work", pc:"var(--violet)", file:"proteinmpnn-solubility.md", steps:[
+      { k:"The request", h:"A ProteinMPNN that designs soluble proteins", b:"Same backbone, <b>fewer water-hating residues on the surface</b>, and it must still fold. The scientist names ESMFold and the self-consistency TM-score, and the H200s on the cluster.",
+        st:function(){ return '<div class="hviz">'+bub("you","Current ProteinMPNN tends to design insoluble protein sequences that aggregate or are unable to express. I wanna develop a version of ProteinMPNN that can design soluble proteins.",0)+bub("agent","I'll measure natural proteins first, as a yardstick.",1)+'</div>'; } },
+      { k:"Measure first", h:"A yardstick before any question", b:"The agent read the data and measured natural proteins: <b>25.8%</b> of their surface positions hold a greasy residue. Then it asked five questions.",
+        st:function(){ return '<div class="hviz"><div class="stat2 hz"><div><b>25.8%</b><span>of surface positions greasy in natural proteins</span></div><div><b>5</b><span>questions, each with a proposed answer</span></div></div>'+bub("agent","Which residues count as water-hating? What counts as still folding? Which backbones? How many sequences per backbone? Budget?",1)+'</div>'; } },
+      { k:"The answers", h:"The scientist's terms become the rubric", b:"F, I, L, M, V, W as greasy. <b>TM-score 0.8</b> as the folding line, preferred to RMSD. Single chains of 60 to 300 residues. <b>Eight</b> designs per backbone, because that is what they would order. About 12 GPU-hours.",
+        st:function(){ return '<div class="hviz">'+bub("you","The big oily side chains: F, I, L, M, V, W. Alanine I don't worry about, it's small and natural proteins are full of it on the surface.",0)+bub("you","TM-score 0.8 is the right line. A design that fails the fold earns nothing.",1)+'</div>'; } },
+      { k:"The audit", h:"Then the agent pushed back", b:"Before freezing, it checked whether the metric could be gamed. With alanine left out, a model could <b>swap every exposed F for an A</b> and satisfy the metric without changing anything real.",
+        take:"The scientist changed their mind before anything froze. The headline became AFILMVWY, with their six kept beside it.",
+        st:function(){ return '<div class="hviz">'+bub("agent","Excluding alanine leaves a hole: F → A on the surface scores as a win.",0)+bub("you","You've caught me contradicting myself. Counting it closes the hole. Switch the headline to AFILMVWY, and keep my six beside it.",1)+'</div>'; } },
+      { k:"The search", h:"It found the comparator on its own", b:"Nobody told it about the authors' own published soluble weights. It found them as the comparator worth measuring against, and beat them on the validation backbones.",
+        st:function(){ return '<div class="hviz" style="--pc:var(--violet)">'+wbars([["this model",89.9,"0.899"],["published soluble",82.2,"0.822","dim"]])+'<p class="capt hz" style="--i:2">validation, side by side · 4 of 6 submissions · about 12 GPU-hours on one A100</p></div>'; } },
+      { k:"The choice", h:"It refused its own best model", b:"One experiment scored higher by stripping the surface far outside anything natural. The frozen metric could not see that; the agent could. It shipped the moderate model, and the reason is in the report.",
+        take:"mlguy finish --experiment N --reason \"…\" takes a submission that is not the top score, and records why.",
+        st:function(){ return '<div class="hviz" style="--pc:var(--violet)">'+wbars([["surface charge",56,"56%","bad"],["natural proteins",36,"36%","dim"]])+'<p class="capt hz" style="--i:2">the higher-scoring experiment, against nature</p></div>'; } },
+      { k:"Scored once", h:"Half the greasy surface, and it folds", b:"Scored a single time on <b>126 backbones it had never seen</b>, eight designs each.",
+        st:function(){ return '<div class="hviz" style="--pc:var(--violet)"><div class="stat2 hz"><div><b>7.3</b><span>water-hating surface residues per design, against 14.9 in natural proteins</span></div><div><b>98.6%</b><span>of designs fold back onto the requested backbone</span></div></div>'+wbars([["this model",7.3/14.9*100,"7.3"],["natural",100,"14.9","dim"]])+'<p class="capt hz" style="--i:3">mean self-consistency TM-score 0.95</p></div>'; } }
+    ]}
+  };
+  function drawTiles(){
+    var box = $("#tilesheet"); if (!box) return;
+    var r = (function(seed){ return function(){ seed = (seed*16807) % 2147483647; return seed/2147483647; }; })(7);
+    for (var n=0;n<24;n++){
+      var c = document.createElement("canvas"); c.width = c.height = 64; var x = c.getContext("2d");
+      var odd = n === 4 || n === 13 || n === 19, base = odd ? [150,110,214] : [[233,170,200],[240,196,214],[222,150,190],[246,214,226]][n%4];
+      x.fillStyle = "rgb("+base.join(",")+")"; x.fillRect(0,0,64,64);
+      for (var k=0;k<70;k++){ var px = r()*64, py = r()*64, rr = 1 + r()*3.2; x.fillStyle = odd ? "rgba(90,50,160,.55)" : "rgba("+(100+r()*40|0)+",50,"+(130+r()*40|0)+",.55)"; x.beginPath(); x.arc(px,py,rr,0,6.3); x.fill(); }
+      for (var s=0;s<5;s++){ x.strokeStyle = "rgba(255,255,255,.35)"; x.lineWidth = 1 + r()*2; x.beginPath(); x.moveTo(r()*64, r()*64); x.quadraticCurveTo(r()*64, r()*64, r()*64, r()*64); x.stroke(); }
+      if (odd) c.className = "odd"; box.appendChild(c);
+    }
+  }
+  var cur = null, idx = 0, stage = $("#hStage"), copy = $("#hCopy"), dots = $("#hDots"), prev = $("#hPrev"), next = $("#hNext"), player = $("#player");
+  function render(){
+    var W = WALKS[cur], s = W.steps[idx];
+    player.style.setProperty("--pc", W.pc);
+    $("#hTitle").textContent = W.title; $("#hSrc").href = GH + W.file; $("#hSrc").textContent = "gallery/" + W.file + " ↗";
+    stage.innerHTML = s.st(); if (s.after) s.after();
+    copy.innerHTML = '<p class="hiw-k">'+(idx+1)+' / '+W.steps.length+' · '+s.k+'</p><h3>'+s.h+'</h3><p class="hb">'+s.b+'</p>'+(s.take?'<p class="hiw-take">'+esc(s.take)+'</p>':'');
+    dots.innerHTML = W.steps.map(function(_, i){ return '<button type="button" class="'+(i===idx?'on':'')+'" aria-label="Step '+(i+1)+'" data-i="'+i+'"></button>'; }).join('');
+    prev.disabled = idx === 0; next.textContent = idx === W.steps.length-1 ? "Start over ↺" : "Next →";
+    $$(".hiw-card").forEach(function(c){ c.setAttribute("aria-pressed", c.dataset.wt === cur ? "true" : "false"); });
+  }
+  function open(id){ cur = id; idx = 0; render(); }
+  $$(".hiw-card").forEach(function(c){ c.addEventListener("click", function(){ open(c.dataset.wt); player.scrollIntoView({behavior: REDUCE ? "auto" : "smooth", block:"center"}); }); });
+  prev.addEventListener("click", function(){ if (idx > 0){ idx--; render(); } });
+  next.addEventListener("click", function(){ var n = WALKS[cur].steps.length; idx = idx < n-1 ? idx+1 : 0; render(); });
+  dots.addEventListener("click", function(e){ var b = e.target.closest("button"); if (b){ idx = +b.dataset.i; render(); } });
+  player.addEventListener("keydown", function(e){ if (e.key === "ArrowRight") next.click(); if (e.key === "ArrowLeft") prev.click(); });
+  open("agent");
+  onShow.how = function(o){ if (o && o.walk){ open(o.walk); setTimeout(function(){ $("#walks").scrollIntoView({behavior:"auto", block:"start"}); }, 30); } };
+})();
+
+/* ---------------- usage: real terminal output ---------------- */
+(function(){
+  var STEPS = [
+    {label:"Freeze", cmd:"mlguy init", out:[
+      ["","data.test_inputs moved out of the project: ~/.mlguy/projects/tumour-triage/test_inputs.csv"],
+      ["","data.test_reference moved out of the project: ~/.mlguy/projects/tumour-triage/test_reference.csv"],
+      ["dim","  anything else that still holds the test split — the file your preparation script read — belongs outside the project too; training code can open any path"],
+      ["ok","project 'tumour-triage' ready"],
+      ["","  metric auroc (maximize, task/evaluate.py)  |  Budget: 5 of 5 submissions left."],
+      ["hd","  task frozen (hash 054f1a143b56)"],
+      ["dim","next: train a model into model/, make infer.py work, then run `mlguy validate`"]]},
+    {label:"Baseline", cmd:'mlguy validate --note "one feature: mean radius, the rule of thumb"', out:[
+      ["ok","infer.py and scoring work end to end."],
+      ["hd","experiment 0: auroc=0.9448  accuracy=0.6579  (validation)"],
+      ["","best so far: this one"],["","Budget: 5 of 5 submissions left."],
+      ["dim","the loop is open: change the modelling however you like, then `mlguy submit --note \"...\"`"]]},
+    {label:"Submit", cmd:'mlguy submit --note "logistic regression on all 30 measurements"', out:[
+      ["hd","experiment 1: auroc=0.9993  accuracy=0.9737  (validation)"],
+      ["ok","  +0.0545 auroc against experiment 0, the best before this"],
+      ["","best so far: this one"],["","Budget: 4 of 5 submissions left."]]},
+    {label:"Submit again", cmd:'mlguy submit --note "gradient-boosted trees"', out:[
+      ["hd","experiment 2: auroc=0.9990  accuracy=0.9649  (validation)"],
+      ["no","  -0.0003 auroc against experiment 1, the best before this"],
+      ["","best so far: experiment 1 with auroc=0.9993"],["","Budget: 3 of 5 submissions left."]]},
+    {label:"Status", cmd:"mlguy status", out:[
+      ["hd","project: tumour-triage  |  the probability that the mass is malignant  |  metric auroc"],
+      ["","     0  auroc=0.9448  accuracy=0.6579       6s 0MB        one feature: mean radius, the rule of thumb"],
+      ["ok"," *   1  auroc=0.9993  accuracy=0.9737       5s 0MB        logistic regression on all 30 measurements"],
+      ["","     2  auroc=0.9990  accuracy=0.9649       5s 0MB        gradient-boosted trees"],
+      ["dim","       (cost: seconds to run the model over validation, and the size of model/)"],
+      ["","best: experiment 1 with auroc=0.9993  (* above)"],["","Budget: 3 of 5 submissions left."]]},
+    {label:"Score once", cmd:"mlguy finish", out:[
+      ["ok","test auroc = 0.9965  (scored once)"],
+      ["","report written to ~/tumour-triage/REPORT.md"],
+      ["","final/ holds the scored model, with its test outputs and the test reference (test_reference.csv) beside them"],
+      ["dim","the test inputs are spent too, and stay at ~/.mlguy/projects/tumour-triage/test_inputs.csv"]]},
+    {label:"Refusals", cmd:"mlguy finish", out:[
+      ["no","the final check was already taken (experiment 1, scored auroc=0.9965). Taking it again would let the search fit to it; use --again only if you know why that is safe."]],
+     then:{c:"# then, after editing task/evaluate.py to lower its threshold:", cmd:'mlguy submit --note "lower the threshold"', out:[
+      ["no","task/ has changed since the brief was approved: evaluate.py (changed). The metric, the data and the split are fixed; restore them, or start a new project if the task itself should change."]]}}
+  ];
+  var REF = [
+    ["mlguy new <dir> --name <name>","create an empty project from the template"],
+    ["mlguy score --outputs <path>","check the scoring tells good from bad before freezing; records nothing"],
+    ["mlguy init","check the task, hold the test split back, freeze task/"],
+    ["mlguy validate","check infer.py and scoring work; record the baseline as experiment 0"],
+    ["mlguy submit --note \"...\"","score the current model on validation and record it; refused once the budget is spent"],
+    ["mlguy status","what has been tried, what is best, what budget is left"],
+    ["mlguy finish","score the result on the test set once and write the report"],
+    ["mlguy finish --experiment N --reason \"...\"","take a simpler submission than the best, with the reason in the report"]
+  ];
+  function fmt(s){ return esc(s).replace(/^mlguy/, '<span class="tool">mlguy</span>').replace(/(--[a-z]+)/g, '<span class="flag">$1</span>'); }
+  $("#cref").innerHTML = REF.map(function(r){ return '<div class="cref"><code>'+fmt(r[0])+'</code><span>'+esc(r[1])+'</span></div>'; }).join('');
+  var body = $("#tBody"), stepsEl = $("#tSteps"), timer = null, running = false;
+  stepsEl.innerHTML = STEPS.map(function(s, i){ return '<button class="step" type="button" data-i="'+i+'">'+s.label+'</button>'; }).join('');
+  function lit(i){ $$(".step", stepsEl).forEach(function(b){ b.classList.toggle("on", +b.dataset.i === i); }); }
+  function addLine(cls, html){ var d = document.createElement("div"); d.className = cls; d.innerHTML = html; body.appendChild(d); body.scrollTop = body.scrollHeight; return d; }
+  function wait(ms){ return new Promise(function(r){ timer = setTimeout(r, ms); }); }
+  function typeCmd(cmd, token){
+    var line = addLine("tline cmd", '<span class="pr">$</span><span class="tx"></span><span class="cursor"></span>'), tx = $(".tx", line), i = 0;
+    return new Promise(function(res){
+      (function tick(){ if (token !== run) return; i++; tx.innerHTML = fmt(cmd.slice(0, i)); if (i < cmd.length) timer = setTimeout(tick, 18 + Math.random()*22); else { $(".cursor", line).remove(); res(); } })();
+    });
+  }
+  function block(s){ return [{cmd:s.cmd, out:s.out}].concat(s.then ? [s.then] : []); }
+  var run = 0;
+  function play(from){
+    run++; var token = run; clearTimeout(timer); body.innerHTML = ""; running = true;
+    if (REDUCE){ STEPS.forEach(function(s){ block(s).forEach(function(b){ if (b.c) addLine("tline c", esc(b.c)); addLine("tline cmd", '<span class="pr">$</span>'+fmt(b.cmd)); b.out.forEach(function(o){ addLine("out "+o[0], esc(o[1])); }); }); }); lit(-1); return; }
+    var seq = Promise.resolve();
+    STEPS.forEach(function(s, i){
+      if (i < from) return;
+      block(s).forEach(function(b, bi){
+        seq = seq.then(function(){ if (token !== run) return; if (bi === 0) lit(i); if (b.c) addLine("tline c", esc(b.c)); return typeCmd(b.cmd, token); })
+          .then(function(){ return wait(260); })
+          .then(function(){ var p = Promise.resolve(); b.out.forEach(function(o){ p = p.then(function(){ if (token !== run) return; addLine("out "+o[0], esc(o[1])); return wait(110); }); }); return p; })
+          .then(function(){ return wait(900); });
+      });
+    });
+    seq.then(function(){ if (token === run){ running = false; addLine("tline", '<span class="pr">$</span><span class="cursor"></span>'); } });
+  }
+  stepsEl.addEventListener("click", function(e){ var b = e.target.closest(".step"); if (b) play(+b.dataset.i); });
+  $("#tReplay").addEventListener("click", function(){ play(0); });
+  var started = false;
+  onShow.usage = function(){ if (!started){ started = true; play(0); } };
+})();
+
+/* ---------------- start ---------------- */
+show((location.hash || "#home").replace("#",""), {keepScroll:true});
+})();
+</script>
+</body>
+</html>
