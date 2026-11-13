@@ -104,10 +104,19 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
     for name in scored:
         def cell(result: dict) -> str:
             value = result["metrics"].get(name)
-            return "n/a" if value is None else f"{value:.4f}"
+            if value is None:
+                return "refused" if result.get("refused") else "n/a"
+            return f"{value:.4f}"
         lines.append(f"| {name} | {cell(test_result)} | {cell(best)} |")
-    lines += ["", f"The score that counts is **{primary} = {test_result['metrics'][primary]:.4f}** "
-                  f"({better} is better).", ""]
+    if test_result.get("refused"):
+        # A refusal on the final check is the result, as a score would be. Saying so plainly matters
+        # more than the validation column: that number was never confirmed on new data.
+        lines += ["", "**The final check refused this model's outputs, so there is no test score.** "
+                      f"The validation {primary} above was not confirmed on new data. The evaluator said:",
+                  "", "```", test_result["refused"].strip(), "```", ""]
+    else:
+        lines += ["", f"The score that counts is **{primary} = {test_result['metrics'][primary]:.4f}** "
+                      f"({better} is better).", ""]
 
     if best_on_validation and best_on_validation["number"] != best["number"]:
         top = best_on_validation["metrics"][primary]

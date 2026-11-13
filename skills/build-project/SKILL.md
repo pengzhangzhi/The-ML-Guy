@@ -121,6 +121,10 @@ machine. Point it at the "Environment" section of `PROJECT_MEMORY.md`, and tell 
 `mlguy score` runs from inside the project. Give it no
 hypothesis of your own — a finding it had to reach by itself is worth more than one it agreed to.
 
+A question the audit raises for the user goes to the user, with the audit's numbers; do not
+answer it for them. If you change `task/` because of what the audit found, have the changed task
+audited again before you ask for approval: a fix can open a hole of its own.
+
 ## 7. Write the brief and get it approved
 
 Copy `reference/brief.md` (beside this skill) to `task/brief.md` and fill it in: goal, input, output, data, how it is tested, how it is scored, the
@@ -138,6 +142,7 @@ to their own data is easy to check:
   highest, about this many would really be in your top 10%."
 
 Then ask them to approve or correct it. **Do not freeze or train anything before they approve.**
+Small throwaway runs that prove the pipeline works are fine; real training waits.
 When they do, record it in the brief's last section, in their words, with the date:
 `Approved by the user: "..." (date)`. `mlguy init` refuses without that line. This is the one
 point where a wrong metric or a wrong split is cheap to fix.

@@ -51,21 +51,34 @@ The translation has three parts, and each has to be something the user can check
 - **What else is reported or refused.** Secondary metrics for what the primary cannot see, and
   refusals for outputs that cannot be scored.
 
+**Several goals.** When the user wants more than one thing ("right, and not the same every
+time"), ask which comes first. That one is the primary. Each of the others becomes a refusal
+threshold, set from real data and from the simplest model's score, so the search cannot buy the
+primary by giving it up. Show both numbers next to each threshold. The thresholds also apply at
+`mlguy finish`, and a refusal there is recorded as the result, so leave the margin real data
+needs between validation and test.
+
+**Several uses.** When the user named more than one use (predict from scratch, and complete what
+is partly known), report a score for each, and say in the table which number answers which use.
+
 ## 3. Try to break it
 
 Answer each with numbers from `mlguy score --outputs PATH`, which scores any outputs on the
 validation split and records nothing.
 
-1. **Can it be won without solving the problem?** Score degenerate outputs: a constant, a
-   shuffle, copies from training, one good output repeated, the shortcut this problem invites.
-   None should come near a good score.
+1. **Can it be won without solving the problem?** Build the cheapest outputs that could win,
+   and score them. Start with degenerate ones: a constant, a shuffle, copies from training, one
+   good output repeated. Then aim at how the score is computed: for each term, average or
+   threshold in it, make an output that wins that part at the expense of the rest. None should
+   come near a good score.
 2. **Does it tell good from bad?** The best outputs available — the true answers, or something
    known to be good — should score at or near the top.
 3. **Can it see a real difference?** Score two plausible models: the obvious default and
    something the field trusts. Is the gap bigger than resampling this many examples would move
    it? If not, every submission will be climbing noise.
 4. **Is there headroom?** Score the simplest reasonable model now. If it is already near the
-   ceiling, the search has nothing to find.
+   ceiling, the search has nothing to find. With several uses, look at each one's score: a
+   model can climb the average while doing worse than the simplest model on one of them.
 5. **Does it reward what they asked for, and only that?** Imagine the model that games it, and
    ask whether the user would accept that model. If not, add a secondary metric or a refusal.
 

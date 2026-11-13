@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from helpers import DATA_TOML, write_splits, write_task
+from helpers import DATA_TOML, EVALUATE_PY, write_splits, write_task
 from mlguy.cli import main
 from mlguy.records import Experiments
 
@@ -339,6 +339,38 @@ def test_finish_leaves_the_test_outputs_and_reference_in_final(project):
     report = (project / "REPORT.md").read_text()
     assert "0 of 2 submissions used" in report and "after the budget was spent" not in report
     assert "(higher is better)" in report
+
+
+def test_a_refusal_on_the_test_split_is_the_result(project, capsys):
+    """An evaluator that refuses outputs has judged them against the test reference. What it decided
+    is spent like a score: recorded, reported, and not retried with another experiment."""
+    refusing = EVALUATE_PY.replace("a = p.parse_args()\n", 'a = p.parse_args()\nif a.split == "final":\n'
+                                   '    raise SystemExit("refused: the draws are too alike")\n')
+    (project / "task" / "evaluate.py").write_text(refusing)
+    run(project, "init")
+    run(project, "validate")
+    capsys.readouterr()
+    assert run(project, "finish") == 1
+    err = capsys.readouterr().err
+    assert "the draws are too alike" in err and "the test split is spent" in err
+    report = (project / "REPORT.md").read_text()
+    assert "there is no test score" in report and "| spearman | refused |" in report
+    assert (project / "final" / "test_outputs").exists(), "the user still gets the model and its outputs"
+    assert run(project, "finish") == 2, "a refusal cannot be retried"
+    assert "refused by the evaluator" in capsys.readouterr().err
+    run(project, "status")
+    assert "refused by the evaluator on the test set" in capsys.readouterr().out
+
+
+def test_a_model_that_crashes_at_finish_has_not_spent_the_test_split(project, capsys):
+    _write_predict(project, offset='(1 / 0 if "test" in a.input.name else 0)')
+    run(project, "init")
+    run(project, "validate")
+    capsys.readouterr()
+    assert run(project, "finish") == 2
+    assert "not spent" in capsys.readouterr().err
+    run(project, "status")
+    assert "final:" not in capsys.readouterr().out
 
 
 def test_python_caches_in_task_do_not_count_as_a_change(project, capsys):
