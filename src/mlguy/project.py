@@ -41,6 +41,11 @@ class SubmissionError(Exception):
     """The submission could not be scored (crash, bad output, no usable score). Never a zero."""
 
 
+class EvaluatorFailed(SubmissionError):
+    """The model ran, and the evaluator would not score what it produced. The evaluator had the
+    split's reference when it decided, so on the test split this is the final check's result."""
+
+
 # Keys of the first contract, which knew two kinds of task. Ignoring them would be worse than
 # refusing: a test_labels file nobody moves out of the project is a test set the model can read.
 _OLD_KEYS = ("validation_labels", "test_labels", "id_column", "target_column", "validation_matches_test")
@@ -222,18 +227,18 @@ def _evaluator_scores(task: dict, split: str, outputs: Path) -> dict:
     try:
         proc = subprocess.run(cmd, cwd=script.parent, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
-        raise SubmissionError(f"the evaluator did not finish within {timeout // 60} minutes")
+        raise EvaluatorFailed(f"the evaluator did not finish within {timeout // 60} minutes")
     if proc.returncode != 0:
-        raise SubmissionError(f"the evaluator could not score these outputs (exit {proc.returncode}):\n"
+        raise EvaluatorFailed(f"the evaluator could not score these outputs (exit {proc.returncode}):\n"
                               f"{proc.stderr.strip()[-2000:]}")
     try:
         metrics = {k: float(v) for k, v in json.loads(result_file.read_text())["metrics"].items()}
     except Exception as e:
-        raise SubmissionError(f"the evaluator did not write a usable result file: {e}")
+        raise EvaluatorFailed(f"the evaluator did not write a usable result file: {e}")
     if primary not in metrics:
-        raise SubmissionError(f"the evaluator must report '{primary}'; it reported {sorted(metrics)}")
+        raise EvaluatorFailed(f"the evaluator must report '{primary}'; it reported {sorted(metrics)}")
     if not math.isfinite(metrics[primary]):
-        raise SubmissionError(f"the evaluator reported {primary} = {metrics[primary]}; it must be a finite number")
+        raise EvaluatorFailed(f"the evaluator reported {primary} = {metrics[primary]}; it must be a finite number")
     return {primary: metrics[primary], **{k: v for k, v in metrics.items() if k != primary}}
 
 

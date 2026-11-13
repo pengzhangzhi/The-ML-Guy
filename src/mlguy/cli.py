@@ -17,6 +17,7 @@ from mlguy.project import (
     ENTRY_POINT,
     STATE_POINTER,
     TEST_KEYS,
+    EvaluatorFailed,
     SubmissionError,
     TaskChanged,
     check_task_unchanged,
@@ -390,25 +391,33 @@ def cmd_finish(args: argparse.Namespace) -> int:
     if final_path.exists() and not args.again:
         previous = json.loads(final_path.read_text())
         raise CommandError(
-            f"the final score was already taken (experiment {previous['number']}, "
-            f"{primary}={previous['metrics'][primary]:.4f}). Taking it again would let the search fit to it; "
-            "use --again only if you know why that is safe."
+            f"the final check was already taken (experiment {previous['number']}, {_final_outcome(previous, primary)}). "
+            "Taking it again would let the search fit to it; use --again only if you know why that is safe."
         )
 
     snapshot = experiments.dir / f"{chosen['number']:04d}" / "submission"
     if not snapshot.exists():
         raise CommandError(f"no saved submission for experiment {chosen['number']} at {snapshot}")
+    final_dir = project_dir / "final"
     try:
         with tempfile.TemporaryDirectory() as tmp:
             outputs = Path(tmp) / "test_outputs"
-            test_result = score_split(project_dir, "test", run_dir=snapshot, keep_outputs=outputs)
-            final_dir = project_dir / "final"
+            try:
+                test_result = score_split(project_dir, "test", run_dir=snapshot, keep_outputs=outputs)
+            except EvaluatorFailed as e:
+                # The evaluator judged these outputs against the test reference, and what it decided
+                # is information about the test split. Retrying with another experiment would choose
+                # by that information, so a refusal is recorded as the result, like a score.
+                test_result = {"split": "test", "primary": primary, "metrics": {}, "refused": str(e)}
             if final_dir.exists():
                 shutil.rmtree(final_dir)
             shutil.copytree(snapshot, final_dir)
             shutil.move(outputs, final_dir / "test_outputs")
     except SubmissionError as e:
-        raise CommandError(f"the best submission failed the final check:\n{e}")
+        # infer.py itself failed: nothing was judged against the test reference, so nothing is spent.
+        raise CommandError(f"the model failed before the final check could judge it, so the test "
+                           f"split is not spent; fix it and run finish again:\n{e}")
+    refused = test_result.get("refused")
 
     # The working folder holds whatever was tried last; final/ holds what was scored, and the
     # page and the user run the model from there. The test split is now spent, so its reference
@@ -423,14 +432,25 @@ def cmd_finish(args: argparse.Namespace) -> int:
     final_path.write_text(json.dumps({"number": chosen["number"], "best_on_validation": best["number"],
                                       "reason": reason, "time": now(), **test_result}, indent=2))
     path = report.write(project_dir, task, records, chosen, test_result, best_on_validation=best, reason=reason)
-    git_commit(project_dir, f"finish: test {primary}={test_result['metrics'][primary]:.4f}")
-    print(f"test {primary} = {test_result['metrics'][primary]:.4f}  (scored once)")
+    git_commit(project_dir, f"finish: {_final_outcome(test_result, primary)} on test")
+    if refused:
+        print(f"the final check refused experiment {chosen['number']}'s outputs on the test split:\n{refused}",
+              file=sys.stderr)
+        print("recorded as the result: there is no test score, and the test split is spent", file=sys.stderr)
+    else:
+        print(f"test {primary} = {test_result['metrics'][primary]:.4f}  (scored once)")
     print(f"report written to {path}")
     print("final/ holds the scored model, with its test outputs"
           + (f" and the test reference ({reference_beside.name}) beside them" if reference_beside else " beside it"))
     if "test_inputs" in task.get("data", {}):
         print(f"the test inputs are spent too, and stay at {held_back_path(task, 'test_inputs')}")
-    return 0
+    return 1 if refused else 0
+
+
+def _final_outcome(result: dict, primary: str) -> str:
+    if result.get("refused"):
+        return "refused by the evaluator"
+    return f"scored {primary}={result['metrics'][primary]:.4f}"
 
 
 def cmd_status(args: argparse.Namespace) -> int:
@@ -478,8 +498,8 @@ def cmd_status(args: argparse.Namespace) -> int:
         # Without this, a finished project looks exactly like one that still has its final check to
         # take, and the only record of the score that counts is REPORT.md.
         final = json.loads(final_path.read_text())
-        print(f"final: experiment {final['number']} scored {primary}="
-              f"{final['metrics'][primary]:.4f} on the test set, once, on {final['time'][:10]}")
+        print(f"final: experiment {final['number']} {_final_outcome(final, primary)} on the test set, "
+              f"once, on {final['time'][:10]}")
     print(budget.describe(task, records))
     return 0
 
