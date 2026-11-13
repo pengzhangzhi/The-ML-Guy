@@ -122,8 +122,7 @@ machine. Point it at the "Environment" section of `PROJECT_MEMORY.md`, and tell 
 hypothesis of your own — a finding it had to reach by itself is worth more than one it agreed to.
 
 A question the audit raises for the user goes to the user, with the audit's numbers; do not
-answer it for them. If you change `task/` because of what the audit found, have the changed task
-audited again before you ask for approval: a fix can open a hole of its own.
+answer it for them.
 
 ## 7. Write the brief and get it approved
 
