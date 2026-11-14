@@ -152,6 +152,7 @@ the commands, and leaves the judgment to the agent.
 | `deploy` | Score the test set once, write the report, build a page for the user's problem, record what was learned |
 | `evaluation` | Turn what the user means by success into a metric on a split, try to break it, and write `task/evaluate.py` |
 | `environment` | Learn the user's machine — compute, scheduler, storage, where code and environments go, how to build one — prove it with a small job, and write it down once per machine |
+| `research-scout` | Look up what is already known about the task — evaluation pitfalls, leaks, realistic scores, methods — and write it to `RESEARCH_CONTEXT.md` with sources |
 | `writing` | Used by the others for anything the user reads: what they need first, in their words, with the depth kept and the padding cut |
 
 Starting a project by hand:

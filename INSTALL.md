@@ -50,7 +50,8 @@ skills/research/SKILL.md, then skills/deploy/SKILL.md. When build-project asks f
 audit, start a separate Codex session (`codex exec`) that follows skills/audit/SKILL.md.
 Before writing anything the user will read, follow skills/writing/SKILL.md. To learn what
 this machine offers, follow skills/environment/SKILL.md; to define how the model is
-judged, skills/evaluation/SKILL.md.
+judged, skills/evaluation/SKILL.md. To look up what is known about a task, follow
+skills/research-scout/SKILL.md.
 Run `mlguy --help` for the commands.
 ```
 
