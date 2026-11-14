@@ -701,3 +701,34 @@ def test_a_task_that_holds_nothing_back_reruns_validation_at_the_end(project, ca
     assert run(project, "finish") == 0
     report = (project / "REPORT.md").read_text()
     assert "No test split was held back" in report and "| Final check |" in report
+
+
+def test_a_commit_that_fails_is_said_not_swallowed(project, monkeypatch, capsys):
+    """`finish` once failed to commit a 4 GB final/model inside git's timeout, and nothing said so:
+    the history simply stopped at the last submission."""
+    import subprocess
+    for key in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"):
+        monkeypatch.setenv(key, "test")
+    for key in ("GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
+        monkeypatch.setenv(key, "test@example.invalid")
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    run(project, "init")
+    assert run(project, "validate") == 0
+    assert "could not commit" not in capsys.readouterr().err
+    (project / ".git" / "index.lock").write_text("")   # another git process, as far as git can tell
+    _write_model(project, 2.0)
+    assert run(project, "submit", "--note", "while git is locked") == 0
+    assert "warning: could not commit" in capsys.readouterr().err
+
+
+def test_the_report_names_the_page_only_once_there_is_one(project):
+    run(project, "init")
+    run(project, "validate")
+    run(project, "finish")
+    assert "app.py" not in (project / "REPORT.md").read_text()
+
+
+def test_new_projects_keep_models_out_of_git(tmp_path):
+    assert main(["new", str(tmp_path / "p"), "--name", "p"]) == 0
+    ignored = (tmp_path / "p" / ".gitignore").read_text().split()
+    assert "model/" in ignored and not any(line.startswith("!") for line in ignored)

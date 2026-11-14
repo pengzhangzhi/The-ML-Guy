@@ -51,7 +51,8 @@ Three things are not:
   model than a prediction, have `infer.py` write it as extra columns.
 - **It says what the model was tested on and what it was not,** in their words, where someone
   using it cold will see it.
-- **`python app.py [--port N]` starts it,** so anyone can run it the same way.
+- **`python app.py [--port N]` starts it,** so anyone can run it the same way. Add that line to
+  "Using the model" in `REPORT.md`, which `finish` wrote before the page existed.
 
 **`final/` holds only `infer.py`, `src/` and `model/`.** That is what was scored, and it is what
 the user will copy and run. Anything the model reaches for outside it — a weights cache, a folding
