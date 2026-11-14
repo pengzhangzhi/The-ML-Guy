@@ -39,10 +39,13 @@ direction = "maximize"               # or "minimize"
 # [evaluator]
 # timeout_minutes = 60
 
-# `max_submissions` is enforced: `mlguy submit` refuses past it. Any other limit the user set
-# goes here under whatever name fits; it is shown to the agent and printed in the report, and
-# keeping it is the agent's job.
+# How long the search may run. `hours` is enforced: it counts from `mlguy init`, and `mlguy submit`
+# refuses once it is up (`mlguy finish` still runs). Submissions are counted and reported, not
+# capped, unless the user wants a cap: then `max_submissions` is enforced too. Any other limit the
+# user set goes here under whatever name fits; it is shown to the agent and printed in the report,
+# and keeping it is the agent's job.
 [budget]
-max_submissions = 10
+hours = 4
+# max_submissions = 20
 # max_gpu_hours = 40
 # deadline = "2026-12-01"

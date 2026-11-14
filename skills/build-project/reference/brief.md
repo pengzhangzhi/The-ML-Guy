@@ -12,7 +12,7 @@ built, so every line has to be something they can check.
 | How we test it | TODO which examples are held back, and why that matches how the model will be used. |
 | How we score it | TODO the metric, and what a given value of it would let them do. |
 | Starting model | TODO the baseline and roughly what it costs to run. |
-| Budget | TODO. |
+| Budget | TODO how long the search may run, and any other limit they set. |
 
 ## Split sizes
 

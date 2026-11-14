@@ -337,7 +337,7 @@ def test_finish_leaves_the_test_outputs_and_reference_in_final(project):
     labels = pd.read_csv(project / "final" / "test_reference.csv")
     assert set(outputs["id"]) == set(labels["id"]) and "target" in labels
     report = (project / "REPORT.md").read_text()
-    assert "0 of 2 submissions used" in report and "after the budget was spent" not in report
+    assert "0 submission(s) of 2 allowed" in report and "after the budget was spent" not in report
     assert "(higher is better)" in report
 
 
@@ -634,10 +634,9 @@ def test_a_large_task_is_fingerprinted_without_reading_all_of_it(project, capsys
     assert "task/ has changed" in capsys.readouterr().err
 
 
-def test_only_the_submission_count_is_enforced(project, capsys):
-    """Every look at validation fits the search to it, so the count is part of the rubric. Time and
-    money are the user's limits and the agent's to keep: the framework never sees the compute, so
-    it reports what was agreed and stops nothing on their account."""
+def test_time_and_a_chosen_cap_are_enforced_other_limits_are_reported(project, capsys):
+    """`hours` and `max_submissions` stop the search. Other limits are the user's and the agent's to
+    keep: the framework never sees the compute, so it reports what was agreed and stops nothing."""
     toml = project / "task" / "task.toml"
     toml.write_text(toml.read_text() + 'max_gpu_hours = 40\ndeadline = 2020-01-01\n')
     run(project, "init")
@@ -646,13 +645,39 @@ def test_only_the_submission_count_is_enforced(project, capsys):
     _write_model(project, 2.0)
     assert run(project, "submit", "--note", "long after the deadline") == 0
     out = capsys.readouterr().out
-    assert "1 of 2 submissions left" in out
+    assert "Submissions: 1 of 2 left." in out and "since the task was frozen" in out
     assert "max_gpu_hours = 40" in out and "keep them yourself" in out
     assert run(project, "status", "--json") == 0
     limits = json.loads(capsys.readouterr().out)["budget"]["limits"]
     assert limits["deadline"] == {"limit": "2020-01-01", "enforced": False}
+    assert limits["submissions"] == {"used": 1, "limit": 2}
     run(project, "finish")
     assert "the agent's to keep: max_gpu_hours = 40" in (project / "REPORT.md").read_text()
+
+
+def test_the_search_stops_when_its_hours_are_up(project, tmp_path, capsys):
+    """Time is the default budget. Submissions are counted, not capped, and the clock starts when
+    the task is frozen; once it is up, submit refuses and finish still runs."""
+    toml = project / "task" / "task.toml"
+    toml.write_text(toml.read_text().replace("max_submissions = 2", "hours = 1"))
+    run(project, "init")
+    run(project, "validate")
+    for scale in (2.0, 3.0, 4.0):
+        _write_model(project, scale)
+        assert run(project, "submit", "--note", f"scale {scale}") == 0
+    out = capsys.readouterr().out
+    assert "Submissions: 3 so far, no limit." in out and "of 1.0 h used" in out
+
+    clock = tmp_path / "state" / "projects" / "tiny-test-project" / "search_started.txt"
+    clock.write_text("2000-01-01T00:00:00+00:00\n")
+    assert run(project, "submit", "--note", "after time") == 2
+    assert "the 1.0 h for the search are up" in capsys.readouterr().err
+    assert run(project, "init") == 0
+    assert clock.read_text().startswith("2000"), "re-freezing once there are results keeps the clock"
+
+    assert run(project, "finish") == 0
+    report = (project / "REPORT.md").read_text()
+    assert "3 submission(s) over" in report and "(limit 1)" in report and "best of 3" in report
 
 
 def test_the_framework_has_no_kinds_of_task(project, capsys):

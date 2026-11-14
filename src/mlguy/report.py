@@ -40,14 +40,18 @@ def _row(record: dict, names: list[str]) -> str:
 
 def _budget_used(task: dict, records: list[dict]) -> str:
     status = budget.state(task, records)
-    parts = []
-    if "submissions" in status["limits"]:
-        s = status["limits"]["submissions"]
-        parts.append(f"{s['used']} of {s['limit']} submissions used")
+    s, hours = status["limits"]["submissions"], status["limits"].get("hours")
+    line = f"{s['used']} submission(s)" + (f" of {s['limit']} allowed" if "limit" in s else "")
+    if hours:
+        line += f" over {hours['used']:.1f} hours of search" + (f" (limit {hours['limit']})" if "limit" in hours else "")
+    line += "."
     errors = sum(1 for r in records if r["status"] == "error")
     if errors:
-        parts.append(f"{errors} submission(s) failed to run")
-    line = (", ".join(parts).capitalize() + ".") if parts else "No submission limit was set."
+        line += f" {errors} of them failed to run."
+    if s["used"] > 1:
+        # The count is recorded rather than capped, so say what it means for the numbers above.
+        line += (f" The validation score of the result is the best of {s['used']}, so it flatters the model "
+                 "a little; the test score, taken once, does not.")
     if budget.agreed_only(task):
         # Not checked by anyone but the agent, so it is reported as what was agreed, not as kept.
         line += f" Also agreed, and the agent's to keep: {budget.agreed_only(task)}."
@@ -71,22 +75,21 @@ def write(project_dir: Path, task: dict, records: list[dict], best: dict, test_r
     names = scored[:MAX_COLUMNS]                        # the experiment table: as many as fit
     better = "higher" if direction(task) == "maximize" else "lower"
     counted = sum(1 for r in records if r.get("counts_against_budget"))
-    limit = task.get("budget", {}).get("max_submissions")
-    used = f"{counted} of {limit} submissions" if limit else f"{counted} submissions"
+    used = f"after {counted} submission{'s' if counted != 1 else ''}"
     output = task["task"]["output"].replace("_", " ")
     given = task["task"].get("input", "").replace("_", " ")
     headline = f"Takes {given} and returns **{output}**." if given else f"Returns **{output}**."
     final_args = " ".join(infer_args(task, "test"))
     if has_test_split(task):
         measured = ["Measured on the held-out test split, which stayed outside the project until now,",
-                    f"scored once, at the end of the search ({used} used)."]
+                    f"scored once, at the end of the search ({used})."]
         columns = f"| Metric | Test | Validation (experiment {best['number']}) |"
     else:
         # Nothing was held back, so the final check is a fresh run on validation. Say so, because
         # the two columns then share their inputs and are closer than a held-out test would be.
         measured = ["No test split was held back. The final check ran the model again on the validation",
                     "split" + (f", with {final_args}," if final_args else "")
-                    + f" once, at the end of the search ({used} used)."]
+                    + f" once, at the end of the search ({used})."]
         columns = f"| Metric | Final check | Validation (experiment {best['number']}) |"
 
     lines = [
