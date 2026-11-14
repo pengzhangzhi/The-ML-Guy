@@ -68,26 +68,9 @@ Each submission gets one score, on the same validation set every time; that scor
 result of the run. A small gain on a finite validation set may be luck, so judge it as you
 would any measurement.
 
-**Choosing which submission to ship is yours, and the best score is only the default.** By
-default `mlguy finish` takes the highest validation score; `mlguy finish --experiment N --reason
-"..."` takes another, and the reason goes in the report. Take the default when it is right, but
-look at the whole table before you do, and weigh whatever the brief makes relevant:
-
-- **Does the gap mean anything?** On this many examples, two scores a hair apart are one
-  measurement, not two. Prefer the simpler model when they are level.
-- **What does it cost to run?** `mlguy status` reports, per submission, how long `infer.py` took
-  over the validation split and how big `model/` is. A model that scores 0.002 better, is forty
-  times larger and needs a GPU at prediction time is usually the wrong answer for someone who
-  will run it on a laptop. Read the brief for which of those they actually care about.
-- **Is the better score real, or is it the metric's blind spot?** A frozen metric cannot see
-  everything that matters. If the top model wins by doing something the brief would call wrong,
-  say so and take the other one — this is what `--reason` is for, and it is the most valuable
-  thing you can put in a report.
-- **What will the user have to maintain?** Fewer dependencies, no bespoke inference environment,
-  and code someone else can read are worth a little score.
-
-There are no fixed penalties for complexity and no thresholds to clear. Make the judgement, and
-write down why in `--reason` so the user can disagree with it.
+**Choosing which submission to ship is yours.** By default `mlguy finish` takes the highest
+validation score; `mlguy finish --experiment N --reason "..."` takes another, and the reason goes
+in the report.
 
 Validation is the shared yardstick, and its reference is in the project only so that it can be
 scored. Read whatever `submit` reports, including any breakdown the evaluator gives. Make your
@@ -95,26 +78,9 @@ own choices (hyperparameters, which idea to submit) on the training data, by cro
 or however you like. Computing your own numbers against the validation reference outside `submit`
 makes every recorded score optimistic.
 
-The budget is a ceiling, not a target. When you judge that more submissions would mostly fit
-noise, stop, and tell the user why.
-
 The final check belongs to `mlguy finish`: once, at the end, on whichever submission scored
 best. Do not go looking for the test split, and do not tune a model to an evaluator's blind spots: a score
 won that way will not survive the final check or the user.
-
-## Working well
-
-- Spend your first move understanding the data: the split, the shape of the target, what makes
-  validation different from training. The brief says what the user actually wants to do with
-  the predictions.
-- Say what you expect before you run something, then compare. A submission that falls flat but
-  was predicted to is worth more than a lucky one.
-- The `--note` is the only record a human reads later. "ESM-2 embeddings instead of one-hot,
-  expecting better transfer to unseen positions" beats "try new model".
-- Watch for overfitting to validation, especially late in a budget, and prefer a change that
-  should generalise over one that squeezes the last decimal.
-- When the budget is nearly gone, stop trying new ideas and make sure the best submission is
-  solid.
 
 ## Finishing
 
